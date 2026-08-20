@@ -1,0 +1,68 @@
+/* Базовый рецепт кнопки-иконки. Раньше он был скопирован в пяти местах
+   (топбар: календарь и колокольчик; шапка сайдбара; рейл; шапка страницы) —
+   каждый раз одни и те же семь свойств с четырьмя разными числами.
+
+   ПОЧЕМУ ВАРИАНТЫ, А НЕ ШКАЛА size/radius/tone. Числа в оригинале не образуют
+   шкалу: контрол 28px имеет радиус 7px, 32px — 6px, а такой же 32px на рейле —
+   8px. Пропсы `size` + `radius` дали бы ложную свободу («возьму 28 и 6») и
+   разъехались бы с эталоном при первом же новом использовании. Вариант
+   кодирует ПОВЕРХНОСТЬ, на которой кнопка живёт, — а её конвенции уже
+   зафиксированы. Список закрытый: новая поверхность = новый вариант здесь,
+   а не набор чисел на месте вызова. */
+/* display:flex, а не inline-flex. Разница видна только вне флекс-контейнера:
+   внутри него любой inline-уровень всё равно блокифицируется, а вот в обычном
+   блоке (кнопка уведомлений лежит в .dd) inline-flex создаёт строчный бокс с
+   местом под базовую линию — лишние пиксели под кнопкой. В эталоне все
+   квадратные кнопки-иконки — flex; inline-flex остаётся только у варианта
+   page, который умеет подпись и потому ведёт себя как текстовый элемент. */
+.icon-button{
+  display: flex; align-items: center; justify-content: center;
+  position: relative; flex: 0 0 auto;
+  width: var(--ib-size); height: var(--ib-size);
+  border-radius: var(--ib-radius);
+  color: var(--ib-color);
+  --icon-size: var(--ib-icon-size);
+  transition: background-color var(--cu-animation-duration) var(--cu-animation-timing),
+              color var(--cu-animation-duration) var(--cu-animation-timing);
+}
+.icon-button:hover{ background-color: var(--ib-hover-bg); color: var(--ib-hover-color); }
+.icon-button:focus-visible{ outline: var(--cu-focus-ring); outline-offset: 1px; }
+
+/* Топбар: 32×32, радиус 6. Рецепт (1), ступень «компактный контрол». */
+.icon-button--topbar{
+  --ib-size: var(--cu-size-8); --ib-radius: var(--cu-radii-3); --ib-icon-size: 16px;
+  --ib-color: var(--cu-content-secondary);
+  --ib-hover-bg: var(--cu-state-hover); --ib-hover-color: var(--cu-content-primary);
+}
+/* Шапка панели: 28×28, радиус 7, тон приглушённее — контролы здесь и так
+   проявляются только по наведению на сайдбар, второй акцент им не нужен. */
+.icon-button--panel{
+  --ib-size: var(--cu-size-7); --ib-radius: 7px; --ib-icon-size: 16px;
+  --ib-color: var(--cu-content-tertiary);
+  --ib-hover-bg: var(--cu-state-hover); --ib-hover-color: var(--cu-content-primary);
+}
+/* Шапка страницы: 28×28, радиус 6. Умеет подпись рядом с иконкой, поэтому
+   ширина минимальная, а не фиксированная. Рецепт (1), ступень subtle —
+   это текстовая кнопка, а не глиф. */
+.icon-button--page{
+  --ib-size: var(--cu-size-7); --ib-radius: var(--cu-radii-3); --ib-icon-size: 16px;
+  --ib-color: var(--cu-content-secondary);
+  --ib-hover-bg: var(--cu-state-hover-subtle); --ib-hover-color: var(--cu-content-primary);
+  display: inline-flex;
+  width: auto; min-width: var(--cu-size-7); padding-inline: 6px; gap: 6px; font-size: 13px;
+}
+/* Рейл: тёмная поверхность. Рецепт (3) — заливка чёрным по чёрному невидима,
+   поэтому подсветка белая с низкой альфой, а покой приглушён до .62. */
+.icon-button--rail{
+  --ib-size: var(--cu-size-8); --ib-radius: var(--cu-radii-4); --ib-icon-size: 18px;
+  --ib-color: rgba(255,255,255,.62);
+  --ib-hover-bg: var(--cu-alphaGrey300); --ib-hover-color: #fff;
+}
+
+/* Включённое состояние (у кнопки применён фильтр): собственная заливка в
+   покое, поэтому ховер шагает на --cu-state-hover-strong — поверх своего же
+   фона слабая ступень не читается (то же правило, что у <Button on>). Вариант
+   rail сюда не попадает намеренно: на тёмной карточке заливка чёрным
+   невидима, у активного пункта рейла своя механика (рецепт 3). */
+.icon-button.is-active{ background-color: var(--cu-fill-subtle); color: var(--cu-content-primary); }
+.icon-button.is-active:hover{ background-color: var(--cu-state-hover-strong); }

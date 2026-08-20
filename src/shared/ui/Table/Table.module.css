@@ -1,0 +1,123 @@
+/* ТАБЛИЦА. Геометрия снята с shadcn/ui <Table> один в один, чтобы не
+   изобретать свою: text-sm (14px/20px), заголовок h-10 (40px) с px-2, ячейка
+   p-2 (8px), align-middle, whitespace-nowrap, граница на КАЖДОЙ строке и
+   снятая у последней строки тела, transition-colors + hover на строке,
+   контейнер relative + overflow-x-auto (длинная таблица прокручивается внутри
+   себя, а не разъезжает страницу).
+
+   ЧТО ОТ НАС, А НЕ ОТ shadcn — цвета. Вместо muted/50 и text-foreground взяты
+   токены проекта: ховер строки это --cu-state-hover-subtle (.05, крупная
+   поверхность по каталогу состояний), границы --cu-border-default. Иначе в
+   одном приложении оказались бы две несогласованные серые шкалы.
+
+   ЕДИНАЯ КОЛОНКА КОНТЕНТА — 12px. Заголовок страницы и первая вкладка
+   начинаются в 12px от левого края <main>; значит, и первая колонка таблицы
+   обязана. К этим 12px иначе прибавляются паддинг .scroll-area--page, рамка
+   блока и паддинг ячейки — «№» уезжал на 21px, и вертикаль ломалась.
+   Складываем обратно: блок выносится за паддинг скролла (margin-inline:-12px,
+   то есть на всю ширину <main>), а 12px держит паддинг первой ячейки. */
+.table-wrap{
+  /* width НЕ 100%, как у shadcn: 100% меряется от контент-бокса скролла, уже
+     сжатого паддингом, и вместе с отрицательным margin дало бы блок,
+     сдвинутый влево и всё равно короткий справа. Блочный div и так занимает
+     всю доступную ширину — с учётом обоих отрицательных полей. */
+  position: relative; overflow-x: auto;
+  margin-inline: -12px;
+  background: var(--cu-background-main);
+  /* Полосой во всю ширину: боковых границ и скругления нет — блок упирается в
+     края <main>, и рисовать там рамку значило бы обводить сам край экрана.
+     Остаются верхняя и нижняя (полоса имеет начало и конец) плюс тень: белая
+     лента приподнята над серым холстом. */
+  border-block: 1px solid var(--cu-border-default);
+  box-shadow: var(--cu-elevation-2);
+}
+.table{
+  width: 100%; border-collapse: collapse; caption-side: bottom;
+  font-size: 14px; line-height: 20px; color: var(--cu-content-primary);
+}
+.table tr{
+  border-bottom: 1px solid var(--cu-border-default);
+  transition: background-color var(--cu-animation-duration) var(--cu-animation-timing);
+}
+.table tbody tr:last-child{ border-bottom: 0; }
+.table tbody tr:hover{ background: var(--cu-state-hover-subtle); }
+/* ОТЛИЧИЕ ОТ shadcn: у него шапка отделена только границей и на плотной
+   таблице сливается с первой строкой. Даём ей «тихую» заливку в покое —
+   --cu-fill-subtle (.035). Ступень выбрана именно эта: ховер строки ниже идёт
+   .05, и шапка обязана быть светлее его, иначе подсветка под курсором
+   читалась бы как вторая шапка. Зебры по той же причине нет: вторая заливка в
+   покое съела бы разницу с ховером. */
+.table thead{ background: var(--cu-fill-subtle); }
+.table th{
+  height: 40px; padding-inline: 8px;
+  text-align: left; vertical-align: middle; white-space: nowrap;
+  font-weight: var(--cu-font-weight-semibold); color: var(--cu-content-secondary);
+}
+.table td{ padding: 8px; vertical-align: middle; white-space: nowrap; }
+.table th:first-child, .table td:first-child{ padding-left: 12px; }
+.table th:last-child, .table td:last-child{ padding-right: 12px; }
+
+/* Подпись таблицы — итог ПОД данными (caption-side:bottom, как у shadcn).
+   Третичным цветом, чтобы не спорить с содержимым, и с тем же левым инсетом
+   12px, что у первой колонки. */
+.caption{
+  padding: 10px 12px 12px; text-align: left;
+  font-size: 12px; color: var(--cu-content-tertiary);
+}
+
+/* ── модификаторы ячеек ─────────────────────────────────────────────────── */
+/* Их отдаёт tableCell из Table.tsx, а не подмешивает вызывающая сторона своим
+   классом: селекторы ниже сцеплены с .table, а классы CSS-модуля хэшируются
+   помодульно — правило `.table th.cell--numeric`, где второй класс объявлен в
+   ЧУЖОМ модуле, не совпало бы ни с чем и молча перестало работать. */
+
+/* Числа и даты вправо. Селектор обязан быть с ТЕГОМ: правило .table th задаёт
+   text-align:left и по специфичности (0,1,1) бьёт одиночный класс (0,1,0) —
+   заголовок оставался слева, а значения уезжали вправо, и колонка выглядела
+   сдвинутой. */
+.table th.cell--numeric, .table td.cell--numeric{ text-align: right; }
+/* Колонка одинаковых по форме кодов читается столбиком только при одинаковой
+   ширине знака. */
+.cell--mono{
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px; color: var(--cu-content-secondary);
+}
+/* Первая значащая колонка — как className="font-medium" в демо shadcn: строка
+   должна читаться с якоря, а не с середины. */
+.cell--strong{ font-weight: var(--cu-font-weight-medium); }
+.cell--muted{ color: var(--cu-content-tertiary); }
+/* Вторая строка в ячейке — УТОЧНЕНИЕ к первой, а не второй пункт. */
+.cell--sub{ display: block; margin-top: 2px; font-size: 12px; line-height: 16px; color: var(--cu-content-tertiary); }
+/* Ссылка внутри ячейки: подчёркивание только по наведению — в покое
+   подчёркнутая колонка превращается в частокол. */
+.cell--link{ color: inherit; text-decoration: none; }
+.cell--link:hover{ text-decoration: underline; }
+.cell--link:focus-visible{ outline: var(--cu-focus-ring); outline-offset: 2px; border-radius: var(--cu-radii-2); }
+
+/* ЯЧЕЙКА, ОТДАННАЯ БЛОКУ. Обычная ячейка — это значение, и паддинг 8px с
+   высотой шапки 40px её обрамляют. Но в колонке сравнения КП в шапке стоит не
+   значение, а карточка подрядчика: она сама несёт свою рамку, свои отступы и
+   свою высоту, и внешний паддинг оставил бы вокруг неё поля, которых у
+   соседних колонок нет. Селектор с ТЕГОМ по той же причине, что у
+   .cell--numeric: базовые `.table th` / `.table td` — это (0,1,1), одиночный
+   класс (0,1,0), и обнуление молча не наступило бы. */
+.table th.cell--card, .table td.cell--card{ padding: 0; height: auto; }
+
+/* Строка целиком ведёт куда-то: курсор обещает переход, подсветка уже есть у
+   tbody tr:hover — второго канала не заводим. */
+.row--link{ cursor: pointer; }
+
+/* ПУСТОЙ РЕЗУЛЬТАТ — строкой В таблице, а не вместо неё: шапка с колонками
+   остаётся на месте, и видно, ЧТО именно не нашлось. Кнопка рядом с текстом —
+   выход одним кликом (правило «No results»: пустой экран не должен быть
+   тупиком). Селектор по тегу, а не по классу: кнопку сюда кладёт чужой
+   модуль, а тег хэшированию не подлежит. */
+/* Селектор с ТЕГОМ, как у .cell--numeric, и ровно поэтому же: базовое
+   `.table td` (0,1,1) бьёт одиночный класс (0,1,0), и строка пустого
+   результата молча оставалась с обычным паддингом 8px — вместо просторного
+   блока получалась ещё одна тесная строка данных. */
+.table td.empty{
+  padding: 28px 12px; text-align: center; white-space: normal;
+  color: var(--cu-content-tertiary); font-size: 13px;
+}
+.empty button{ margin-left: 10px; vertical-align: middle; }

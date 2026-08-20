@@ -1,0 +1,49 @@
+/* ---------------------------------------------------------------------------
+   4.5 FLYOUT — cu-flyout-global-sidebar
+     [host]{position:fixed;top:0;right:0;transform:translate(100%);height:90cqh}
+     right:0 прижимает правый край к правому краю слота рейла, translateX(100%)
+     выносит его вправо → он занимает ровно 64…320px = площадь sidebar_final.
+     height:90cqh → снизу остаётся 10% высоты слота.
+   -------------------------------------------------------------------------*/
+.flyout{
+  position: fixed; top: 0; right: 0; transform: translateX(100%);
+  width: var(--sidebar-final-width); height: 90cqh; z-index: 60; display: none;
+}
+.flyout.is-open{ display: block; }
+/* мостик ховера слева от панели: [host]:before{top:0;right:100%;width:var(--cu-size-3);height:100%} */
+.flyout::before{ content: ""; position: absolute; top: 0; right: 100%; width: var(--cu-size-3); height: 100%; }
+/* ТЕНЬ (правка 4): elevation-border-4 — самый верхний уровень. Флайаут белый и ложится
+   поверх sidebar_final, который тоже почти белый (#f9f9f9); без хэйрлайн-слоя тени
+   (0 0 1px rgba(0,0,0,.2667)) его край просто потерялся бы на фоне. Именно поэтому здесь
+   border-вариант тени и border:1px solid transparent вместо настоящей границы. */
+.flyout__container{
+  border-radius: var(--cu-radii-4); overflow: hidden; height: 100%;
+  box-shadow: var(--cu-elevation-border-4); border: 1px solid transparent;
+  background: var(--cu-background-main); display: flex; flex-direction: column;
+}
+/* ПРАВКА 3: анимация появления панели.
+   Оригинальные keyframes ClickUp: 0%{opacity:0;transform:translate(-1px)} 50%{opacity:1} to{...}.
+   Она НАМЕРЕННО почти невесомая — сдвиг всего на 1px. Причина в том, что флайаут это
+   hover-превью: при движении мыши вдоль рейла он открывается и закрывается по нескольку раз
+   в секунду. Любой заметный «выезд» на 10–20px превратил бы это в мельтешение, поэтому вся
+   выразительность отдана прозрачности, а движение оставлено на уровне намёка. Заметное
+   перемещение получает только носик (см. flyoutIndicatorSlideIn выше) — он маленький,
+   и его ход глаз читает как акцент, а не как рывок всей панели.
+   Класс .no-animation отключает вход при переезде мышью с пункта на пункт: там панель
+   уже на экране и меняется только её содержимое. */
+.flyout:not(.no-animation) .flyout__container{
+  opacity: 0; transform: translateX(0);
+  animation: flyoutSlideIn var(--flyout-duration) var(--flyout-timing) forwards;
+}
+@keyframes flyoutSlideIn{
+  0%{ opacity: 0; transform: translateX(-1px); }
+  50%{ opacity: 1; }
+  to{ opacity: 1; transform: translateX(0); }
+}
+.flyout__header{
+  flex: 0 0 auto; height: 40px; padding: 8px 8px 4px 12px; display: flex; align-items: center;
+  font-size: 16px; line-height: 20px; font-weight: var(--cu-font-weight-semibold);
+  color: var(--cu-content-primary);
+}
+/* ПРАВКА 3: тот же 8px отступ до первой строки, что и в sidebar_final */
+.flyout__body{ flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 8px 0 12px; }

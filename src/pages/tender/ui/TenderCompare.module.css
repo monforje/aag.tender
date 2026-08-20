@@ -1,0 +1,363 @@
+/* Сравнение КП. Экрана-эталона нет — разбор решений в JSDoc компонента и в
+   DESIGN-NOTES.md, Часть XII.
+
+   ГЕОМЕТРИЯ ТАБЛИЦЫ ЗДЕСЬ НЕ ТРОГАЕТСЯ: её задаёт shared/ui/Table, а всё, что
+   ему нужно знать про эту страницу, он получает модификатором ячейки
+   (tableCell.card). Ниже — только то, что живёт ВНУТРИ ячейки: карточка
+   подрядчика, её шкала и палитра колонки, плюс окно досье.
+
+   --col — тон колонки, мост через границу модулей. Компонент ставит его
+   инлайном (значение приходит из TONE_VAR) на .card и на <col>, а дальше его
+   читают подложка карточки, кружок места, заливка сегментов шкалы и заливка
+   самой колонки. Переменная, а не по классу на каждый тон: тонов пять,
+   потребителей четверо, и таблица из двадцати правил существовала бы ради
+   того, что уже описано токенами.
+
+   --wash — сила заливки. 7% — предел, за которым текст в ячейках теряет
+   контраст, а ховер строки (.05) перестаёт читаться поверх цвета. Число стоит
+   в двух правилах ниже (.card и .col--tint) и больше нигде: колонка и её
+   шапка обязаны быть ОДНОГО цвета, иначе полоса разрывается на стыке. */
+
+/* --- КАРТОЧКА ПОДРЯДЧИКА = ШАПКА КОЛОНКИ ---------------------------------
+   Занимает ячейку целиком (у неё tableCell.card, паддинга нет), поэтому свои
+   поля несёт сама. Белая на фоне «тихой» заливки шапки таблицы: карточка —
+   информационная поверхность, и она обязана читаться как предмет, а не как
+   продолжение полосы заголовков.
+
+   min-width держит ширину КОЛОНКИ: у <col width> это лишь рекомендация,
+   которую алгоритм таблицы вправе проигнорировать, а min-width содержимого он
+   обязан уважить. 220px — минимум, на котором сумма в рублях и капсула
+   статуса не переносятся.
+
+   Наследство от `.table th` (nowrap, semibold, secondary) снимается здесь же:
+   внутри карточки текст обычный, а не заголовок колонки. */
+.card{
+  --wash: 7%;
+  position: relative;
+  min-width: 220px; height: 100%;
+  display: flex; flex-direction: column;
+  padding: 13px 12px 10px;
+  /* Тот же цвет, что у колонки под ней, только по белому, а не по прозрачному:
+     колонка читается одной непрерывной полосой от шапки до последней строки.
+     Раньше здесь была белая карточка с 3px полоской тона по верхнему краю —
+     полоску сняли: цветной кант по краю карточки это самый заметный штамп
+     «сгенерированного» интерфейса, а тон в карточке и так назван дважды
+     (кружок места и заливка шкалы). Третий раз он ничего не добавлял. */
+  background: color-mix(in srgb, var(--col) var(--wash), var(--cu-background-main));
+  white-space: normal;
+  font-weight: var(--cu-font-weight-regular);
+  color: var(--cu-content-primary);
+  cursor: pointer;
+  /* Шапка ПРИПОДНЯТА над телом таблицы: тень падает только вниз, на строки —
+     карточки читаются как ряд предметов над списком, а не как его первая
+     строка. Ступень 2 — та же, что у самой ленты таблицы над холстом
+     (лестница теней в global.css); брать выше нельзя, шапка начала бы
+     спорить с данными. */
+  box-shadow: var(--cu-elevation-2);
+  transition: box-shadow var(--cu-animation-duration) var(--cu-animation-timing);
+}
+/* Заливка КОЛОНКИ. Живёт здесь, а не инлайном в разметке: цветовая
+   арифметика — дело CSS, а из TSX приходит только сам тон (--col). База
+   прозрачная, а не белая, — тогда ховер строки (.05) продолжает читаться
+   поверх цвета, а не гасится им. */
+.col--tint{
+  --wash: 7%;
+  background: color-mix(in srgb, var(--col) var(--wash), transparent);
+}
+/* Вертикальная линейка колонки. На <col>, а не на ячейках: в сравнении
+   значения читают СТОЛБИКОМ, и без линеек четыре узкие колонки слева
+   сливаются в кашу. Работает это только при border-collapse:collapse — он у
+   <Table> и стоит. Последняя колонка линейки не получает: там край ленты. */
+.col--rule{ border-right: 1px solid var(--cu-border-default); }
+
+/* Рецепт (4) каталога состояний: карточка — белая поверхность на светлом
+   фоне, заливать её нечем, поэтому ответ на курсор — кольцо. Ни сдвига, ни
+   изменения размера: каталог их запрещает, и на шапке таблицы прыжок был бы
+   особенно заметен — за карточкой стоит колонка данных. */
+/* Рецепт (4) плюс ступень подъёма: под курсором карточка и обводится, и
+   всплывает — на цветной подложке одного кольца мало. */
+.card:hover{ box-shadow: var(--cu-state-ring), var(--cu-elevation-3); }
+
+/* Шапка карточки: контент по центру, как и просили. Три колонки с ОДИНАКОВЫМИ
+   краями (24px слева и справа) — только так имя стоит по центру карточки, а
+   не по центру остатка: у звезды и кружка места разная ширина содержимого, и
+   auto-колонки увели бы имя вбок. */
+.card__head{
+  display: grid; grid-template-columns: var(--cu-size-6) minmax(0, 1fr) var(--cu-size-6);
+  align-items: center; gap: 6px;
+}
+
+/* Звезда «в избранном». Рецепт (5): в покое её нет, проявляется по наведению
+   на карточку и по фокусу внутри неё — без :focus-within кнопка была бы
+   недостижима с клавиатуры. Отмеченная видна всегда: это состояние данных, а
+   не контрол.
+
+   Цвет отметки — content-primary, а не золото и не тон: пять тонов на этом
+   экране уже заняты смыслом «место в ранжире», и шестой цветной знак читался
+   бы как ещё одна оценка. Отличает отмеченную звезду ФОРМА — контур меняется
+   на заливку. */
+.star{
+  display: flex; align-items: center; justify-content: center;
+  width: var(--cu-size-6); height: var(--cu-size-6); border-radius: var(--cu-radii-3);
+  color: var(--cu-content-tertiary); --icon-size: 16px;
+  opacity: 0;
+  transition: opacity var(--cu-animation-duration) var(--cu-animation-timing),
+              background-color var(--cu-animation-duration) var(--cu-animation-timing);
+}
+.card:hover .star, .card:focus-within .star, .star.is-on{ opacity: 1; }
+.star:hover{ background: var(--cu-state-hover); color: var(--cu-content-primary); }
+.star.is-on{ color: var(--cu-content-primary); }
+/* Залитая звезда — bold-начертание Solar: у него геометрия в ЗАЛИВКЕ, а
+   глобальное правило иконок (§3: .icon svg{fill:none; stroke:currentColor})
+   рассчитано на контурные и оставило бы от неё пустой силуэт. Тот же случай и
+   то же лечение, что у .row__toggle-icon в <TreeRow>. Селектор по ТЕГУ svg —
+   он хэшированию не подлежит и границу модуля пересекает законно. */
+.star.is-on svg{ fill: currentColor; stroke: none; }
+.star:focus-visible{ outline: var(--cu-focus-ring); outline-offset: 1px; }
+
+/* Имя. Настоящая кнопка — единственная клавиатурная цель карточки; кликается
+   при этом вся карточка целиком. Многоточие, а не перенос: три колонки в
+   шапке обязаны остаться одной высоты, иначе таблица поедет. */
+.card__name{
+  width: 100%; text-align: center;
+  font-size: 14px; line-height: 20px; font-weight: var(--cu-font-weight-semibold);
+  color: var(--cu-content-primary);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  border-radius: var(--cu-radii-3);
+}
+.card__name:focus-visible{ outline: var(--cu-focus-ring); outline-offset: 2px; }
+
+/* Стрелка свёртывания. Стоит на месте бывшего кружка с местом в ранжире:
+   номер убран как третье повторение того, что уже сказано порядком колонок и
+   их цветом, а правый слот шапки нужен — без него имя перестало бы стоять по
+   центру карточки.
+
+   Видна ВСЕГДА, в отличие от звезды и палитры: свёрнутую шапку иначе нечем
+   развернуть — наводить курсор было бы некуда, кроме как вслепую. */
+.fold{
+  display: flex; align-items: center; justify-content: center;
+  width: var(--cu-size-6); height: var(--cu-size-6); justify-self: end;
+  border-radius: var(--cu-radii-3);
+  color: var(--cu-content-tertiary); --icon-size: 16px;
+  transition: background-color var(--cu-animation-duration) var(--cu-animation-timing),
+              transform var(--cu-animation-duration) var(--cu-animation-timing);
+}
+.fold:hover{ background: var(--cu-state-hover); color: var(--cu-content-primary); }
+.fold:focus-visible{ outline: var(--cu-focus-ring); outline-offset: 1px; }
+/* Поворот — ответ на СМЕНУ СОСТОЯНИЯ, а не на курсор: каталог запрещает
+   второе, но не первое (так же повёрнут тоггл раскрытия в дереве). */
+.fold.is-on{ transform: rotate(-90deg); }
+
+.card__body{ display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+/* Капсула статуса — inline-элемент в колоночном флексе: без align-self она
+   растянулась бы во всю ширину карточки и перестала быть капсулой. */
+.card__status{ align-self: start; }
+
+/* --- ШКАЛА ЗАПОЛНЕНИЯ ----------------------------------------------------
+   СЕГМЕНТЫ, А НЕ СПЛОШНАЯ ПОЛОСА. Заполнение КП — величина дискретная:
+   позиций шесть, и промежуточных значений между «4 из 6» и «5 из 6» не
+   бывает. Сплошная полоса рисовала бы непрерывность, которой нет, и «66%»
+   пришлось бы читать глазами каждый раз; по делениям это считывается формой.
+
+   Заливка — градиентом от осветлённого тона к самому тону: плоский цвет на
+   8px читается как прямоугольник, градиент даёт объём, не добавляя второго
+   цвета. Ведущий сегмент обведён мягким ореолом того же тона — взгляд сразу
+   попадает в точку «докуда дошли», не пересчитывая деления. */
+.meter{ display: flex; gap: 3px; height: 8px; }
+.meter__seg{
+  flex: 1 1 0; border-radius: 2px;
+  background: var(--cu-fill-subtle);
+  transition: background var(--cu-animation-duration) var(--cu-animation-timing);
+}
+.meter__seg.is-on{
+  background: linear-gradient(180deg, color-mix(in srgb, var(--col) 62%, #fff), var(--col));
+}
+.meter__seg.is-lead{ box-shadow: 0 0 0 3px color-mix(in srgb, var(--col) 18%, transparent); }
+
+/* Процент и расшифровка — на одной строке, по разным краям: слева величина,
+   справа то, из чего она получена. Baseline, а не center: у них разный кегль,
+   и по центру они выглядели бы съехавшими. */
+.meter__row{ display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.percent{
+  font-size: 13px; line-height: 18px; font-weight: var(--cu-font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+.meter__hint{ font-size: 11px; line-height: 16px; color: var(--cu-content-tertiary); }
+
+/* Итог — самое крупное число карточки: за ним сюда и приходят. 17/22 —
+   ступень над заголовком колонки (14) и ниже заголовка страницы (20).
+   tabular-nums обязателен: три суммы стоят рядом и сравниваются разряд в
+   разряд, а пропорциональные цифры сбивают эту вертикаль. */
+.sum{
+  font-size: 17px; line-height: 22px; font-weight: var(--cu-font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- ПАЛИТРА КОЛОНКИ -----------------------------------------------------
+   Рецепт (5), тот же, что у звезды: в покое погашена, проявляется по
+   наведению на карточку и по фокусу внутри неё. Место под неё держится
+   всегда (opacity, а не display), поэтому шапка таблицы не дёргается, когда
+   курсор идёт по колонкам.
+
+   Шесть кружков, а не выпадающее меню: меню внутри .table-wrap обрезалось бы
+   его же overflow-x (сколько бы ни было z-index), а выносить панель в
+   верхний слой ради шести значений — механика дороже задачи. */
+.tints{
+  display: flex; align-items: center; gap: 5px;
+  /* margin-top:auto, а не фиксированный отступ: палитра — подвал карточки, и
+     когда у соседа имя переносится на вторую строку, все три ряда кружков
+     обязаны остаться на одной линии. */
+  margin-top: auto; padding-top: 12px;
+  opacity: 0;
+  transition: opacity var(--cu-animation-duration) var(--cu-animation-timing);
+}
+.card:hover .tints, .card:focus-within .tints{ opacity: 1; }
+
+.tint{
+  width: 14px; height: 14px; flex: 0 0 auto; border-radius: 50%;
+  background: var(--dot);
+  transition: box-shadow var(--cu-animation-duration) var(--cu-animation-timing);
+}
+/* «По ранжиру» — пустой пунктирный кружок: цвета у него нет, он его СНИМАЕТ,
+   возвращая колонку под расчёт. */
+.tint--auto{ background: none; border: 1.5px dashed var(--cu-content-quaternary); }
+/* Выбранный — кольцо через белый зазор: обводка вплотную к цветному кружку
+   сливается с ним у тёмных тонов. */
+.tint.is-on{
+  box-shadow: 0 0 0 2px var(--cu-background-main), 0 0 0 3.5px var(--cu-content-primary);
+}
+.tint:focus-visible{ outline: var(--cu-focus-ring); outline-offset: 3px; }
+
+/* --- РАЗДЕЛЫ СМЕТЫ -------------------------------------------------------
+   Шапка раздела и его итог — не «строки таблицы покрасивее», а рамка вокруг
+   набора строк. Отсюда две разные заливки: у шапки та же «тихая» ступень, что
+   у шапки таблицы (.035) — она объявляет блок; у итога заливки нет вовсе, но
+   есть линия сверху и полужирные числа — он блок закрывает.
+
+   Ячейка шапки берёт tableCell.card (паддинг снят): свои поля несёт кнопка —
+   иначе зона нажатия была бы меньше видимой строки, и в стрелку приходилось
+   бы целиться. */
+/* Полоса раздела — во всю ширину таблицы, а не только под четырьмя левыми
+   колонками: она отделяет блок строк, и обрываться на середине ей нечем.
+   Заливка ПОЛУПРОЗРАЧНАЯ (.035) по той же причине, что у строки итога: цвет
+   колонки живёт на <col>, ниже ячейки, и плотный фон разорвал бы его. */
+.group-row th, .group-row td{ background: var(--cu-fill-subtle); }
+/* Ячейке заголовка паддинг снимает tableCell.card — свои поля несёт кнопка. */
+.group-head{ vertical-align: middle; }
+
+/* Размер раздела в колонках «Количество» и «Единица». Капитель + третичный
+   тон + 11px — тот же язык, которым в этом интерфейсе говорят ПОДПИСИ
+   (.field__label в сводке, .total-label ниже), а не значения. Разница со
+   сметной строкой идёт по трём осям сразу — кегль (11 против 14), тон
+   (третичный против primary) и форма (капитель): одного кегля мало, мелкое
+   чёрное число всё равно читалось бы как замер. */
+.group-meta{
+  font-size: 11px; line-height: 14px; font-weight: var(--cu-font-weight-medium);
+  text-transform: uppercase; letter-spacing: .06em;
+  color: var(--cu-content-tertiary);
+}
+/* Название на колонке контента (12px) — там же, где первая колонка таблицы,
+   стрелка сразу за ним. Кнопкой стала вся полоса, а не один квадрат стрелки:
+   зона нажатия обязана совпадать с видимой строкой, иначе в стрелку
+   приходится целиться. Полоса при этом прижата влево (не растянута
+   space-between): стрелка принадлежит названию, а не правому краю блока в
+   тысячу с лишним пикселей. */
+.group-toggle{
+  display: flex; align-items: center; gap: 8px;
+  width: 100%; padding: 8px 12px;
+  font-size: 13px; line-height: 18px; color: var(--cu-content-primary);
+  transition: background-color var(--cu-animation-duration) var(--cu-animation-timing);
+}
+/* Рецепт (1), ступень «крупная поверхность»: полоса во всю ширину четырёх
+   колонок — это не компактный контрол. */
+.group-toggle:hover{ background: var(--cu-state-hover-subtle); }
+.group-toggle:focus-visible{ outline: var(--cu-focus-ring); outline-offset: -2px; }
+/* РЕЦЕПТ (7): одна подсветка на один жест. Курсор на квадрате стрелки — и
+   заливка полосы гаснет, остаётся только заливка квадрата; иначе под курсором
+   горели бы две вложенные «таблетки» сразу, и было бы непонятно, что именно
+   нажимается. Правило стоит ПОСЛЕ :hover: специфичность у них одинаковая
+   (0,2,0), решает порядок. */
+.group-toggle:has(.fold:hover){ background: transparent; }
+.group-title{ font-weight: var(--cu-font-weight-semibold); }
+
+/* ИТОГ РАЗДЕЛА — самая тяжёлая строка блока, и это осознанно: за суммами по
+   разделам сюда и приходят, а позиции читают уже потом. Три канала сразу,
+   потому что одного мало на полосе в 1252px: заливка ступенью выше шапки
+   раздела (.06 против .035 — читается как «главное здесь»), линия сверху,
+   закрывающая блок, и полужирные числа кеглем строки.
+
+   Заливка ПОЛУПРОЗРАЧНАЯ: цвет колонки живёт на <col>, то есть НИЖЕ ячейки, и
+   плотный фон стёр бы его — колонка разорвалась бы на каждом итоге. */
+.total-row td{
+  background: var(--cu-fill);
+  border-top: 1px solid var(--cu-content-placeholder);
+  padding-block: 11px;
+}
+.total-label{
+  padding-left: 12px;
+  font-size: 12px; font-weight: var(--cu-font-weight-semibold);
+  text-transform: uppercase; letter-spacing: .06em;
+  color: var(--cu-content-primary);
+}
+.total-value{
+  font-weight: var(--cu-font-weight-semibold);
+  color: var(--cu-content-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Незакрытая позиция. Прочерк, а не пустая ячейка: пустота читается как сбой
+   загрузки, прочерк — как «сознательно нет». cursor:help + title, тот же
+   третий язык «здесь есть пояснение», что у даты срока в <TenderSummary>. */
+.blank{ color: var(--cu-content-placeholder); cursor: help; }
+
+/* --- ДОСЬЕ: нативный <dialog> --------------------------------------------
+   Фокус, Escape, подложка и верхний слой достаются от платформы. Reset
+   проекта <dialog> не касается (он перечисляет теги поимённо), поэтому
+   собственные стили браузера — рамку, паддинг и центрирование через
+   margin:auto — снимаем здесь. */
+.modal{
+  width: min(520px, calc(100vw - 32px));
+  padding: 0; border: 0; border-radius: var(--cu-radii-6);
+  background: var(--cu-background-main);
+  /* Чистая тень, а НЕ --cu-elevation-border-4: у той первый слой работает
+     хэйрлайн-границей, и она нужна там, где белое лежит на белом (меню,
+     флайаут). Здесь под окном тёмная подложка — контур ей рисовать не от
+     чего, а на скруглённом углу он читался как лишняя рамка. */
+  box-shadow: var(--cu-elevation-4);
+  color: var(--cu-content-primary);
+}
+/* showModal() переводит фокус на сам <dialog>, и браузер обводит его своим
+   кольцом — рамка вокруг всего окна, которой никто не просил. Гасим здесь, а
+   фокус отдаём кнопке «Закрыть» (autoFocus): пропадать ему нельзя. */
+.modal:focus, .modal:focus-visible{ outline: none; }
+.modal::backdrop{ background: rgba(32,32,32,.35); }
+
+.modal__body{ display: flex; flex-direction: column; gap: 16px; padding: 16px; }
+.modal__head{ display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.modal__title{
+  font-size: 18px; line-height: 24px; font-weight: var(--cu-font-weight-semibold);
+}
+
+/* Реквизиты в две колонки: значения короткие, и в один столбец окно вытянулось
+   бы вдвое, оставив половину ширины пустой. Подписи капителью — та же роль и
+   тот же рецепт, что у полей <TenderSummary>. */
+.facts{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; }
+.fact{ display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.fact__label{
+  font-size: 11px; line-height: 14px; font-weight: var(--cu-font-weight-medium);
+  text-transform: uppercase; letter-spacing: .04em;
+  color: var(--cu-content-secondary);
+}
+.fact__value{ font-size: 14px; line-height: 20px; font-variant-numeric: tabular-nums; }
+
+/* Честная фраза о том, чего ещё нет. Тот же смысл, что у <ScreenPlaceholder>,
+   но строкой: у того min-height 320px — он рассчитан на пустой ЭКРАН. */
+.note{
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: var(--cu-radii-4);
+  background: var(--cu-fill-subtle);
+  font-size: 13px; line-height: 18px; color: var(--cu-content-tertiary);
+}
+.note-icon{ --icon-size: 20px; color: var(--cu-content-quaternary); }
+
+.modal__foot{ display: flex; justify-content: flex-end; }

@@ -1,0 +1,42 @@
+/* Поле поиска, сужающее то, что уже на экране. Два варианта — не два размера,
+   а два МЕСТА, и у каждого своя форма:
+
+     capsule — в полосе контролов. Радиус round, потому что это единственное
+               поле ВВОДА среди кнопок-селектов, и форма отделяет его вернее
+               размера. Растёт во всю доступную ширину: поиск — вход в данные.
+               Границы нет — её роль играет первый слой хэйрлайн-тени, иначе
+               получился бы двойной край.
+     field   — внутри панели, где вокруг уже нет кнопок и отличать поле не от
+               чего: обычный прямоугольник с рамкой, прижатый к верху колонки.
+
+   Обе версии остаются полем, а не кнопкой: выдача сужает СОСЕДНИЙ список и
+   ей не нужно отдельное место (тем и отличается от SearchTrigger). */
+.search{
+  display: flex; align-items: center; flex: 0 0 auto;
+  background: var(--cu-background-main);
+}
+.search--capsule{
+  gap: 7px; height: var(--cu-size-8); padding-inline: 12px;
+  flex: 1 1 220px; max-width: 300px; min-width: 170px;
+  border-radius: var(--cu-radii-round); box-shadow: var(--cu-elevation-border-1);
+}
+.search--capsule:focus-within{ box-shadow: var(--cu-elevation-border-1), var(--cu-state-ring); }
+.search--field{
+  gap: 6px; height: 34px; padding-inline: 10px;
+  border-radius: var(--cu-radii-3); border: 1px solid var(--cu-border-default);
+}
+.search--field:focus-within{ box-shadow: var(--cu-state-ring); }
+
+.search__icon{ --icon-size: 15px; color: var(--cu-content-quaternary); }
+.search__input{
+  flex: 1 1 auto; min-width: 0; border: none; background: none; outline: none;
+  font-family: inherit; font-size: 13px; color: var(--cu-content-primary);
+}
+.search__input::placeholder{ color: var(--cu-content-placeholder); }
+/* Крестик появляется только когда есть что стирать: кнопка, которая всегда
+   неактивна, занимает внимание зря. */
+.search__clear{
+  display: flex; flex: 0 0 auto; color: var(--cu-content-quaternary); --icon-size: 14px;
+}
+.search__clear:hover{ color: var(--cu-content-primary); }
+.search__clear:focus-visible{ outline: var(--cu-focus-ring); outline-offset: 2px; border-radius: var(--cu-radii-round); }

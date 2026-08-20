@@ -1,0 +1,209 @@
+/* ---------------------------------------------------------------------------
+   4.8 СТРОКА ДЕРЕВА — cdk-tree-node > .row-body
+   ПРАВКА 9: узел несёт padding-bottom:2px и margin-inline:8px → шаг 30px
+   при высоте самой строки 28px. Раньше строки шли вплотную (28px) и текст
+   казался крупнее, чем в оригинале, из-за более плотного ритма.
+   -------------------------------------------------------------------------*/
+.tree-node{
+  display: flex; padding-bottom: var(--sidebar-tree-node-gap);
+  margin-inline: var(--sidebar-tree-node-inset);
+  /* ПРАВКА 10: отступ вложенности — переменная с дефолтом 0, а не хардкод,
+     ЧТОБЫ конкретный уровень вложенности мог переопределить её ОДНИМ
+     правилом ниже, не трогая этот базовый. 1:1 с живым ClickUp: то же имя
+     переменной, тот же приём (DevTools → cdk-tree-node). Полный разбор
+     паттерна «вложенные пункты дерева» — §4.8-a ниже. */
+  --sidebar-tree-node-left-padding: 0px;
+  padding-left: var(--sidebar-tree-node-left-padding);
+}
+/* ПРАВКА 12 — text-align:left ОБЯЗАТЕЛЕН, и вот почему (иначе выглядит как
+   лишняя строка): .row в этом дереве бывает и <div> (декоративные строки из
+   row()), и <button> (кликабельные пункты — My Tasks и его дети). У <button>
+   в UA-стилях браузера text-align:center, у <div> — left, а наш reset (§2)
+   его не сбрасывает. Флекс-раскладка при этом одинаковая: .row__title —
+   flex:1 1 auto, то есть тянется на всю оставшуюся ширину строки; текст
+   ВНУТРИ него и уезжал в центр этой ширины — визуально «пункт с огромным
+   отступом от иконки», хотя ни один padding/gap не отличался. Правило ниже
+   и есть настоящая причина, а не подгонка отступов: любой .row — независимо
+   от тега — выравнивает текст по левому краю. */
+.row{
+  display: flex; align-items: center; gap: var(--sidebar-icon-x-spacing);
+  height: var(--sidebar-tree-item-height); padding: 0 8px; border-radius: 7px;
+  cursor: default; width: 100%; min-width: 0; text-align: left;
+  transition: background-color var(--cu-animation-duration) var(--cu-animation-timing);
+}
+/* Рецепт (1): строка — крупная поверхность, ей хватает слабой ступени.
+   Было .045 — единственное значение вне шкалы; сведено к .05 (см. токены). */
+.row:hover{ background-color: var(--cu-state-hover-subtle); }
+/* Рецепт (2): текущее состояние — тот же фон ступенью выше hover. */
+.row.is-active{ background-color: var(--cu-state-hover); }
+.row__icon{ --icon-size: var(--sidebar-icon-dimensions); color: var(--cu-content-secondary); }
+/* замер .title: 14px / 400 / line-height 16.002px / цвет secondary;
+   у активной (.bolded) — 600 и primary */
+.row__title{
+  flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  font-size: 14px; line-height: 16.002px;
+  font-weight: var(--cu-font-weight-regular); color: var(--cu-content-secondary);
+}
+/* Активная строка: заголовок меняет только ЦВЕТ на primary (чёрный) —
+   начертание остаётся прежним (400, как в покое). Намеренно без font-weight:
+   смена веса сдвигала бы ощущение строки, а нужно лишь показать выбор цветом.
+   Метрика строки не трогается, px-сверка с эталоном остаётся в нуле. */
+.row.is-active .row__title{
+  color: var(--cu-content-primary);
+}
+.row__sub{ font-size: 12px; color: var(--cu-content-tertiary); font-weight: var(--cu-font-weight-regular); }
+/* Сам аватар рисует shared/ui/Avatar (вариант tree). Здесь остаётся только
+   его роль В СТРОКЕ: ведущий глиф, который не сжимается и участвует в колонке
+   вместе с иконкой (правило .tree-branch ниже).
+   Точка онлайна приходит пропом online и значит РОВНО «человек сейчас в
+   сети». У «Assigned to me» та же буква D означает «назначено мне» — другой
+   смысл, поэтому точки там нет. */
+.row__avatar{ flex: 0 0 auto; }
+.group-title{
+  font-size: 12px; line-height: 16px; font-weight: var(--cu-font-weight-regular);
+  color: var(--cu-content-tertiary);
+  padding: 14px 8px 4px; margin-inline: var(--sidebar-tree-node-inset);
+}
+
+/* ---------------------------------------------------------------------------
+   §4.8-a ВЛОЖЕННЫЕ ПУНКТЫ ДЕРЕВА (nested navs) — рецепт компонента.
+   Полный текст рецепта (когда заводить вложенный узел, анатомия разметки,
+   9 пунктов реализации, «что сюда не относится») остался в эталоне
+   reference/index.html:1032–1153 и разобран в DESIGN-NOTES.md, часть VI.
+   Здесь — только CSS. Что изменилось при переезде на React:
+     • п.8/п.9 (активность и набор видимых детей) больше не синхронизируются
+       вручную — это производные от стора, см. entities/workspace;
+     • всё остальное (уровни через aria-level, колонка глифа, линия, тоггл)
+       перенесено правило в правило.
+   -------------------------------------------------------------------------*/
+.tree-node[aria-level="3"]{ --sidebar-tree-node-left-padding: 20px; }
+
+/* ПРАВКА 12 — КОЛОНКА ВЕДУЩЕГО ГЛИФА. Часть того же компонента вложенности:
+   у строки слева всегда ровно одна ячейка фиксированной ширины
+   (--sidebar-icon-dimensions), что бы в ней ни лежало — иконка или аватар.
+   Без этого «Assigned to me» (аватар 18px) и «Today & Overdue» (иконка 16px)
+   стартуют с текстом на разных x: колонка задаётся содержимым, а не
+   раскладкой, и два соседних пункта одного уровня не выравниваются между
+   собой. Отступ от колонки до текста — общий gap строки
+   (--sidebar-icon-x-spacing, 8px), то есть ровно как у Meetings и любой
+   другой плоской строки: править его тут отдельно НЕ нужно и нельзя —
+   он один на всё дерево. Базовый .row__avatar (18px, Direct Messages) не
+   трогаем: сужение до колонки — свойство ЭТОГО контекста, не аватара. */
+.tree-branch .row > .row__icon,
+.tree-branch .row > .row__avatar{
+  flex: 0 0 var(--sidebar-icon-dimensions);
+  width: var(--sidebar-icon-dimensions);
+  height: var(--sidebar-icon-dimensions);
+}
+
+.tree-node.has-children{ position: relative; }
+.tree-node.has-children:hover .row__icon,
+.tree-node.has-children:focus-within .row__icon{ visibility: hidden; }
+.tree-node.has-children:hover .row__toggle,
+.tree-node.has-children:focus-within .row__toggle{ display: flex; }
+/* ПРИМЕНЕНИЕ ПАТТЕРНА §0.2(g) «одна подсветка на один жест» — общий разбор
+   там, здесь только то, что специфично для этого места: тогл лежит поверх
+   иконки внутри .row, поэтому наведение на него по геометрии есть наведение
+   и на строку. Гасим фон строки, пока курсор на тогле.
+   БЕЗ :not(.is-active) намеренно: гасим фон и у ТЕКУЩЕЙ строки тоже. Иначе
+   на активном пункте (My Tasks открыт) правило просто не срабатывало бы, и
+   получалось бы ровно то, что оно призвано убрать — две подсветки разом.
+   На время наведения на тогл строка отдаёт ему фокус внимания целиком;
+   отпустил курсор — .is-active возвращается сам, состояние никуда не делось.
+   Селектор смотрит от .tree-node (родителя обоих), а не через `+` от строки:
+   не зависит от того, в каком порядке лежат .row и .row__toggle в разметке. */
+.tree-node.has-children:has(.row__toggle:hover) .row{
+  background-color: transparent;
+}
+
+/* Кнопка тоггла КРУПНЕЕ своего глифа: сама стрелка 14px, иконочная ячейка,
+   которую она подменяет, — 16px, а кликабельная/подсвечиваемая область —
+   --sidebar-toggle-hit (22px). Растим её симметрично ОТ ЦЕНТРА иконки, а не
+   от левого края: left компенсирует прирост на половину разницы, поэтому
+   центр стрелки остаётся ровно там же, где центр иконки, которую она
+   заменяет (и там же, где направляющая линия, § .tree-branch::before), —
+   увеличение зоны попадания не должно сдвигать сам глиф. */
+.row__toggle{
+  display: none; align-items: center; justify-content: center;
+  position: absolute; transform: translateY(-50%);
+  left: calc(8px - (var(--sidebar-toggle-hit) - var(--sidebar-icon-dimensions)) / 2);
+  top: calc(var(--sidebar-tree-item-height) / 2);
+  width: var(--sidebar-toggle-hit); height: var(--sidebar-toggle-hit);
+  border-radius: 5px; color: var(--cu-content-secondary);
+  transition: background-color var(--cu-animation-duration) var(--cu-animation-timing),
+              color var(--cu-animation-duration) var(--cu-animation-timing);
+}
+/* ПРАВКА 11 — наведение НА САМУ стрелку (не просто на строку, которая её
+   лишь проявляет, см. правило выше) красит кружок вокруг неё — тот же
+   рецепт, что у любой другой мелкой icon-button в этом файле (.sidebar-btn,
+   .topbar__notif, .user-menu__toggle: --cu-state-hover + цвет primary).
+   Раскрытие/сворачивание по-прежнему происходит ТОЛЬКО по клику на этот
+   элемент (onClick на самой кнопке; раньше — делегирование по
+   [data-my-tasks-toggle]) — hover здесь только обратная связь «кликабельно»,
+   он не расширяет зону клика за пределы самой кнопки. */
+.row__toggle:hover{ background-color: var(--cu-state-hover); color: var(--cu-content-primary); }
+/* .icon — класс из чужого модуля (shared/ui/Icon), поэтому селектор
+   `.row__toggle .icon` здесь не собрался бы: CSS Modules хэширует классы
+   помодульно. Класс на саму иконку передаётся пропом className, и правило
+   пишется от него — .row__toggle-icon. */
+.row__toggle-icon{
+  --icon-size: 14px;
+  transition: transform var(--cu-animation-duration) var(--cu-animation-timing);
+}
+/* Иконка тоггла — Solar Bold (AltArrowDownBoldIcon), а не Linear: заливка
+   вместо обводки, поэтому здесь локально переопределяем базовое правило
+   §3 (.icon svg{fill:none; stroke:currentColor}) — оно рассчитано на
+   Linear-иконки и не подходит именно этому глифу. */
+.row__toggle-icon svg{ fill: currentColor; stroke: none; }
+/* стрелка смотрит вниз = раскрыто (контент ниже); поворот -90° = вправо =
+   свёрнуто (обычная конвенция треугольника-дисклоужера, не своя придумка) */
+.tree-node[aria-expanded="false"] .row__toggle-icon{ transform: rotate(-90deg); }
+
+/* ПРАВКА 11/12/13 — направляющая линия вложенности. .tree-branch — обёртка
+   вокруг родителя (.has-children) и его детей. Обёртка есть ВСЕГДА, в том
+   числе у свёрнутого узла (правка 13): она несёт не только линию, но и
+   колонку ведущего глифа (правило выше), а та обязана работать одинаково в
+   обоих состояниях — иначе иконка родителя прыгала бы при сворачивании.
+   Гаснет линия по факту ОТСУТСТВИЯ ДЕТЕЙ (правило ниже), а не по
+   aria-expanded: у свёрнутого узла может остаться пришпиленный текущий
+   ребёнок (§4.8-a п.9), и тогда линия нужна — она и до него тянется ровно
+   так же. Условие «нет ни одного ребёнка» описывает реальную причину
+   («тянуть не к чему»), а состояние раскрытия — лишь частный её случай.
+   Линия — псевдоэлемент, а
+   не бордер на каждом узле: даёт ОДИН непрерывный отрезок на всю высоту
+   блока, а не N сегментов с зазорами по 2px (--sidebar-tree-node-gap) между
+   строками. По правке 12: не от середины иконки, а от НИЗА hover-области
+   родителя (var(--sidebar-tree-item-height) — это и есть высота .row, то
+   есть высота её hover-подсветки) до НИЗА hover-области последнего ребёнка
+   (bottom: --sidebar-tree-node-gap — ровно хвостовой 2px-отступ узла,
+   который в hover-подсветку ребёнка не входит). pointer-events:none, чтобы
+   не мешать кликам по строкам под ней. */
+.tree-branch{ position: relative; }
+.tree-branch::before{
+  content: "";
+  position: absolute;
+  left: var(--sidebar-tree-line-x);
+  top: var(--sidebar-tree-item-height);
+  bottom: var(--sidebar-tree-node-gap);
+  width: 1px;
+  background: var(--cu-border-default);
+  pointer-events: none;
+}
+.tree-branch:not(:has(> .tree-node:not(.has-children)))::before{ display: none; }
+
+/* Анимации появления у детей НЕТ намеренно (была, убрана по правке 13):
+   раскрытие узла дерева — навигационный жест, а не показ нового слоя;
+   строки должны оказаться на месте сразу, чтобы курсор мог идти к нужной
+   без ожидания. Анимация здесь оправдана только у самой стрелки (поворот
+   на 90°, § .row__toggle .icon) — она показывает СМЕНУ СОСТОЯНИЯ одного
+   элемента, а не появление новых. */
+
+/* Кликабельными в дереве являются только три строки My Tasks — остальное
+   декоративная витрина. cursor:pointer нужен точечно: базовый
+   .row{cursor:default} — намеренный выбор для декоративных строк, а не
+   забытый сброс. Раньше адресация шла по data-атрибуту (он же был крючком
+   для делегированного обработчика); в React обработчик приходит пропом,
+   поэтому модификатор явный: .row--interactive. */
+.row--interactive{ cursor: pointer; }
+.row--interactive:focus-visible{ outline: var(--cu-focus-ring); outline-offset: -2px; }
+.row__toggle:focus-visible{ outline: var(--cu-focus-ring); outline-offset: 1px; }

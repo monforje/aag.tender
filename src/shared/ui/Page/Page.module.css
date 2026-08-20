@@ -1,0 +1,131 @@
+/* §4.10 — обвязка страницы внутри <main>: шапка 44px и прокручиваемое тело.
+   Вынесено в shared, потому что этим пользуются все страницы (My Tasks и
+   заглушки разделов), а сам <main> принадлежит каркасу (widgets/workspace).
+
+   ПРАВКА 1: main-header — БЕЛЫЙ. У живого ClickUp сам .cu-home-top-bar
+   прозрачный, но его хост покрашен в rgb(255,255,255), а контейнер страницы
+   ниже — в rgb(249,249,249). Правило: полоса с названием таба и действиями —
+   информационная поверхность, значит белая; всё под ней — холст, значит серый. */
+
+/* Экран страницы. Раньше их было два соседа в DOM с переключением класса
+   .is-open; теперь экран — это маршрут, и в DOM всегда ровно один. Стили те
+   же, что были у .my-tasks-screen.is-open. */
+.screen{
+  display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; height: 100%;
+}
+
+.main-header{
+  flex: 0 0 44px; height: 44px;
+  display: flex; align-items: center; justify-content: space-between;
+  padding-inline: 8px;
+  border-bottom: 1px solid var(--cu-border-default);
+  background: var(--cu-background-main);
+}
+/* Крошки несут собственный левый инсет (padding-left:12px), поэтому шапка
+   обнуляет свой: сложившись, они дали бы 20px и увели крошки вправо от
+   единой колонки контента (ПРАВКА 7.1). */
+.main-header--breadcrumb{ padding-inline: 0; }
+/* Сосед снизу — .main-secondary-header, у неё своя граница; рисовать обе
+   значило бы задвоить линию на стыке (см. references/replies.html §4.10,
+   ПРАВКА 8.3 — там же живой класс называется _withAttachedSecondaryHeader_). */
+.main-header--with-secondary{ border-bottom: none; }
+.main-header__title{
+  display: flex; align-items: center; padding: 0 8px 0 4px;
+  font-size: 14px; line-height: 16px; font-weight: var(--cu-font-weight-semibold);
+  color: var(--cu-content-primary);
+}
+.main-header__actions{ display: flex; align-items: center; gap: 4px; height: var(--cu-size-7); }
+
+.chip-btn{
+  display: inline-flex; align-items: center; gap: 6px; height: var(--cu-size-7);
+  padding-inline: 10px; border-radius: var(--cu-radii-3);
+  background: rgb(32,32,32); color: #fff;
+  font-size: 13px; font-weight: var(--cu-font-weight-medium); --icon-size: 14px;
+}
+.chip-btn:hover{ background: rgb(58,58,58); }
+/* .ghost-btn удалён: это был ровно IconButton, вариант page (тот же размер,
+   радиус, тон и ступень hover). Скролл-область уехала в shared/ui/ScrollArea —
+   её механика нужна и сайдбару, а не только странице. */
+
+/* SecondaryHeader — отдельный узел, а не часть .main-header (сверено на
+   живом ClickUp: _secondaryHeader_ и _chatRoomHeader_ — соседи с общим
+   родителем, не родитель-потомок). Фон БЕЛЫЙ, как у .main-header: серый
+   холст красится глубже, на .main, и без явного фона здесь бы просвечивал. */
+.main-secondary-header{
+  flex: 0 0 36px; height: 36px;
+  display: flex; align-items: center;
+  padding-inline: 8px;
+  border-bottom: 1px solid var(--cu-border-default);
+  background: var(--cu-background-main);
+}
+.tablist{ display: flex; align-items: center; gap: 8px; height: 100%; }
+/* .tab — только хит-зона клика (35px, легче попасть курсором) и якорь для
+   ::after активной вкладки; фон и радиус — на вложенном .tab__content, у
+   него своя, компактная зона подсветки (24px) вокруг текста. */
+.tab{
+  position: relative;
+  display: flex; align-items: center;
+  height: 35px; padding: 6px 0 5px;
+  background: none; border: none; cursor: pointer;
+}
+.tab__content{
+  display: flex; align-items: center;
+  padding: 4px; border-radius: 5px;
+  transition: background-color .15s ease;
+}
+/* Ховер — только у неактивной: у активной уже есть цвет текста + ::after,
+   второй подсветки не нужно. --cu-state-hover, не -subtle: 24px — компактный
+   контрол, не крупная поверхность (см. каталог состояний, global.css). */
+.tab:not(.is-active) .tab__content:hover{ background: var(--cu-state-hover); }
+.tab__label{
+  font-size: 12px; line-height: 16px; font-weight: var(--cu-font-weight-semibold);
+  color: var(--cu-content-secondary);
+}
+.tab.is-active .tab__label{ color: var(--cu-content-primary); }
+.tab.is-active::after{
+  content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px;
+  background: var(--cu-content-primary);
+}
+
+/* ВАРИАНТ canvas — тот же таблист, но НЕ в шапке экрана, а в теле страницы:
+   вкладки карточки тендера стоят под сводкой, на сером холсте <main>. Отсюда
+   ровно три отличия.
+
+   ФОНА НЕТ: белая полоса посреди холста читалась бы как вторая шапка, а это
+   навигация внутри содержимого. Линия снизу остаётся — она и отделяет
+   вкладки от того, что они переключают.
+
+   ЛИНИЯ ВО ВСЮ ШИРИНУ: margin-inline гасит паддинг .scroll-area--page — тот
+   же приём, что у таблицы реестра (Часть XII DESIGN-NOTES.md). Обратный
+   паддинг 4px плюс 8px внутри .tab__content возвращают подпись на общую
+   колонку контента (12px), где стоят крошки, заголовок и первая колонка
+   таблицы.
+
+   ВЫШЕ И КРУПНЕЕ: в шапке вкладка — мелкий фильтр среза (12px в полосе
+   36px), здесь она главный переключатель экрана, и 14px — кегль таблицы и
+   значений сводки, то есть основной текст страницы, а не служебный. Высоты
+   48px хватает, чтобы подпись не жалась к линии: под пилюлей 9.5px против
+   5.5px в шапке — про этот воздух и просили. */
+.main-secondary-header--canvas{
+  flex: none; height: 48px;
+  margin-top: var(--cu-size-4);
+  margin-inline: -12px; padding-inline: var(--cu-size-1);
+  background: none;
+}
+/* Вкладка тянется на всю высоту полосы: ::after активной прибит к её низу, и
+   при унаследованных 35px он повис бы посреди холста, не дойдя до линии.
+   padding-block снимается, иначе пилюля садится на 1px ниже центра. */
+.main-secondary-header--canvas .tab{ height: 100%; padding-block: 0; }
+.main-secondary-header--canvas .tab__content{
+  padding: 4px var(--cu-size-2); border-radius: var(--cu-radii-3);
+}
+.main-secondary-header--canvas .tab__label{ font-size: 14px; line-height: 20px; }
+
+/* ЗАГЛУШКА ТЕЛА — контент вне задачи, поэтому центрированная подсказка:
+   та же логика, что у пустых .card__body, просто с текстом, а не молча. */
+.screen-placeholder{
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 10px; min-height: 320px; text-align: center;
+  color: var(--cu-content-tertiary); font-size: 13px;
+}
+.screen-placeholder-icon{ --icon-size: 32px; color: var(--cu-content-quaternary); }

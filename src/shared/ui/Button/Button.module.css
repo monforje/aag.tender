@@ -1,0 +1,52 @@
+/* Кнопка с текстом. Появилась не «для полноты набора»: в одном только модуле
+   фильтров лежало ЧЕТЫРЕ копии одной и той же белой кнопки 32px с рамкой
+   (.control, .reset, .link-btn и триггер статуса) — они отличались ступенью
+   ховера (.05 против .06) и тем, темнеет ли текст, то есть случайными
+   различиями, а не смыслом. Ровно та же история, что была у кнопки-иконки до
+   выноса IconButton.
+
+   ВАРИАНТ = РОЛЬ, А НЕ НАБОР ЧИСЕЛ (то же правило, что у IconButton):
+     primary   — главное действие панели или диалога. Тёмная заливка, и
+                 поэтому в одной панели она РОВНО ОДНА: две «главные» кнопки
+                 рядом отменяют смысл обеих.
+     secondary — всё остальное: контрол полосы, «Очистить», «Сбросить».
+
+   Высота 32px — панельная шкала (полоса фильтров, подвал меню). Шапка
+   страницы живёт на 28px и держит свою кнопку — <ChipButton>; слить их
+   нельзя, не сдвинув пиксели эталона. */
+.btn{
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  height: var(--cu-size-8); padding-inline: 12px; border-radius: var(--cu-radii-3);
+  font-size: 13px; font-weight: var(--cu-font-weight-medium);
+  white-space: nowrap; --icon-size: 14px;
+  transition: background-color var(--cu-animation-duration) var(--cu-animation-timing),
+              color var(--cu-animation-duration) var(--cu-animation-timing);
+}
+.btn:focus-visible{ outline: var(--cu-focus-ring); outline-offset: 1px; }
+
+/* Единственный элемент с заливкой в покое, поэтому и ховер особый: не альфа
+   поверх (по чёрному она не читается), а осветление самого фона — тот же
+   рецепт, что у ChipButton. Тень отделяет её от плоских соседей: у главного
+   действия есть право быть приподнятым. */
+.btn--primary{
+  padding-inline: 18px; background: rgb(32,32,32); color: #fff;
+  box-shadow: var(--cu-elevation-2);
+}
+.btn--primary:hover{ background: rgb(58,58,58); }
+
+/* Компактный контрол → ступень ховера .06 из каталога состояний. Раньше одна
+   из копий брала .05 «на глаз» — теперь ступень одна и выведена из правила. */
+.btn--secondary{
+  border: 1px solid var(--cu-border-default); background: var(--cu-background-main);
+  box-shadow: var(--cu-elevation-1); color: var(--cu-content-secondary);
+}
+.btn--secondary:hover:not(:disabled){ background: var(--cu-state-hover); color: var(--cu-content-primary); }
+/* Нечего делать — кнопка гаснет, но ОСТАЁТСЯ: исчезающая кнопка дёргает
+   раскладку и заставляет искать, куда она делась. */
+.btn--secondary:disabled{ color: var(--cu-content-placeholder); box-shadow: none; cursor: default; }
+/* Включённое состояние (в контроле выбран фильтр): собственная заливка в
+   покое, значит ховер шагает на --cu-state-hover-strong — поверх своего же
+   фона слабая ступень не читается. Вес шрифта не трогаем: одно состояние —
+   один канал кодирования. */
+.btn.is-on{ background: var(--cu-fill-subtle); color: var(--cu-content-primary); }
+.btn.is-on:hover{ background: var(--cu-state-hover-strong); }

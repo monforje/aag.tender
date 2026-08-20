@@ -1,0 +1,49 @@
+# Сборка и публикация на GitHub Pages.
+#
+# Артефакт кладётся напрямую в Pages (actions/deploy-pages), без ветки
+# gh-pages: собранный dist в истории репозитория не нужен, и .gitignore его
+# честно не пускает.
+#
+# dist/404.html делает сам `bun run build` — это SPA-фолбэк: Pages отдаёт его
+# на любой неизвестный путь, а дальше маршрут разбирает роутер. Без него
+# прямая ссылка на /tenders/registry/T-2026-014 давала бы 404.
+name: pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Одна выкладка за раз: новый пуш отменяет предыдущую, ещё не доехавшую.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      # tsc --noEmit входит в скрипт build: типы проверяются здесь же, отдельным
+      # шагом это было бы вторым местом, где о них нужно помнить.
+      - run: bun run build
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

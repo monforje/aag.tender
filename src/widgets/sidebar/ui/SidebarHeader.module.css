@@ -1,0 +1,148 @@
+/* Шапка панели: заголовок, группа контролов, поиск и кнопка создания.
+   ВСЁ ЭТО В ОДНОМ МОДУЛЕ НАМЕРЕННО. Компоненты разные, но стили сцеплены
+   :has()-правилами: при фокусе в поиске заголовок схлопывается в ноль, а
+   группа контролов забирает всю ширину шапки. Растащи их по модулям — и
+   селектор перестанет собираться, потому что CSS Modules хэширует классы
+   помодульно. Граница компонентов проходит по разметке, граница стилей — по
+   зависимостям между ними; здесь они не совпадают, и это нормально. */
+
+.sidebar-final__header{
+  --header-x-spacing: var(--cu-size-4);
+  flex-shrink: 0; align-items: center;
+  background-color: var(--cu-global-sidebar-background);
+  display: grid; grid-template-columns: 1fr;
+  height: calc(var(--cu-size-7) + 12px);          /* 40px */
+  line-height: var(--sidebar-tree-item-height);
+  padding: 8px 8px 4px 12px;
+  position: sticky; top: 0; z-index: 2;
+  /* ТЕНЬ (правка 4): шапка sticky и фон у неё тот же, что у списка под ней. Пока список
+     не прокручен, тень не нужна и её нет — иначе она висела бы бессмысленной полосой.
+     Как только контент уезжает ПОД шапку, включаем elevation-2: именно в этот момент
+     шапка перестаёт быть частью потока и становится слоем над ним, и тень это объясняет.
+     Класс переключается из JS по scrollTop списка. */
+  box-shadow: 0 0 0 0 rgba(0,0,0,0);
+  transition: box-shadow var(--cu-animation-duration) var(--cu-animation-timing);
+}
+/* Раньше правило шло от предка: .sidebar-final.is-scrolled .sidebar-final__header.
+   После разделения на модули оно перестало собираться — .sidebar-final живёт в
+   Sidebar.module.css, а шапка здесь, и CSS Modules хэширует классы помодульно,
+   поэтому в одном селекторе они уже не встречаются.
+   Состояние теперь на самой шапке: она владеет собственным модификатором и не
+   зависит от того, какой класс висит на предке. Это и правильнее по сути —
+   тень принадлежит шапке, а не панели. */
+.sidebar-final__header--scrolled{ box-shadow: var(--cu-elevation-2); }
+.sidebar-final__header-inner{ display: flex; align-items: center; gap: 4px; min-width: 0; }
+.sidebar-final__title{
+  font-size: 16px; line-height: 20px; font-weight: var(--cu-font-weight-semibold);
+  color: var(--cu-content-primary); flex: 1 1 auto; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis;
+}
+
+/* ---------------------------------------------------------------------------
+   ПРАВКА 5.3 (обновлено по новой просьбе): .sidebar-final__actions — группа
+   управляющих элементов в шапке Home. Итоговый состав: слева направо —
+   «⋮» (настройки), поиск (cu-search-input), «свернуть» (cu-collapsed-sidebar).
+   Кнопка создания «+⌄» (cu-sidebar-creation-menu-button, состояние reduced —
+   только иконки, текст Create визуально скрыт) В ГРУППУ НЕ ВХОДИТ: она
+   статична и видна всегда, как только раскрыт сам sidebar_final — у живого
+   ClickUp «+⌄» это постоянная белая капсула в шапке, а ховером показываются
+   только остальные контролы. Из полного набора живого <cu-sidebar-header>
+   (колокольчик-инбокс со счётчиком, поиск, фильтр, «свернуть», «+⌄») по
+   прямой просьбе удалены колокольчик (вместе с внешней ссылкой на inbox)
+   и фильтр — вместо них слева добавлена кнопка «⋮».
+
+   АНИМАЦИЯ — «самостоятельная», как и просили: opacity/transform/transition
+   висят прямо на контейнере .sidebar-final__actions, и вся группа (теперь из
+   трёх контролов) появляется/скрывается ОДНИМ блоком — без промежуточных
+   CSS-переменных на предке и без класса-маркера .sidebar-control на детях.
+   Триггер остался прежним: :hover ИЛИ :focus-within на .sidebar-final. Второе
+   обязательно — иначе группа уезжала бы обратно вправо в момент, когда поле
+   поиска в фокусе (идёт ввод текста), а курсор мыши уже покинул сайдбар.
+   -------------------------------------------------------------------------*/
+/* HOVER-REVEAL ЧЕРЕЗ CSS-ПЕРЕМЕННЫЕ (§0.2(c) эталона).
+   Раньше проявление писалось селектором от предка:
+       .sidebar-final:hover .sidebar-final__actions{ opacity: 1 }
+   После разделения на модули он перестал работать: .sidebar-final живёт в
+   Sidebar.module.css и получает там свой хэш, а тот же класс, упомянутый
+   здесь, — другой. Селектор не совпадал ни с чем, и группа навсегда
+   оставалась прозрачной.
+   Кастомные свойства НАСЛЕДУЮТСЯ по DOM и хэшей не имеют, поэтому именно они
+   переносят состояние через границу модуля: панель на :hover/:focus-within
+   переопределяет переменные (см. Sidebar.module.css), группа их читает.
+   Это тот же приём, что был описан в эталоне как §0.2(c), — теперь у него
+   появилась вторая причина существовать. */
+.sidebar-final__actions{
+  display: flex; align-items: center; gap: 1px; flex: 0 0 auto;
+  opacity: var(--sidebar-actions-opacity, 0);
+  transform: translateX(var(--sidebar-actions-shift, 8px));
+  transition: opacity var(--cu-animation-duration) var(--cu-animation-timing),
+              transform var(--cu-animation-duration) var(--cu-animation-timing);
+}
+
+/* Кнопки шапки — shared/ui/IconButton, вариант panel. */
+
+/* cu-search-input: в покое — та же кнопка 28×28 с одной иконкой; по фокусу
+   разъезжается в поле на всю доступную ширину шапки */
+.sidebar-search{
+  display: flex; align-items: center; gap: 4px; flex: 0 0 auto;
+  width: var(--cu-size-7); height: var(--cu-size-7); padding: 0 6px;
+  border-radius: 7px; overflow: hidden; color: var(--cu-content-tertiary); --icon-size: 16px;
+  transition: width var(--cu-animation-duration) var(--cu-animation-timing),
+              background-color var(--cu-animation-duration) var(--cu-animation-timing),
+              opacity var(--cu-animation-duration) var(--cu-animation-timing),
+              transform var(--cu-animation-duration) var(--cu-animation-timing);
+}
+.sidebar-search:hover{ background-color: var(--cu-state-hover); color: var(--cu-content-primary); }
+/* Раскрытие поиска. Раньше была фиксированная ширина 150px — при двух контролах
+   влезало. С группой из четырёх контролов (ПРАВКА 5.3) 150px + три соседние
+   кнопки в 256px шапки уже не помещаются, поэтому поле растягивается на ВСЁ
+   свободное место (flex:1 1 auto), а заголовок сворачивается в ноль через :has()
+   — ровно так ведёт себя живой cu-search-input в Home-шапке: при фокусе поле
+   занимает всю ширину, остальные кнопки остаются справа. */
+.sidebar-search:focus-within{ flex: 1 1 auto; width: auto; background-color: var(--cu-background-main); box-shadow: var(--cu-elevation-border-1); }
+/* Поле растёт внутри .sidebar-final__actions, но сама группа — flex:0 0 auto
+   (максимально-контентная): свободного места внутри неё нет, flex-grow поиска
+   не находит, чем распорядиться. Поэтому при фокусе отдаём ВСЮ ширину шапки
+   группе (flex:1), а заголовок сворачиваем в ноль — дальше поиск уже сам
+   растянется на всё, что дала группа. */
+.sidebar-final__header-inner:has(.sidebar-search:focus-within) .sidebar-final__title{ flex: 0 1 0; }
+.sidebar-final__header-inner:has(.sidebar-search:focus-within) .sidebar-final__actions{ flex: 1 1 auto; min-width: 0; }
+.sidebar-search__input{
+  flex: 1 1 auto; min-width: 0; width: 0; border: none; background: transparent; outline: none;
+  font-size: 13px; color: var(--cu-content-primary);
+}
+.sidebar-search__input::placeholder{ color: var(--cu-content-tertiary); }
+
+/* cu-sidebar-creation-menu-button — кнопка создания «+⌄» в состоянии reduced
+   (только иконки; текст Create скрыт через .visually-hidden, как в живом DOM).
+   СТАТИЧНАЯ: в отличие от .sidebar-final__actions, не прячется до ховера —
+   лежит вне анимированной группы в шапке и появляется/исчезает только вместе
+   с самим sidebar_final (тот гасится через opacity/width на предке). «внутри
+   белая, снаружи тень» — заливка rgba(0,0,0,.06) убрана, теперь белый
+   капсульный фон на сером сайдбаре + хэйрлайн-тень (elevation-border-1),
+   та же семантика, что у поля поиска в топбаре: белая поверхность с тенью =
+   «нажми, здесь действие». */
+.sidebar-add{
+  display: inline-flex; align-items: center; justify-content: center; gap: 2px;
+  height: var(--cu-size-7); padding-inline: 6px; border-radius: 7px; flex: 0 0 auto;
+  background: var(--cu-background-main);
+  box-shadow: var(--cu-elevation-border-1);
+  transition: box-shadow var(--cu-animation-duration) var(--cu-animation-timing);
+}
+/* Рецепт (4): та же белая капсула, что и поиск в топбаре. */
+.sidebar-add:hover{ box-shadow: var(--cu-state-ring), var(--cu-elevation-border-1); }
+/* `.icon` — класс чужого модуля (shared/ui/Icon), селектор от него здесь не
+   собрался бы; класс передаётся иконкам пропом className.
+
+   ВНИМАНИЕ, здесь легко «починить» рендер. В эталоне рядом с этим правилом
+   лежало второе:
+       .sidebar-add .icon:last-child{ --icon-size: 12px; color: tertiary }
+   и оно НИКОГДА не применялось: последний ребёнок кнопки — не иконка, а
+   <span class="visually-hidden">Create</span>, поэтому .icon:last-child не
+   совпадает ни с чем (проверено на живом DOM эталона: matches() → false у
+   обеих иконок, ширина кнопки 46px, обе иконки 16px/secondary).
+   При переносе на пропы это правило само собой «ожило» бы и сузило шевron до
+   12px — кнопка стала бы 42px. Оставляем обе иконки одинаковыми, как
+   рендерится эталон. Если 12px были задумкой — это отдельное осознанное
+   изменение, а не побочный эффект миграции. */
+.sidebar-add__icon{ --icon-size: 16px; color: var(--cu-content-secondary); }

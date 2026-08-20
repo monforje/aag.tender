@@ -1,0 +1,87 @@
+/* Пункт рейла: иконка, подпись под ней, счётчик и «носик» открытого превью.
+   Здесь же мостик ховера и анимация носика — всё это свойства ОДНОГО пункта,
+   поэтому живут в его модуле, а не в модуле рейла. */
+/* ---------------------------------------------------------------------------
+   4.4 ПУНКТ РЕЙЛА — cu-simple-bar-home-switch / cu-simple-bar-item
+   Слот: 4 (padding-top) + 6 + 40 + 6 = 56px. Подписи под иконкой нет —
+   название раздела живёт в шапке sidebar_final, дублировать его негде.
+   -------------------------------------------------------------------------*/
+.nav-switch{ display: flex; flex-direction: column; align-items: center; width: 100%; padding-top: var(--cu-size-1); }
+.nav-switch__container{ display: flex; justify-content: center; }
+.nav-item{
+  position: relative; display: flex; align-items: center; justify-content: center;
+  width: var(--sidebar-collapsed-button-width);
+  --sidebar-item-opacity: .62;
+}
+.nav-item:hover, .nav-item:focus-within, .nav-item.is-flyout-open{ --sidebar-item-opacity: 1; }
+/* мостик ховера справа: [host]:hover:before{height:180%;width:12px;transform:translate(100%)} */
+.nav-item:hover::before{ content: ""; position: absolute; right: 0; height: 180%; width: 12px; transform: translateX(100%); }
+.nav-item__link{
+  position: relative; display: flex; align-items: center; justify-content: center;
+  width: var(--sidebar-collapsed-button-width); height: var(--sidebar-collapsed-button-width);
+  text-decoration: none; margin-block: 6px;
+}
+.nav-item__inner{
+  display: flex; align-items: center; justify-content: center;
+  width: 100%; height: 100%; border-radius: var(--cu-radii-4);
+  transition: background-color var(--cu-animation-duration) var(--cu-animation-timing);
+}
+.nav-item__link:hover .nav-item__inner,
+.nav-item__link:focus-visible .nav-item__inner,
+.nav-item__inner.is-flyout-open{ background-color: var(--cu-alphaGrey300); }
+/* ТЕНЬ (правка 4): активный пункт рейла у ClickUp несёт box-shadow:var(--cu-elevation-2) —
+   .cu-simple-bar-item__inner.active{box-shadow:var(--cu-elevation-2)}. На чёрном фоне тень
+   почти не читается как тень, её роль — дать выбранной иконке едва заметный объём,
+   чтобы она не выглядела просто «светлым квадратом». */
+.nav-item__inner.is-active{
+  background-color: var(--cu-alphaGrey400);
+  box-shadow: var(--cu-elevation-2);
+}
+
+/* «носик» флайаута — ::before у пункта рейла (position:fixed, top задаётся из JS).
+   ПРАВКА 6.2. Сверено 1:1 с живым правилом ClickUp (DevTools →
+   .cu-simple-bar__item-icon-container::before): совпадает всё, кроме двух деталей,
+   которые я раньше упростил не глядя в реальный код, — исправлено:
+     1) background-color был var(--cu-background-menu), должен быть var(--cu-background-main).
+        Оба токена сегодня совпадают (белый), но семантически носик — это часть ПАНЕЛИ
+        флайаута (её фон), а не часть выпадающего МЕНЮ; если тема когда-то разведёт эти
+        два фона по разным оттенкам белого, носик обязан остаться в паре с панелью.
+     2) transform был scale(.7) — равномерное сжатие даёт симметричный ромб. У ClickUp
+        именно scaleY(.7) — сжатие ТОЛЬКО по вертикали. В паре с несимметричным
+        border-radius (0 100% 0 3px, один угол скруглён в полную четверть окружности,
+        остальные почти острые) равномерный scale() рисует аккуратный ромб-бриллиант,
+        а scaleY() — вытянутый «лепесток»/капля, прижатую к панели длинной стороной.
+        Это и есть тот самый характерный «плавник», а не ромбик — на глаз разница
+        небольшая, но именно она делает форму узнаваемо ClickUp-овской.
+   ТЕНЬ (правка 4): своя, «однобокая» — -1px 1px 1px -1px. Носик повёрнут на 45°, поэтому
+   обычная симметричная тень обвела бы его ромбом и выдала как отдельную фигуру. Смещение
+   влево-вниз кладёт тень только на тот луч, который торчит из-под панели, — и носик
+   читается как продолжение флайаута, а не как значок рядом с ним. */
+.nav-item__inner.is-flyout-open::before{
+  --cu-flyout-indicator-right: -10px;
+  position: fixed; content: ""; right: var(--cu-flyout-indicator-right);
+  /* top раньше инъектировался в <style> из JS (positionArrow); теперь это
+     inline-переменная на самом пункте — считается там же, в useFlyout. */
+  top: var(--arrow-top, 0px);
+  height: 18px; width: 18px; border-radius: 0 100% 0 3px;
+  background-color: var(--cu-background-main); z-index: 2;
+  box-shadow: -1px 1px 1px -1px var(--cu-alphaGrey700), 0 4px 6px -6px rgba(0,0,0,.1);
+  transform: scaleY(.7) rotate(45deg);
+  /* ПРАВКА 3: у носика СВОЯ анимация, отдельная от панели — это оригинальные keyframes
+     ClickUp (компонент пункта рейла, не флайаута):
+       0%{opacity:0; right:calc(var(--cu-flyout-indicator-right) + 8px)} to{...right:var(...)}
+     То есть носик выезжает вправо на 8px из-под рейла, пока панель проявляется. Две
+     раздельные анимации дают эффект «панель вытянула за собой язычок». */
+  animation: flyoutIndicatorSlideIn var(--flyout-duration) var(--flyout-timing) forwards;
+}
+@keyframes flyoutIndicatorSlideIn{
+  0%{ opacity: 0; right: calc(var(--cu-flyout-indicator-right) + 8px); }
+  to{ opacity: 1; right: var(--cu-flyout-indicator-right); }
+}
+.nav-item__icon{
+  --icon-size: 26px; color: var(--cu-content-on-dark);
+  opacity: var(--sidebar-item-opacity);
+  transition: opacity var(--cu-animation-duration) var(--cu-animation-timing);
+}
+.nav-item__link.is-active .nav-item__icon{ opacity: 1; }
+.nav-item__counter{ position: absolute; top: -3px; right: -5px; border: 2px solid rgb(0,0,0); }

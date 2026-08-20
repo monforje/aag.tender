@@ -1,0 +1,35 @@
+/* ---------------------------------------------------------------------------
+   4.3 RAIL — слот 64px (container-query + containing block) + карточка 52px
+   -------------------------------------------------------------------------*/
+.rail-slot{
+  width: var(--global-sidebar-width); flex: 0 0 var(--global-sidebar-width);
+  position: relative; min-height: 0; height: 100%;
+  container-type: size;              /* даёт единицу cqh для height:90cqh у флайаута */
+  will-change: transform, width;     /* как у ClickUp; делает слот containing block для fixed */
+  z-index: var(--z-rail);
+}
+/* ТЕНЬ (правка 4): рейл — самый «высокий» элемент шелла, он физически лежит поверх
+   холста как отдельный тёмный остров, поэтому elevation-3, а не 1. Контур ему не нужен:
+   чёрное на белом и так отделяется, так что здесь чистая elevation-*, без border-варианта. */
+.rail{
+  width: var(--rail-card-width); height: 100%; margin-inline: var(--island-gap);
+  background: rgb(0,0,0);
+  border-radius: var(--cu-radii-4); box-shadow: var(--cu-elevation-3);
+  display: flex; flex-direction: column; align-items: center;
+  padding-bottom: var(--island-gap); overflow: hidden;
+}
+.rail__expand-zone{
+  width: 100%; flex: 0 0 auto; display: grid; justify-items: center;
+  overflow: hidden; max-height: 56px; opacity: 1;
+  transition: max-height var(--cu-animation-duration) var(--cu-animation-timing),
+              opacity var(--cu-animation-duration) var(--cu-animation-timing);
+}
+/* Зона сворачивается, когда sidebar_final раскрыт. Раньше это делал селектор
+   от предка (.app[data-sidebar="open"] …) — предок теперь в другом модуле,
+   поэтому состояние приходит модификатором из стора. */
+.rail__expand-zone--hidden{ max-height: 0; opacity: 0; pointer-events: none; }
+/* Сама кнопка — shared/ui/IconButton, вариант rail (размер, радиус, тон и
+   белая подсветка по тёмному). Здесь остаётся только её место в зоне. */
+.rail__expand-btn{ margin-top: var(--island-gap); }
+.rail__divider{ width: 30px; height: 1px; background: var(--cu-alphaGrey300); margin: 8px 0 2px; }
+.rail__body{ display: flex; flex-direction: column; align-items: center; width: 100%; flex: 1 1 auto; min-height: 0; }

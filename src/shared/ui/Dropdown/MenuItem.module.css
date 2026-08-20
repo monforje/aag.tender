@@ -1,0 +1,23 @@
+/* Пункт выпадающего меню. Стили переехали из Dropdown.module.css без
+   изменения значений — сменилась только разметка (роль и слоты). */
+.dd__item{
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 10px; border-radius: var(--cu-radii-3); font-size: 13px; line-height: 18px;
+  color: var(--cu-content-secondary);
+  /* cursor:default — намеренный выбор для пунктов-заглушек: курсор не должен
+     обещать действие, которого нет. Кликабельный пункт (есть onSelect)
+     переключается на pointer правилом ниже. */
+  cursor: default;
+  --icon-size: 16px;
+}
+/* Рецепт (1): пункт меню — крупная поверхность. */
+.dd__item:hover{ background: var(--cu-state-hover-subtle); }
+.dd__item--interactive{ cursor: pointer; }
+.dd__item--interactive:focus-visible{ outline: var(--cu-focus-ring); outline-offset: -2px; }
+/* Отключённый пункт остаётся видимым и читаемым: пользователь должен понимать,
+   что действие существует, но сейчас недоступно. Поэтому приглушение, а не
+   удаление, и никакой реакции на наведение. */
+.dd__item--disabled{ opacity: .45; pointer-events: none; }
+/* Правая приписка — хоткей или счётчик. Прижата к правому краю и всегда тише
+   основного текста: это справка, а не второй заголовок. */
+.dd__item__hint{ margin-left: auto; color: var(--cu-content-placeholder); font-size: 12px; }

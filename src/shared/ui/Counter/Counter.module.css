@@ -1,0 +1,14 @@
+/* §4.9 COUNTER — cu3-counter.large.counter.notification.circle
+   Замер: min-width/height 16px (1rem), padding 0, radius 666px,
+   background rgb(233,61,130), color #fff, font-size 11px (.6875rem), weight 600,
+   line-height 16px, flex + центрирование по обеим осям. */
+.counter{
+  display: flex; align-items: center; justify-content: center;
+  min-width: var(--cu3-counter-min-width); height: var(--cu3-counter-height);
+  padding: 0; border-radius: var(--cu3-counter-border-radius);
+  background: var(--cu3-counter-background); color: var(--cu3-counter-color);
+  font-size: var(--cu3-counter-font-size); font-weight: var(--cu3-counter-font-weight);
+  line-height: 1rem; text-align: center; box-sizing: border-box; flex: 0 0 auto;
+}
+/* вариант «тихого» счётчика — как у Team Ops | Work: без заливки, серым */
+.counter--muted{ background: transparent; color: var(--cu-content-secondary); }

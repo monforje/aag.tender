@@ -1,0 +1,46 @@
+/* Аватар-инициал. Раньше существовал в трёх копиях: у переключателя
+   воркспейса, у меню пользователя и в строке дерева.
+
+   ПОЧЕМУ ВАРИАНТЫ, А НЕ size/shape/tone. У трёх копий различаются ВСЕ оси
+   разом, причём несогласованно: два аватара по 18px имеют разный кегль (11 и
+   9) и разную форму (скруглённый квадрат и круг). Пропсы-оси позволили бы
+   собрать сочетание, которого в дизайне нет. Вариант кодирует РОЛЬ, а роль
+   уже определяет всё остальное. */
+.avatar{
+  display: flex; align-items: center; justify-content: center;
+  position: relative; flex: 0 0 auto; line-height: 1;
+  width: var(--av-size); height: var(--av-size);
+  border-radius: var(--av-radius);
+  background: var(--av-bg);
+  color: var(--cu-content-on-dark);
+  font-size: var(--av-font); font-weight: var(--cu-font-weight-bold);
+}
+/* Воркспейс: скруглённый квадрат и фирменный цвет — он опознаётся как логотип
+   пространства, а не как человек. Поэтому же здесь никогда не бывает статуса. */
+.avatar--workspace{
+  --av-size: 18px; --av-radius: 4.5px; --av-font: 11px; --av-bg: rgb(18,165,148);
+}
+/* Текущий пользователь в топбаре. */
+.avatar--user{
+  --av-size: var(--cu-size-6); --av-radius: var(--cu-radii-round); --av-font: 12px;
+  --av-bg: rgb(32,32,32);
+  --av-dot: 9px; --av-dot-ring: 2px;
+}
+/* Человек или адресат в строке дерева: мельче и с более тонкой обводкой точки,
+   потому что лежит в 28-пиксельной строке. */
+.avatar--tree{
+  --av-size: 18px; --av-radius: 50%; --av-font: 9px; --av-bg: rgb(32,32,32);
+  --av-dot: 7px; --av-dot-ring: 1.5px;
+}
+
+/* Точка «сейчас в сети». Обводка = цвет поверхности ПОД аватаром, а не белый
+   по умолчанию: иначе на сером сайдбаре вокруг точки появляется светлый ореол
+   и она читается отдельным пятном, а не вырезом в аватаре. Поверхность
+   передаётся пропом surface — это единственная вещь, которую компонент про
+   своё окружение знать не может. */
+.avatar__status{
+  position: absolute; right: -1px; bottom: -1px;
+  width: var(--av-dot); height: var(--av-dot);
+  border-radius: 50%; background: rgb(46,164,108);
+  border: var(--av-dot-ring) solid var(--av-surface, var(--cu-background-main));
+}

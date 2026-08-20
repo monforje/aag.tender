@@ -1,0 +1,23 @@
+/* Переключатель воркспейса: аватар + имя + каретка в одной капсуле.
+   Единственный контрол топбара с заливкой в покое — он же «где я сейчас».
+   Из-за заливки его hover идёт ступенью выше остальных (рецепт 1). */
+.ws-toggle{
+  min-width: 52px; height: var(--cu-size-7); gap: var(--island-gap);
+  padding-inline: var(--island-gap); border-radius: var(--cu-radii-3);
+  display: inline-flex; align-items: center; border: 1px solid transparent;
+  background-color: var(--cu-fill);
+  transition: background-color var(--cu-animation-duration) var(--cu-animation-timing);
+}
+/* Рецепт (1), ступень «поверх собственной заливки»: в покое здесь --cu-fill,
+   поэтому hover обязан быть темнее её, иначе наведение не читается. */
+.ws-toggle:hover{ background-color: var(--cu-state-hover-strong); }
+/* Аватар воркспейса рисует shared/ui/Avatar (вариант workspace). */
+/* ПРАВКА 6.3: было 13px «на глаз», реально в DOM у SPAN.name — 14px/600
+   (замер: font-size:14px, font-weight:600, line-height:16.002px). 13px — это размер
+   СОСЕДНИХ элементов тоглла (сам .cu-workspace-picker-toggle, .left-part), а не имени
+   воркспейса — задел на них и ошибся адресом токена. */
+.ws-toggle__name{
+  font-size: 14px; font-weight: var(--cu-font-weight-semibold); line-height: 18px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ws-toggle__caret{ --icon-size: 14px; color: var(--cu-content-secondary); }

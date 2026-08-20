@@ -1,0 +1,66 @@
+/* ПОЛОСА ФИЛЬТРОВ. Лежит на сером холсте между вкладками и таблицей — не
+   внутри прокрутки: фильтры это оснастка экрана, они обязаны быть на месте,
+   когда таблица уехала вниз, и их панели не должны резаться границей скролла.
+
+   ЧЕТЫРЕ КОНТРОЛА РАЗНОГО ВЕСА, а не ряд одинаковых кнопок:
+     капсула во всю ширину — поиск: вход в данные (<SearchInput capsule>);
+     32×32 — «Фильтры»: под ней четыре критерия с мультивыбором;
+     32×32 — период; статус — селект с подписью;
+     хвост справа — сброс, появляется только когда есть что сбрасывать.
+
+   Сами контролы своего оформления НЕ ЗАВОДЯТ: кнопки-глифы это буквально
+   <IconButton variant="topbar"> (тот же компонент, что календарь в топбаре),
+   селект и сброс — <Button variant="secondary">, поиск — <SearchInput>.
+   Здесь остаётся только раскладка полосы и то, чего у общих компонентов
+   нет, — индикаторы поверх кнопок без подписи. */
+.filters{
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  padding: 10px 12px 0;
+}
+
+/* Иконка и стрелка внутри селекта статуса: тон тише подписи — это оснастка
+   контрола, а не его содержание. */
+.control__icon{ --icon-size: 15px; color: var(--cu-content-quaternary); }
+.control__caret{ --icon-size: 12px; color: var(--cu-content-quaternary); }
+/* Выбран ровно один статус — на кнопке стоит его <Badge>: тот же тон и тот же
+   глиф, что в таблице. Своих цветных классов полоса не заводит; горизонтальный
+   паддинг ужимается, потому что капсула несёт собственный. */
+.control--badge{ padding-left: 6px; }
+
+/* ── панели под кнопками ────────────────────────────────────────────────── */
+/* Ширина — свойство СОДЕРЖИМОГО, поэтому живёт здесь, а не в <MenuPanel>.
+   У панели периода своей ширины нет вовсе: её задаёт <RangeCalendar>. */
+.panel--narrow{ width: 210px; }
+.panel__body{ max-height: 320px; overflow-y: auto; }
+
+/* ── индикаторы на кнопках без подписи ──────────────────────────────────── */
+/* Без них иконка молчит о том, что таблица показывает не всё. Цифру и точку
+   дублирует подпись кнопки (label={`Фильтры · ${count}`}) — значок
+   визуальный, для скринридера его роль играет имя кнопки. */
+.btn-badge{
+  position: absolute; top: -3px; right: -4px;
+  display: flex; align-items: center; justify-content: center;
+  min-width: 15px; height: 15px; padding-inline: 4px; border-radius: var(--cu-radii-round);
+  background: rgb(32,32,32); color: #fff;
+  font-size: 10px; font-weight: var(--cu-font-weight-semibold); line-height: 1;
+  box-shadow: 0 0 0 2px var(--cu-global-sidebar-background);
+}
+/* У периода считать нечего — он либо задан, либо нет, поэтому точка. */
+.btn-dot{
+  position: absolute; top: 4px; right: 4px; width: 6px; height: 6px; border-radius: 50%;
+  background: rgb(32,32,32); box-shadow: 0 0 0 2px var(--cu-background-main);
+}
+
+/* ── хвост полосы ───────────────────────────────────────────────────────── */
+/* Прижат вправо целиком, а не по одной кнопке: иначе при скрытом сбросе
+   «Фильтры» оставались бы посреди полосы. */
+.tail{ display: inline-flex; align-items: center; gap: 6px; margin-left: auto; }
+.reset__icon{ --icon-size: 14px; }
+.reset__count{
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 15px; height: 15px; padding-inline: 4px; border-radius: var(--cu-radii-round);
+  background: var(--cu-fill); font-size: 10px; font-weight: var(--cu-font-weight-semibold);
+  color: var(--cu-content-primary);
+}
+/* Счётчик результата живёт в <caption> таблицы: он описывает ТАБЛИЦУ, а не
+   выбор, и среди контролов читался как ещё один фильтр. */

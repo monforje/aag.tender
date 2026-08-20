@@ -1,0 +1,10 @@
+/* Меню текущего пользователя: аватар с точкой присутствия + каретка. */
+.user-menu{ margin-left: 2px; position: relative; }
+.user-menu__toggle{
+  width: 43px; height: var(--cu-size-8); border-radius: 16px;
+  display: flex; align-items: center; justify-content: center; gap: 1px;
+  transition: background-color var(--cu-animation-duration) var(--cu-animation-timing);
+}
+.user-menu__toggle:hover{ background-color: var(--cu-state-hover); }
+/* Аватар пользователя с точкой онлайна — shared/ui/Avatar (вариант user). */
+.user-menu__caret{ --icon-size: 12px; color: var(--cu-content-secondary); }

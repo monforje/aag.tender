@@ -1,0 +1,31 @@
+/* ---------------------------------------------------------------------------
+   4.1 TOPBAR — .global-actions-bar (height 40px, padding-inline 6px)
+   ПРАВКА 1: position+z-index обязательны. Без них топбар не создаёт собственный
+   стекинг-контекст, и его выпадающие меню оказываются под рейлом (z-index:999).
+   -------------------------------------------------------------------------*/
+.topbar{
+  flex: 0 0 var(--cu-global-actions-bar-height);
+  height: var(--cu-global-actions-bar-height);
+  display: flex; align-items: center;
+  padding-inline: var(--island-gap);
+  background: var(--cu-background-main);
+  position: relative; z-index: var(--z-topbar);
+}
+.topbar__row{
+  display: flex; align-items: center; height: var(--cu-size-8);
+  flex-grow: 1; min-width: 0; gap: var(--cu-size-2);
+}
+.topbar__left{ display: flex; align-items: center; flex: 0 0 auto; }
+.topbar__center{ flex: 1 1 auto; display: flex; justify-content: center; min-width: 0; }
+.topbar__right{ display: flex; align-items: center; flex: 0 0 auto; }
+
+
+/* Обёртка поиска. Была id-селектором (#searchDd) на общем .dd — теперь
+   класс, который топбар передаёт Dropdown'у пропом className. Именно она
+   задаёт РЕАЛЬНЫЙ размер, от которого .search{width:100%} считает проценты:
+   без этого ширина схлопывалась по контенту (ПРАВКА 7.2). */
+.search-dd{
+  display: flex; justify-content: center;
+  width: 261px;              /* замер живого .search-button при похожей ширине топбара */
+  min-width: 176px; max-width: 360px;  /* = 11rem/22.5rem у живого .stt-search-area */
+}

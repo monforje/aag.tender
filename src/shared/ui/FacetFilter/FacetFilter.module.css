@@ -1,0 +1,57 @@
+/* ОКНО ФИЛЬТРОВ: критерии слева, значения справа.
+
+   ПОЧЕМУ ДВЕ КОЛОНКИ, А НЕ СТОПКА ГРУПП. Стопка (все значения всех полей
+   подряд) работает на трёх критериях и разваливается на десяти: чтобы дойти до
+   последнего, нужно пролистать все чужие списки. Здесь высота панели НЕ
+   ЗАВИСИТ ни от числа критериев, ни от числа значений — прокручиваются сами
+   колонки, и обе видны одновременно: слева «что я фильтрую», справа «чем
+   именно».
+
+   Ширина ограничена вьюпортом: панель прижата к правому краю полосы и на
+   узком экране обязана ужиматься, а не уезжать за границу. */
+.fp{ width: min(560px, calc(100vw - 40px)); height: 400px; }
+.fp__body{ display: flex; flex: 1 1 auto; min-height: 0; }
+.fp__facets{
+  flex: 0 0 180px; display: flex; flex-direction: column; gap: 2px;
+  padding-right: 6px; margin-right: 6px; overflow-y: auto;
+  border-right: 1px solid var(--cu-border-default);
+}
+/* Критерий — крупная поверхность (строка во всю колонку), поэтому ховер .05.
+   Текущий держит заливку постоянно: это не выбор значения, а «где я». */
+.fp__facet{
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 10px 12px; border-radius: var(--cu-radii-3);
+  text-align: left; font-size: 13px; font-weight: var(--cu-font-weight-medium);
+  color: var(--cu-content-secondary);
+  transition: background-color var(--cu-animation-duration) var(--cu-animation-timing);
+}
+.fp__facet:hover{ background: var(--cu-state-hover-subtle); }
+.fp__facet:focus-visible{ outline: var(--cu-focus-ring); outline-offset: -2px; }
+.fp__facet.is-on{ background: var(--cu-fill); color: var(--cu-content-primary); }
+.fp__facet-title{ overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Счётчики у критериев — единственный способ увидеть картину целиком, не
+   открывая каждый по очереди. */
+.fp__facet-count{
+  margin-left: auto; min-width: 16px; height: 16px; padding-inline: 4px;
+  border-radius: var(--cu-radii-round); background: rgb(32,32,32); color: #fff;
+  font-size: 10px; line-height: 16px; text-align: center;
+  font-weight: var(--cu-font-weight-semibold);
+}
+.fp__values{ flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.fp__search{ margin-bottom: 8px; }
+/* «Снять N» — внутри поля поиска, а не рядом с ним: действие относится к
+   текущему критерию, и место у его правого края говорит это без подписи. */
+.fp__clear{
+  flex: 0 0 auto; height: var(--cu-size-6); padding-inline: 8px;
+  border: 1px solid var(--cu-border-default); border-radius: var(--cu-radii-round);
+  background: var(--cu-background-main);
+  font-size: 12px; color: var(--cu-content-secondary);
+}
+.fp__clear:hover{ background: var(--cu-state-hover); color: var(--cu-content-primary); }
+.fp__clear:focus-visible{ outline: var(--cu-focus-ring); outline-offset: 1px; }
+.fp__list{ flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-right: 2px; }
+/* Черта между закреплённым выбранным и остальным списком: без неё после
+   первого же символа в поиске непонятно, почему сверху лежит что-то,
+   не совпадающее с запросом. */
+.fp__divider{ height: 1px; margin: 6px 8px; background: var(--cu-border-default); }
+.fp__hint{ padding: 8px; font-size: 12px; color: var(--cu-content-tertiary); }

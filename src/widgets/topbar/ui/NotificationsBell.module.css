@@ -1,0 +1,3 @@
+/* Счётчик лежит в чужом модуле (shared/ui/Counter): позицию ему задаёт
+   родитель через className, как раньше — парный класс на том же узле. */
+.topbar__notif-counter{ position: absolute; top: 1px; right: 1px; border: 1.5px solid var(--cu-background-main); }

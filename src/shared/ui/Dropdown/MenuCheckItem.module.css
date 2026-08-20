@@ -1,0 +1,54 @@
+/* Строка мультивыбора. Крупная поверхность (во всю ширину панели) — значит
+   ховер .05, рецепт 1 из каталога состояний.
+
+   ДВА ВИДА ОТМЕТКИ, и выбор между ними не косметический:
+     квадрат-галочка — обычное значение. Состояние читается СТОЛБИКОМ, не
+       приходится сравнивать заливки соседних строк;
+     круглый значок тона — значение, у которого уже есть свой цвет и свой глиф
+       (статус). Галочка рядом кодировала бы то же состояние второй раз. */
+.opt{
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 9px 10px; border-radius: var(--cu-radii-3);
+  text-align: left; font-size: 13px; color: var(--cu-content-primary);
+  transition: background-color var(--cu-animation-duration) var(--cu-animation-timing);
+}
+.opt:hover{ background: var(--cu-state-hover-subtle); }
+.opt:focus-visible{ outline: var(--cu-focus-ring); outline-offset: -2px; }
+.opt__label{ overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.opt__box{
+  position: relative; width: 16px; height: 16px; flex: 0 0 auto;
+  border: 1px solid var(--cu-border-default); border-radius: var(--cu-radii-2);
+  background: var(--cu-background-main);
+}
+/* Галочка — две линии на псевдоэлементе: одна иконка ради квадрата 16px не
+   стоит записи в icon-map. */
+.opt.is-on .opt__box{ background: var(--tone, rgb(32,32,32)); border-color: transparent; }
+.opt.is-on .opt__box::after{
+  content: ''; position: absolute; left: 5px; top: 2px; width: 4px; height: 9px;
+  border: solid #fff; border-width: 0 1.5px 1.5px 0; transform: rotate(45deg);
+}
+
+/* Значок тона: в покое контурный и приглушённый, выбранный — залитый. */
+.opt__glyph{
+  display: flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; flex: 0 0 auto; border-radius: 50%;
+  border: 1px solid var(--cu-border-default); background: var(--cu-background-main);
+  color: var(--tone, var(--cu-content-tertiary)); --icon-size: 14px;
+  transition: background-color var(--cu-animation-duration) var(--cu-animation-timing);
+}
+.opt.is-on .opt__glyph{ background: var(--tone); border-color: transparent; color: #fff; }
+
+/* Тон строки — тот же, что у <Badge> в таблице: иначе связь «выбрал зелёное —
+   остались зелёные» держится только на подписи. */
+.opt--info{    --tone: var(--cu-tone-info);    --tone-fill: var(--cu-tone-info-fill); }
+.opt--success{ --tone: var(--cu-tone-success); --tone-fill: var(--cu-tone-success-fill); }
+.opt--warning{ --tone: var(--cu-tone-warning); --tone-fill: var(--cu-tone-warning-fill); }
+.opt--danger{  --tone: var(--cu-tone-danger);  --tone-fill: var(--cu-tone-danger-fill); }
+.opt--neutral{ --tone: var(--cu-tone-neutral); --tone-fill: var(--cu-tone-neutral-fill); }
+/* У цветных строк выбранная получает свой тон, у обычных — ничего: состояние
+   там держит квадрат-галочка. Переменная с фолбэком, а не селектор по
+   подстроке класса: классы модуля хэшируются, и правило, которое разбирает их
+   по кускам, ломается молча. */
+.opt.is-on{ background: var(--tone-fill, transparent); }
+.opt.is-on:hover{ background: var(--tone-fill, var(--cu-state-hover-subtle)); }

@@ -1,0 +1,17 @@
+/* §4.1 — общий .dd-паттерн топбара (4 использования: воркспейс, поиск,
+   уведомления, аватар). Меню не размонтируется, а гасится opacity+visibility:
+   так работает transition на закрытие, которого не было бы при снятии узла. */
+.dd{ position: relative; }
+.dd__menu{
+  position: absolute; top: calc(100% + 6px); right: 0; min-width: 200px;
+  z-index: var(--z-menu);
+  background: var(--cu-background-menu); border: 1px solid var(--cu-border-default);
+  border-radius: var(--cu-radii-4); box-shadow: var(--cu-elevation-border-4); padding: 6px;
+  opacity: 0; visibility: hidden; transform: translateY(-4px);
+  transition: opacity var(--cu-animation-duration) var(--cu-animation-timing),
+              transform var(--cu-animation-duration) var(--cu-animation-timing),
+              visibility var(--cu-animation-duration);
+}
+.dd__menu--left{ right: auto; left: 0; }
+.dd.is-open > .dd__menu{ opacity: 1; visibility: visible; transform: translateY(0); }
+/* Пункт меню живёт в соседнем файле — MenuItem.module.css. */

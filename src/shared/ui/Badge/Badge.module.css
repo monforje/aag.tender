@@ -1,0 +1,19 @@
+/* Капсула-статус: тихая подложка тона + текст того же тона, но темнее.
+   Заливка .1 — та же ступень, что у прочих подложек в покое; ink отдельным
+   токеном, потому что исходный цвет на своей же десятипроцентной подложке
+   не добирает контраста. Оба берутся из --cu-tone-* (global.css), здесь
+   только выбор тона: одно место знает цифры, остальные — имена. */
+.badge{
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 2px 10px; border-radius: var(--cu-radii-round);
+  font-size: 12px; line-height: 18px; font-weight: var(--cu-font-weight-medium);
+  background: var(--tone-fill); color: var(--tone-ink);
+  /* Размер глифа задаётся переменной, а не пропом Solar, — иконка внутри
+     капсулы наследует её по DOM, как везде в проекте (§3). */
+  --icon-size: 13px;
+}
+.badge--info{    --tone-fill: var(--cu-tone-info-fill);    --tone-ink: var(--cu-tone-info-ink); }
+.badge--success{ --tone-fill: var(--cu-tone-success-fill); --tone-ink: var(--cu-tone-success-ink); }
+.badge--warning{ --tone-fill: var(--cu-tone-warning-fill); --tone-ink: var(--cu-tone-warning-ink); }
+.badge--danger{  --tone-fill: var(--cu-tone-danger-fill);  --tone-ink: var(--cu-tone-danger-ink); }
+.badge--neutral{ --tone-fill: var(--cu-tone-neutral-fill); --tone-ink: var(--cu-tone-neutral-ink); }

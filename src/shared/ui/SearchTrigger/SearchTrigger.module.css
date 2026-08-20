@@ -1,0 +1,67 @@
+/* ---------------------------------------------------------------------------
+   ПРАВКА 6.4 — topbar-поиск, сверено с живым DOM (BUTTON.search-button + вложенный
+   SPAN.ai-button внутри ОДНОЙ и той же капсулы, не два соседних элемента).
+   Компонент: в компонентном разборе это самостоятельный `<TopbarSearch>` —
+   не переиспользуется больше нигде, поэтому все связанные правила держу рядом,
+   а не растаскиваю по общим .btn-каким-нибудь классам.
+
+   ПОЧЕМУ форма именно такая (капсула, а не прямоугольное поле): topbar целиком
+   уже держит прямые углы (радиус 6px у кнопок), поэтому единственный полностью
+   скруглённый (radii-round = 666px) элемент в этом ряду сразу читается взглядом
+   как «нажми, чтобы открыть», а не как обычное текстовое поле — форма сама
+   сигналит про другой тип интеракции (модалка, а не инлайн-ввод).
+
+   ПОЧЕМУ подпись AI Chats нарисована СЕРОЙ и БЕЗ своего фона в состоянии покоя,
+   хотя это самостоятельная фича: если бы у неё сразу была заметная плашка,
+   поиск на 260px зрительно раскалывался бы на «две кнопки», а это одна зона
+   клика с двумя подсказками намерения внутри. Едва заметный серый текст молчит,
+   пока не наведёшься, — тогда чуть темнеет (см. .search:hover .search__ai) —
+   ровно настолько, чтобы боковое зрение считало «тут есть что-то ещё», не
+   конкурируя с основной надписью Search.
+
+   ПРАВКА 7.2 — ширина. Была узкой (206px) не из-за неверных чисел на самой
+   .search, а из-за структурного бага: .search лежит внутри .dd (обычный
+   блочный div, см. §JS-дропдауны), а .dd — flex-ребёнок .topbar__center без
+   собственной ширины, значит сжимается по контенту. width:100% на .search
+   в такой ситуации считается от .dd, а .dd сам равен «сколько влезло» — то
+   есть 100% от собственного контента, эффект нулевой, сколько ни увеличивай
+   max-width. Живое CSS-правило (.stt-search-area, обёртка того же уровня, что
+   у нас — .dd): max-width:22.5rem (360px), min-width:11rem (176px) — у меня
+   было 420/60, тоже мимо. Фикс на уровне #searchDd ниже — задаёт РЕАЛЬНЫЙ
+   размер обёртке, а .search{width:100%} внутри неё наконец получает от чего
+   считать проценты. */
+
+.search{
+  display: flex; align-items: center; justify-content: flex-start;
+  width: 100%;
+  height: var(--cu-size-7); padding: 0 7px; gap: 6px;
+  border: 1px solid transparent; border-radius: var(--cu-radii-round);
+  background-color: var(--cu-background-main);
+  box-shadow: var(--cu-elevation-border-1);
+  transition: box-shadow var(--cu-animation-duration) var(--cu-animation-timing);
+  cursor: pointer; /* это кнопка-триггер модалки, не текстовое поле */
+}
+/* Рецепт (4): белую капсулу заливать нечем — показываем кольцо. */
+.search:hover, .search:focus-visible{ box-shadow: var(--cu-state-ring), var(--cu-elevation-border-1); }
+.search__icon{ --icon-size: 16px; color: var(--cu-content-quaternary); }
+.search__placeholder{
+  font-size: 14px; font-weight: var(--cu-font-weight-medium);
+  color: var(--cu-content-quaternary);
+}
+.search__kbd{
+  font-size: 12px; font-weight: var(--cu-font-weight-medium); line-height: 16px;
+  color: var(--cu-content-placeholder); flex: 0 0 auto;
+}
+.search__ai{
+  display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto;
+  margin-left: auto; padding-inline-start: 8px;
+  font-size: 14px; color: var(--cu-content-quaternary);
+  transition: color var(--cu-animation-duration) var(--cu-animation-timing);
+}
+.search:hover .search__ai{ color: var(--cu-content-primary); }
+/* Настоящая иконка ClickUp тут — растровая цветная PNG (brain-ai-colored-*.png),
+   собственный брендовый ассет, а не SVG-глиф. Вместо подключения чужой картинки
+   (плюс отдельный домен, зависимость от чужого CDN) переиспользую уже имеющийся
+   в спрайте i-ai — так весь файл остаётся на ОДНОЙ иконочной системе (чистые SVG
+   из @solar-icons/js) без единственного «особого случая»-растра ради одной кнопки. */
+.search__ai-icon{ --icon-size: 16px; }

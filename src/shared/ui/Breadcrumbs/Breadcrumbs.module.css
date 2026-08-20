@@ -1,0 +1,32 @@
+/* §4.10-a ХЛЕБНЫЕ КРОШКИ — .title-container, снято 1:1 с живого ClickUp.
+   Когда рисуются: только когда открытый экран — ДОЧЕРНИЙ пункт дерева
+   (aria-level 3+). Число сегментов-ссылок = глубина активного пункта минус 1,
+   поэтому компонент принимает массив ссылок и текущий заголовок и не меняется
+   при появлении следующего уровня. Полный разбор — DESIGN-NOTES.md, часть VII.
+
+   Цвета и вес — НЕ новые токены, а те же, что у обычного заголовка шапки:
+   крошки это тот же заголовок с историей выбора перед текущим значением. */
+.title-container{
+  display: flex; align-items: center; gap: 6px; flex-grow: 1;
+  padding-left: 12px; min-width: 0;
+  font-size: 14px; font-weight: var(--cu-font-weight-medium); line-height: 16px;
+  color: var(--cu-content-secondary);
+}
+/* §0.2(f) — hover ВСЕГДА заливка-«таблетка», никогда подчёркивание, даже если
+   синтаксически это ссылка <a>. Подсветка ВОКРУГ текста: padding растит фон,
+   парный отрицательный margin возвращает элемент на прежнее место в потоке,
+   поэтому раскладка шапки не съезжает ни на пиксель. Горизонтальный padding
+   (6px) равен gap контейнера — таблетка дотягивается ровно до разделителя «/»
+   и не наезжает на него. */
+.title-container .button{
+  color: inherit; border-radius: 5px; padding: 4px 6px; margin: -4px -6px;
+  transition: background-color var(--cu-animation-duration) var(--cu-animation-timing),
+              color var(--cu-animation-duration) var(--cu-animation-timing);
+}
+/* Рецепт (1), ступень «компактный контрол»: крошка — короткая таблетка
+   вокруг текста, а не полоса списка, поэтому .06, а не subtle. */
+.title-container .button:hover{ background-color: var(--cu-state-hover); color: var(--cu-content-primary); }
+.title-container .title{
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-weight: var(--cu-font-weight-semibold); color: var(--cu-content-primary);
+}

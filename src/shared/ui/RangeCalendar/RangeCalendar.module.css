@@ -1,0 +1,188 @@
+/* Календарь диапазона. ГЕОМЕТРИЯ ПЕРЕНЕСЕНА С shadcn/ui <Calendar> (new-york,
+   v4) один в один, без react-day-picker: у нас нет и не будет этой
+   зависимости, а нужен был именно её вид. Что взято дословно:
+
+     --cell-size: 2rem (32px)      размер клетки;
+     .rc            p-3            12px полей вокруг всего календаря;
+     .months        gap-4          16px между месяцами (md:flex-row);
+     .month         gap-4          16px между шапкой месяца и сеткой;
+     .month-caption h-(--cell-size) px-(--cell-size) — 32px высоты и 32px полей
+                                   по бокам, чтобы под стрелками было место;
+     .caption-label text-sm/medium;
+     .weekday       flex-1, text-[.8rem], muted;
+     .week          mt-2           8px между неделями (строки — flex, поэтому
+                                   margin на них работает, хотя это <tr>);
+     .day           aspect-square, p-0, relative;
+     range_start / range_middle / range_end — полоса на ЯЧЕЙКЕ, пилюля на кнопке.
+
+   ЧТО ОТ НАС — только палитра, как и у <Table>: bg-primary → rgb(32,32,32),
+   bg-accent → --cu-fill, muted-foreground → --cu-content-tertiary, кольцо
+   фокуса — общее --cu-focus-ring. Иначе в приложении появилась бы вторая
+   несогласованная серая шкала.
+
+   ГЛАВНЫЙ ПРИЁМ, РАДИ КОТОРОГО СТОИЛО СМОТРЕТЬ ИСХОДНИК: полоса диапазона
+   рисуется на ЯЧЕЙКЕ (<td>), а тёмная «пилюля» края — на кнопке внутри неё.
+   Пилюля скруглена со всех сторон, и её углы иначе оставляли бы светлые
+   вырезы в полосе; заливка ячейки закрывает их снизу, и отрезок читается
+   сплошным. Своими силами это обычно решают скруглением только внешнего края —
+   выглядит хуже на стыке недель. */
+.rc{ display: flex; flex-direction: column; gap: 12px; --cell-size: 2rem; }
+
+/* ── поля границ ────────────────────────────────────────────────────────── */
+/* Не из shadcn: там ввод живёт в отдельном <Input> над поповером. Здесь поля
+   внутри панели, потому что панель и есть весь контрол — открыли и задали
+   период, не выходя. */
+/* Поле стоит НАД СВОИМ календарём: «от» над левым, «до» над правым, тире — в
+   зазоре между ними. Сетка повторяет .months колонка в колонку (месяц | 16px |
+   месяц), поэтому совпадение держится само и не зависит от длины подписей.
+   Так поле и месяц читаются как одна вещь — видно, какой календарь какую
+   границу задаёт, и отдельная надпись про это не нужна.
+
+   Поле УЖЕ своей колонки и стоит в ней по центру: растянутое на все 224px, оно
+   упиралось в тире и в края панели, а сама дата — десять знаков — терялась в
+   пустой белой полосе. Здесь ширина по содержимому плюс воздух, а поля
+   отбиваются и от краёв, и от тире. */
+.fields{
+  display: grid; grid-template-columns: 1fr 16px 1fr;
+  align-items: center; justify-items: center;
+}
+.field{
+  width: 160px;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  height: var(--cu-size-8); padding-inline: 10px; border-radius: var(--cu-radii-3);
+  border: 1px solid var(--cu-border-default); background: var(--cu-background-main);
+}
+.field:focus-within{ box-shadow: var(--cu-state-ring); }
+/* Поле, за которым сейчас очередь: показывает, КАКУЮ границу поставит
+   следующий клик по сетке. */
+.field.is-active{ border-color: var(--cu-content-primary); }
+.field__label{ font-size: 12px; color: var(--cu-content-tertiary); }
+/* Ширина под ровно десять знаков даты и текст по центру: подпись и дата стоят
+   в поле одной центрированной группой. tabular-nums — чтобы при наборе цифры
+   не гуляли по ширине. */
+.field__input{
+  flex: 0 0 auto; width: 78px; text-align: center;
+  border: none; background: none; outline: none;
+  font-family: inherit; font-size: 13px; color: var(--cu-content-primary);
+  font-variant-numeric: tabular-nums;
+}
+.field__input::placeholder{ color: var(--cu-content-placeholder); }
+/* Ширина ровно в зазор между месяцами — тире стоит между календарями, а не
+   отодвигает поля друг от друга. */
+.fields__dash{
+  flex: 0 0 16px; display: flex; justify-content: center;
+  color: var(--cu-content-tertiary);
+}
+
+/* ── месяцы ─────────────────────────────────────────────────────────────── */
+.months{ display: flex; gap: 16px; }
+/* Второй месяц — первое, чем жертвуем на узком экране: панель прижата к полосе
+   фильтров и обязана ужиматься, а не уезжать за край. */
+@media (max-width: 900px){
+  .month--second{ display: none; }
+  /* Второго календаря нет — колонка одна, тире связывать больше нечего. */
+  .fields{ grid-template-columns: 1fr; gap: 8px; }
+  .fields__dash{ display: none; }
+}
+.month{ display: flex; flex-direction: column; gap: 16px; }
+/* У КАЖДОГО МЕСЯЦА СВОИ СТРЕЛКИ И СВОИ СПИСКИ. У shadcn (и у
+   react-day-picker под ним) пара месяцев листается СВЯЗАННО: стрелка двигает
+   оба окна сразу. Для «покажи мне вот эти два конкретных месяца» это тупик —
+   расстояние между окнами навсегда равно единице. Здесь каждое окно
+   самостоятельно: левое можно оставить на марте, а правое увести на декабрь. */
+.month__caption{
+  position: relative; display: flex; align-items: center; justify-content: center;
+  height: var(--cell-size); padding-inline: var(--cell-size);
+}
+/* ВЫБОР МЕСЯЦА И ГОДА СПИСКОМ — captionLayout="dropdown" из того же shadcn:
+     .dropdowns     flex h-(--cell-size) items-center justify-center gap-1.5 text-sm font-medium
+     .dropdown-root relative rounded-md border shadow-xs, кольцо при фокусе
+     .dropdown      absolute inset-0 opacity-0  ← настоящий <select> поверх
+     .caption-label flex h-8 items-center gap-1 rounded-md pr-1 pl-2 text-sm
+
+   Приём shadcn целиком: сверху лежит НАТИВНЫЙ <select> с нулевой прозрачностью,
+   под ним рисуется своя подпись со стрелкой. Список открывает и рисует
+   браузер — клавиатура, поиск набором, прокрутка и мобильное колесо достаются
+   даром, а выглядит он как остальной интерфейс. Без этого до марта позапрошлого
+   года пришлось бы жать стрелку двадцать девять раз. */
+.dropdowns{
+  display: flex; height: var(--cell-size); align-items: center; justify-content: center;
+  gap: 6px; font-size: 14px; font-weight: var(--cu-font-weight-medium);
+}
+/* inline-flex, а не голый <span>: строчный элемент не даёт абсолютному
+   потомку цельного блока для inset:0 — прозрачный <select> накрывал рамку не
+   полностью, и часть подписи оказывалась некликабельной. */
+.dropdown-root{
+  position: relative; display: inline-flex; border-radius: var(--cu-radii-3);
+  border: 1px solid var(--cu-border-default); box-shadow: var(--cu-elevation-1);
+}
+.dropdown-root:has(select:focus-visible){ box-shadow: var(--cu-state-ring); }
+.dropdown-root:hover{ background: var(--cu-fill); }
+.dropdown{
+  position: absolute; inset: 0; opacity: 0; cursor: pointer;
+  appearance: none; border: none;
+}
+.caption-label{
+  display: flex; align-items: center; gap: 4px; height: var(--cu-size-8);
+  padding-left: 8px; padding-right: 4px; border-radius: var(--cu-radii-3);
+  font-size: 14px; font-weight: var(--cu-font-weight-medium);
+  color: var(--cu-content-primary); text-transform: capitalize; user-select: none;
+}
+.caption-chevron{ --icon-size: 14px; color: var(--cu-content-tertiary); }
+/* Кнопка листания = ghost-кнопка shadcn в размер клетки: 32×32, радиус 6,
+   заливка по наведению. */
+.nav{
+  position: absolute; top: 0; display: flex; align-items: center; justify-content: center;
+  width: var(--cell-size); height: var(--cell-size);
+  border-radius: var(--cu-radii-3); color: var(--cu-content-secondary);
+  transition: background-color var(--cu-animation-duration) var(--cu-animation-timing);
+}
+.nav:hover{ background: var(--cu-fill); color: var(--cu-content-primary); }
+.nav:focus-visible{ outline: var(--cu-focus-ring); outline-offset: -2px; }
+/* Стрелки вбок — та же chevronDown, повёрнутая: отдельных «влево/вправо» в
+   наборе нет, а поворот сохраняет геометрию и толщину. size-4 у shadcn. */
+.nav--prev{ left: 0; --icon-size: 16px; transform: rotate(90deg); }
+.nav--next{ right: 0; --icon-size: 16px; transform: rotate(-90deg); }
+
+.month__grid{ width: 100%; border-collapse: collapse; }
+/* Строки таблицы сделаны флексом — так у shadcn, и только поэтому у .week
+   работает вертикальный отступ. */
+.weekdays{ display: flex; }
+.weekday{
+  flex: 1; font-size: .8rem; font-weight: var(--cu-font-weight-regular);
+  color: var(--cu-content-tertiary); user-select: none;
+}
+.week{ display: flex; width: 100%; margin-top: 8px; }
+.day{
+  position: relative; flex: 1; aspect-ratio: 1 / 1; padding: 0; text-align: center;
+  user-select: none;
+}
+.day-btn{
+  display: flex; align-items: center; justify-content: center;
+  width: 100%; height: 100%; min-width: var(--cell-size);
+  border-radius: var(--cu-radii-3);
+  font-size: 13px; font-weight: var(--cu-font-weight-regular); line-height: 1;
+  color: var(--cu-content-primary);
+  transition: background-color var(--cu-animation-duration) var(--cu-animation-timing);
+}
+.day-btn:hover{ background: var(--cu-fill); }
+.day-btn:focus-visible{ outline: var(--cu-focus-ring); outline-offset: -2px; z-index: 1; }
+/* Дни соседних месяцев: показываем и оставляем кликабельными, как у shadcn
+   (showOutsideDays), но приглушёнными. */
+.day-btn--outside{ color: var(--cu-content-placeholder); }
+
+/* Сегодня — заливка accent и обычный радиус; под выбором она пропадает, потому
+   что там уже своя. У shadcn ровно так: today rounded-md bg-accent, а
+   data-[selected]:rounded-none. */
+.day-btn--today{ background: var(--cu-fill); }
+
+/* ПОЛОСА — на ячейке. Середина квадратная, у краёв скруглён внешний бок:
+   заливка подпирает пилюлю и закрывает светлые вырезы под её углами. */
+.day--middle{ background: var(--cu-fill); }
+.day--start{ background: var(--cu-fill); border-radius: var(--cu-radii-3) 0 0 var(--cu-radii-3); }
+.day--end{ background: var(--cu-fill); border-radius: 0 var(--cu-radii-3) var(--cu-radii-3) 0; }
+
+/* ПИЛЮЛЯ — на кнопке. Скруглена целиком, поэтому и нужна полоса под ней. */
+.day-btn--middle{ background: transparent; color: var(--cu-content-primary); }
+.day-btn--edge{ background: rgb(32,32,32); color: #fff; }
+.day-btn--edge:hover{ background: rgb(58,58,58); }

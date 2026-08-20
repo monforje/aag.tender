@@ -1,0 +1,46 @@
+/* ---------------------------------------------------------------------------
+   4.7 SIDEBAR_FINAL — cu-sidebar-final.home-sidebar.full-height
+   -------------------------------------------------------------------------*/
+.sidebar-final{
+  flex: 0 0 var(--sidebar-final-width); width: var(--sidebar-final-width);
+  min-height: 0; white-space: nowrap;
+  background-color: var(--cu-global-sidebar-background);
+  border-right: 1px solid var(--cu-border-default);
+  display: flex; flex-direction: column;
+  transition: flex-basis var(--cu-animation-duration) var(--cu-animation-timing),
+              width var(--cu-animation-duration) var(--cu-animation-timing),
+              opacity var(--cu-animation-duration) var(--cu-animation-timing);
+}
+/* Проявление группы контролов в шапке. Триггер — :hover ИЛИ :focus-within на
+   ВСЕЙ панели. Второе обязательно: без него группа уезжала бы вправо ровно в
+   тот момент, когда пользователь печатает в поиске, а курсор уже покинул
+   сайдбар.
+   Значения передаются переменными, а не селектором от предка: сама группа
+   лежит в SidebarHeader.module.css, и общий селектор через границу модуля не
+   собрался бы (разбор — там же, у .sidebar-final__actions). */
+.sidebar-final:hover,
+.sidebar-final:focus-within{
+  --sidebar-actions-opacity: 1;
+  --sidebar-actions-shift: 0px;
+}
+
+/* Свёрнутое состояние: раньше приходило селектором от предка
+   (.app[data-sidebar="closed"] …), теперь модификатором из стора — предок
+   лежит в другом CSS-модуле. Схлопывание flex-basis в 0 и есть механизм, из
+   которого main сам забирает освободившуюся ширину (§4.10, п.4). */
+.sidebar-final--closed{
+  flex-basis: 0; width: 0; opacity: 0; border-right-color: transparent; pointer-events: none;
+}
+
+/* Список — shared/ui/ScrollArea, вариант panel: те же 8px сверху (замеренный
+   зазор от шапки до первой строки) и отсутствие боковых паддингов — отступ
+   несут сами узлы через margin-inline. */
+.sidebar-final__footer{ flex: 0 0 auto; padding: 6px 8px 8px; }
+.sidebar-final__customize{
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  height: var(--cu-size-8); width: 100%; border-radius: 7px;
+  color: var(--cu-content-secondary); font-size: 13px; --icon-size: 14px;
+  background: var(--cu-fill-subtle);
+}
+/* Рецепт (1), шаг вверх от собственной --cu-fill-subtle в покое. */
+.sidebar-final__customize:hover{ background: var(--cu-state-hover); color: var(--cu-content-primary); }
