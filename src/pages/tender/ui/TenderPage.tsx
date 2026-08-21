@@ -5,7 +5,7 @@ import { ScrollArea } from '@/shared/ui/ScrollArea';
 import {
   PageHeader, Screen, ScreenPlaceholder, SecondaryHeader, type SecondaryTab,
 } from '@/shared/ui/Page';
-import { tenderById } from '@/entities/tender';
+import { MOCK_COMPARISON, tenderById } from '@/entities/tender';
 import { TenderCompare } from './TenderCompare';
 import { TenderSummary } from './TenderSummary';
 
@@ -78,7 +78,11 @@ export function TenderPage() {
         <TenderSummary tender={tender} />
         <SecondaryHeader tabs={TABS} activeId={tab} onChange={setTab} variant="canvas" />
         {tab === 'compare' ? (
-          <TenderCompare />
+          /* Данные сравнения приходят СЮДА и уходят в раздел пропами: это
+             единственное место, где сегодня стоит фикстура, и то же место,
+             где завтра встанет запрос по tender.id. Сам <TenderCompare> о
+             происхождении данных не знает — потому и переживёт подмену. */
+          <TenderCompare {...MOCK_COMPARISON} />
         ) : (
           <ScreenPlaceholder icon="clipboardList">
             Раздел «{TABS.find((t) => t.id === tab)?.label}» ещё не реализован.

@@ -14,6 +14,7 @@ import { AddCircleIcon } from '@solar-icons/react/linear/add-circle';
 import { AltArrowDownIcon as AltArrowDownBoldIcon } from '@solar-icons/react/bold/alt-arrow-down';
 import { StarIcon as StarBoldIcon } from '@solar-icons/react/bold/star';
 import { AltArrowDownIcon } from '@solar-icons/react/linear/alt-arrow-down';
+import { ArrowRightUpIcon } from '@solar-icons/react/linear/arrow-right-up';
 import { ArrowUpIcon } from '@solar-icons/react/linear/arrow-up';
 import { BellIcon } from '@solar-icons/react/linear/bell';
 import { BillListIcon } from '@solar-icons/react/linear/bill-list';
@@ -43,6 +44,7 @@ import { ListIcon } from '@solar-icons/react/linear/list';
 import { MagnifierIcon } from '@solar-icons/react/linear/magnifier';
 import { MedalStarIcon } from '@solar-icons/react/linear/medal-star';
 import { MenuDotsIcon } from '@solar-icons/react/linear/menu-dots';
+import { PipetteIcon } from '@solar-icons/react/linear/pipette';
 import { PulseIcon } from '@solar-icons/react/linear/pulse';
 import { ReplyIcon } from '@solar-icons/react/linear/reply';
 import { ScaleIcon } from '@solar-icons/react/linear/scale';
@@ -51,7 +53,7 @@ import { SettingsIcon } from '@solar-icons/react/linear/settings';
 import { ShareIcon } from '@solar-icons/react/linear/share';
 import { SidebarIcon } from '@solar-icons/react/linear/sidebar';
 import { SledgehammerIcon } from '@solar-icons/react/linear/sledgehammer';
-import { PaletteIcon } from '@solar-icons/react/linear/palette';
+import { Palette2Icon } from '@solar-icons/react/linear/palette-2';
 import { SliderHorizontalIcon } from '@solar-icons/react/linear/slider-horizontal';
 import { StarIcon } from '@solar-icons/react/linear/star';
 import { StarsIcon } from '@solar-icons/react/linear/stars';
@@ -129,7 +131,17 @@ export const ICONS = {
      видно в чёрно-белой печати и при дальтонизме. */
   star: StarIcon,
   starFilled: StarBoldIcon,
-  palette: PaletteIcon,
+  /* Пипетка «взять цвет с экрана» в <ColorPicker>. Показывается только там,
+     где платформа умеет EyeDropper. */
+  pipette: PipetteIcon,
+  /* Палитра художника с четырьмя каплями краски (solar:palette-2-linear),
+     а не solar:palette: та рисует КИСТЬ над лотком и читается как
+     «рисовать», тогда как здесь ВЫБИРАЮТ цвет из готового набора. */
+  palette: Palette2Icon,
+  /* «Открыть досье» — диагональная стрелка, а не шеврон: шеврон в этом
+     интерфейсе означает раскрытие НА МЕСТЕ (дерево, разделы сметы,
+     свёртывание карточек), а здесь уход в отдельное окно. */
+  arrowRightUp: ArrowRightUpIcon,
 } satisfies Record<string, IconComponent>;
 
 export type IconName = keyof typeof ICONS;

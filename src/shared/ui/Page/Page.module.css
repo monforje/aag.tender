@@ -78,7 +78,7 @@
    контрол, не крупная поверхность (см. каталог состояний, global.css). */
 .tab:not(.is-active) .tab__content:hover{ background: var(--cu-state-hover); }
 .tab__label{
-  font-size: 12px; line-height: 16px; font-weight: var(--cu-font-weight-semibold);
+  font-size: 12px; line-height: 16px;
   color: var(--cu-content-secondary);
 }
 .tab.is-active .tab__label{ color: var(--cu-content-primary); }

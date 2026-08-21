@@ -3,41 +3,37 @@ import { cx } from '@/shared/lib/cx';
 import { Badge, type Tone } from '@/shared/ui/Badge';
 import { Button } from '@/shared/ui/Button';
 import { Icon } from '@/shared/ui/Icon';
+import { ColorPicker } from '@/shared/ui/ColorPicker';
+import { ScreenPlaceholder } from '@/shared/ui/Page';
 import { Table, tableCell } from '@/shared/ui/Table';
 import { VisuallyHidden } from '@/shared/ui/VisuallyHidden';
+import { plural } from '@/shared/lib/plural';
 import {
-  BID_STATUS, CONTRACTORS, GROUPS, POSITIONS,
-  decimal, groupSum, money, rankBids, spread, type Bid, type PositionGroup,
+  bidStatus, flatten,
+  decimal, groupSum, money, rankBids, spread,
+  type Bid, type Comparison, type PositionGroup,
 } from '@/entities/tender';
 import s from './TenderCompare.module.css';
 
-/** Тон → CSS-переменная. Таблицей, а не `var(--cu-tone-${tone})`: собранное
- *  из строки имя не проверяется ничем, и опечатка дала бы колонку без цвета
- *  без единой ошибки в консоли. */
-const TONE_VAR: Record<Tone, string> = {
-  info: 'var(--cu-tone-info)',
-  success: 'var(--cu-tone-success)',
-  warning: 'var(--cu-tone-warning)',
-  danger: 'var(--cu-tone-danger)',
-  neutral: 'var(--cu-tone-neutral)',
+/** Тон → имя токена. Таблицей, а не `--cu-tone-${tone}`: собранное из строки
+ *  имя не проверяется ничем, и опечатка дала бы колонку без цвета без единой
+ *  ошибки в консоли. */
+const TONE_TOKEN: Record<Tone, string> = {
+  info: '--cu-tone-info',
+  success: '--cu-tone-success',
+  warning: '--cu-tone-warning',
+  danger: '--cu-tone-danger',
+  neutral: '--cu-tone-neutral',
 };
 
-/** Палитра колонки. «Авто» стоит первой и включена по умолчанию: базовый цвет
- *  считается по ранжиру, а рука нужна там, где расчёт не всё знает — сроки,
- *  гарантии, прошлые объекты. Пять тонов, а не свободный цветовой круг:
- *  цвет здесь ЗНАЧЕНИЕ, а не украшение, и новых значений не заводится. */
-/** Деления шкалы заполнения: по 10% каждое. */
-const METER_STEPS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+/** Тон как цвет для CSS — ссылкой на токен: перекрасят тему, перекрасятся и
+ *  колонки. */
+const toneColor = (tone: Tone) => `var(${TONE_TOKEN[tone]})`;
 
-type TintChoice = Tone | 'auto';
-const TINTS: { value: TintChoice; label: string }[] = [
-  { value: 'auto', label: 'По ранжиру' },
-  { value: 'success', label: 'Зелёный — лучшие условия' },
-  { value: 'warning', label: 'Янтарный — есть вопросы' },
-  { value: 'danger', label: 'Красный — не подходит' },
-  { value: 'info', label: 'Синий — на контроле' },
-  { value: 'neutral', label: 'Серый — вне сравнения' },
-];
+/** Он же ВЫЧИСЛЕННЫМ значением. Пикеру нужен цвет, а не ссылка: `var(...)`
+ *  для него — просто нераспознанная строка, и окно открылось бы на чёрном. */
+const resolveTone = (tone: Tone) =>
+  getComputedStyle(document.documentElement).getPropertyValue(TONE_TOKEN[tone]).trim();
 
 /**
  * Сравнение коммерческих предложений: позиции сметы строками, подрядчики —
@@ -47,43 +43,75 @@ const TINTS: { value: TintChoice; label: string }[] = [
  * НЕ ДЛЯ: реестра тендеров (см. TenderRegistryPage) и списка самих КП
  *         (раздел «КП» — это документы, а не сопоставление цифр).
  *
+ * ДАННЫЕ: приходят ПРОПАМИ — смета разделами и КП подрядчиков, тот же объект,
+ *         что вернёт API (тип Comparison). Своих констант компонент не знает:
+ *         ни числа колонок, ни числа разделов, ни имён — всё считается от
+ *         пришедшего. Разделов может не быть, подрядчиков может не быть, их
+ *         может быть восемь; единственное, что фиксировано, — четыре левые
+ *         колонки (позиция, объём, единица, разброс): это не данные, а способ
+ *         читать смету, и настраивать в них нечего.
+ *         РАСКЛАДКА ТОЖЕ НЕ ЗНАЕТ ДАННЫХ. Колонки подрядчиков одинаковы по
+ *         ширине и держатся в вилке 176…280px независимо от того, сколько
+ *         подано КП и насколько длинны имена; смотри контракт .cols в
+ *         .module.css. Раньше ширину определяло содержимое, и колонки
+ *         расходились (245 / 290 / 296 на ленте 1457px) — сравнивать по ним
+ *         было нельзя: глаз читает разную ширину как разный вес.
+ *
  * UX:     ШАПКА КОЛОНКИ — КАРТОЧКА, а не подпись: подрядчика выбирают не по
  *         имени, а по четырём числам сразу (полнота КП, процент, сумма,
  *         состояние), и держать их в отдельной строке над таблицей значило бы
  *         заставить глаз ходить туда-обратно на каждой позиции. Ячейка
  *         отдана карточке целиком — <Table> публикует для этого модификатор
  *         tableCell.card, снимающий паддинг и высоту шапки.
- *         ШКАЛА ЗАПОЛНЕНИЯ СЕГМЕНТНАЯ, а не сплошная: делений ровно столько,
- *         сколько позиций в смете, и «4 из 6» видно, не читая процент.
- *         Сплошная полоса на шести значениях врёт — показывает непрерывность
- *         там, где её нет.
+ *         ПОЛНОТА КП И СУММА — ОДНОЙ СТРОКОЙ, оба ЧИСЛАМИ. Шкала здесь
+ *         была и сегментной, и сплошной — обе врали: на 220px разница между
+ *         88% и 92% неразличима, а решают именно эти проценты. Число не
+ *         требует расшифровки и сравнивается по трём колонкам напрямую.
  *         КАРТОЧКА ЗАЛИТА ТЕМ ЖЕ ЦВЕТОМ, ЧТО И КОЛОНКА ПОД НЕЙ, — полоса
  *         читается непрерывной от шапки до последней строки. Цветного канта по
  *         краю карточки нет намеренно: тон в ней уже назван кружком места и
  *         заливкой шкалы, и третий раз он был бы украшением.
  *         ЦВЕТ КОЛОНКИ — ПОДСКАЗКА, А НЕ ВЕРДИКТ. Базово его ставит ранжир
  *         (лучшее зелёное, худшее красное, середина янтарная), но ранжир
- *         знает только цифры, поэтому цвет перекрашивается рукой. Палитра
- *         проявляется по наведению на карточку (рецепт 5 каталога состояний):
- *         в покое шесть кружков в каждой колонке спорили бы с данными.
+ *         знает только цифры, поэтому цвет перекрашивается рукой — уже
+ *         ЛЮБОЙ, через <ColorPicker> в окне. Пять тонов заменены свободным
+ *         кругом сознательно: пометка колонки в разборе — не значение, а
+ *         закладка «мой», «спросить», «отпал», и словарь ей задаёт человек.
+ *         Смысловые тона при этом никуда не делись: статус КП по-прежнему
+ *         <Badge> с `--cu-tone-*`, и его цвет рукой не меняется.
+ *         Цвет применяется СРАЗУ, пока окно открыто: колонка под ним видна,
+ *         и подбирать «читается / не читается» можно по живой таблице.
+ *         Возврат под расчёт — кнопка «По ранжиру» в подвале окна.
  *         Звезда «в избранном» — форма, а не цвет: контур меняется на
  *         заливку, отметка читается и в чёрно-белом.
- *         Карточка кликабельна целиком и открывает досье подрядчика; клики по
- *         звезде и палитре до неё не доходят — иначе выбор цвета каждый раз
- *         открывал бы модалку.
- * A11Y:   палитра — настоящая radiogroup (выбор один из шести), звезда —
+ *         ДВА ДЕЙСТВИЯ КАРТОЧКИ СТОЯТ НАПРОТИВ СТАТУСА — палитра и стрелка
+ *         досье, обе одной иконкой и одного веса. Крутится по наведению
+ *         только стрелка: у неё поворот — это «уходим отсюда», а палитра
+ *         вместо движения НАЛИВАЕТСЯ цветом своей колонки. Строка статуса всё равно
+ *         не заполнена справа, а отдельный подвал ради двух кнопок добавлял
+ *         карточке высоты на пустом месте. Проявляются по наведению
+ *         (рецепт 5), как звезда. НИ КАРТОЧКА, НИ ЕЁ ИМЯ НЕ КЛИКАЮТСЯ:
+ *         досье открывает одна явная цель — стрелка. Имя нажимали, не
+ *         собираясь никуда уходить, и попадали в окно.
+ * A11Y:   у пикера своя клавиатура (см. его JSDoc), звезда —
  *         кнопка с aria-pressed. Шкала заполнения — role="img" с подписью
  *         словами: сегменты сами по себе скринридеру ничего не говорят.
  *         Место в ранжире продублировано текстом (<VisuallyHidden>), потому
  *         что заливка колонки в 7% для скринридера не существует вовсе.
- *         Досье — нативный <dialog>.showModal(): фокус, Escape и подложка
- *         достаются от платформы, а не переписываются руками.
+ *         Досье и палитра — нативный <dialog>.showModal(): фокус, Escape и
+ *         подложка достаются от платформы, а не переписываются руками.
+ *         Шкала — role="img" с процентом словами: сплошная полоса без
+ *         подписи для скринридера не существует вовсе.
  *
  * @example
  * {tab === 'compare' ? <TenderCompare /> : null}
  */
-export function TenderCompare() {
-  const bids = rankBids(CONTRACTORS, POSITIONS);
+export function TenderCompare({ groups, contractors }: Comparison) {
+  /* Плоский список позиций и ранжир ВЫВОДЯТСЯ из пришедшего, а не приходят
+     полями: два перечня одних и тех же строк разъехались бы на первой правке.
+     Пересчёт — тринадцать позиций на три КП, мемоизировать тут нечего. */
+  const positions = flatten(groups);
+  const bids = rankBids(contractors, positions);
   /* Свёрнутость ОДНА на все карточки: колонки сравнивают, а не разглядывают
      по одной, и режим «только имена» нужен целиком — иначе шапка превращается
      в лесенку разной высоты. Поэтому стрелка на любой карточке переключает
@@ -94,38 +122,110 @@ export function TenderCompare() {
      закрыть тремя кликами. Хранятся только СВЁРНУТЫЕ: по умолчанию раскрыто
      всё, и пустой объект — честное «ничего не трогали». */
   const [folded, setFolded] = useState<Record<string, boolean>>({});
-  const [tint, setTint] = useState<Record<string, TintChoice>>({});
+  /* Цвет колонки — CSS-строка, а отсутствие ключа значит «по ранжиру».
+     Отдельного 'auto' в значении нет: пустота и есть «ничего не трогали». */
+  const [tint, setTint] = useState<Record<string, string>>({});
   const [starred, setStarred] = useState<string[]>([]);
   const [dossier, setDossier] = useState<Bid | null>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
+  /* Палитра — ВТОРОЙ <dialog>, а не переключатель содержимого внутри первого:
+     открываются они из разных мест и закрываются независимо, а один <dialog>
+     на двоих означал бы ещё одно состояние «что сейчас показываем».
+     Именно <dialog>, хотя это выпадашка, а не окно: она падает из шапки
+     таблицы, а таблица прокручивается по горизонтали и обрезает всё, что
+     вылезло за её пределы, — никакой z-index этого не отменяет. Верхний слой
+     умеет только <dialog> (плюс от него же Escape и клик мимо). */
+  const [paint, setPaint] = useState<Bid | null>(null);
+  const paintRef = useRef<HTMLDialogElement>(null);
+
 
   const openDossier = (bid: Bid) => {
     setDossier(bid);
     dialogRef.current?.showModal();
   };
 
+  const openPaint = (bid: Bid, from: DOMRect) => {
+    const pop = paintRef.current;
+    if (!pop) return;
+    setPaint(bid);
+    /* Координаты ставятся ПРЯМО НА ЭЛЕМЕНТ, а не через состояние: showModal()
+       вызывается в этом же тике, до перерисовки, и панель успела бы открыться
+       со старыми координатами — а на первом открытии и вовсе без них, то есть
+       в левом верхнем углу.
+       Привязка правым краем, а не левым: панель растёт ВЛЕВО от кнопки,
+       которая стоит у правого края карточки, — по левому краю на последней
+       колонке она уехала бы за экран. */
+    /* Не ближе 12px к правому краю: таблица прокручивается по горизонтали, и
+       у последней колонки кнопка может стоять почти на самом краю — панель
+       вышла бы за экран целиком. */
+    pop.style.setProperty('--pop-right', `${Math.max(12, Math.round(window.innerWidth - from.right))}px`);
+    pop.style.setProperty('--pop-top', `${Math.round(from.bottom + 4)}px`);
+    pop.showModal();
+
+    /* Высота МЕРЯЕТСЯ, а не берётся константой: у закрытого <dialog> layout'а
+       нет вовсе (display:none), поэтому замер идёт сразу после showModal() —
+       в том же тике, до отрисовки, так что скачка не видно. Константа же
+       разъедется при первой правке пикера.
+       Если снизу не помещается — панель откидывается ВВЕРХ от кнопки. Шапка
+       таблицы стоит достаточно низко на странице, чтобы это был обычный
+       случай, а не край. */
+    const height = pop.offsetHeight;
+    const up = from.bottom + 4 + height > window.innerHeight - 12;
+    pop.toggleAttribute('data-up', up);
+    if (up) pop.style.setProperty('--pop-top', `${Math.max(12, Math.round(from.top - 4 - height))}px`);
+  };
+
+  /* Цвет, с которого открывается окно: свой, если колонку уже красили, иначе
+     вычисленный тон ранжира — пикеру нужно от чего оттолкнуться. */
+  const paintValue = (bid: Bid) => tint[bid.contractor.id] ?? resolveTone(bid.tone);
+
+  /* Пустой ответ — штатное состояние, а не сбой: тендер объявлен, смета
+     заливается позже, КП собираются неделями. Таблица о четырёх колонках без
+     единой строки читалась бы как поломка. Проверка стоит ПОСЛЕ хуков — до
+     них ранний возврат менял бы их число между рендерами. */
+  if (!groups.length || !contractors.length) {
+    return (
+      <ScreenPlaceholder icon="billList">
+        {!groups.length
+          ? 'В тендере ещё нет сметы — сравнивать нечего.'
+          : 'Ни одного КП пока не подано.'}
+      </ScreenPlaceholder>
+    );
+  }
+
   return (
     <>
-      <Table caption={`${POSITIONS.length} позиций в ${GROUPS.length} разделах · ${bids.length} предложения`}>
+      {/* Счётчик склоняется: подпись «3 предложения», написанная под тройку из
+          фикстуры, на одном КП читалась бы как опечатка. */}
+      <Table layout="fixed" caption={[
+        `${positions.length} ${plural(positions.length, 'позиция', 'позиции', 'позиций')}`,
+        `в ${groups.length} ${plural(groups.length, 'разделе', 'разделах', 'разделах')}`,
+        `· ${bids.length} ${plural(bids.length, 'предложение', 'предложения', 'предложений')}`,
+      ].join(' ')}>
         {/* Цвет колонки — на <col>, а не на каждой ячейке. Фон колонки
             рисуется НИЖЕ фона строки, поэтому ховер строки (.05) продолжает
             читаться поверх заливки, а не гасится ею. Сама арифметика цвета —
-            в .module.css: отсюда уходит только тон. Ширину колонки задаёт не
-            <col>, а min-width самой карточки: ширина у <col> — рекомендация,
-            которую алгоритм таблицы вправе не выполнить, а min-width контента
-            он обязан уважить. */}
-        <colgroup>
+            в .module.css: отсюда уходит только тон. */}
+        {/* ШИРИНА — ТОЖЕ ЗДЕСЬ, и она исполняется: таблица идёт layout="fixed",
+            где <col> и есть источник ширины (при авторазметке это было лишь
+            пожелание, и колонки расходились по длине имён).
+            Из TSX уезжает ОДНО число — сколько подано КП. По нему в CSS
+            считается равная доля ширины на всех (см. контракт .cols в модуле);
+            арифметика остаётся в стилях, значений по умолчанию у --bids нет:
+            число колонок — это данные, и подставлять вместо них тройку из
+            фикстуры значило бы врать раскладкой. */}
+        <colgroup className={s.cols} style={{ '--bids': bids.length } as CSSProperties}>
           {/* Линейка между колонками — на <col>, одним правилом на всю
               колонку сразу. У последней её нет: там край ленты. */}
-          <col className={s.colRule} />
-          <col className={s.colRule} />
-          <col className={s.colRule} />
-          <col className={s.colRule} />
+          <col className={cx(s.colTitle, s.colRule)} />
+          <col className={cx(s.colQty, s.colRule)} />
+          <col className={cx(s.colUnit, s.colRule)} />
+          <col className={cx(s.colSpread, s.colRule)} />
           {bids.map((bid, i) => (
             <col
               key={bid.contractor.id}
-              className={cx(s.colTint, i < bids.length - 1 && s.colRule)}
-              style={{ '--col': TONE_VAR[choose(tint, bid)] } as CSSProperties}
+              className={cx(s.colBid, s.colTint, i < bids.length - 1 && s.colRule)}
+              style={{ '--col': choose(tint, bid) } as CSSProperties}
             />
           ))}
         </colgroup>
@@ -139,15 +239,15 @@ export function TenderCompare() {
               <th scope="col" key={bid.contractor.id} className={tableCell.card}>
                 <ContractorCard
                   bid={bid}
-                  tone={choose(tint, bid)}
-                  choice={tint[bid.contractor.id] ?? 'auto'}
+                  total={positions.length}
+                  col={choose(tint, bid)}
                   starred={starred.includes(bid.contractor.id)}
                   onStar={() => setStarred((list) => (
                     list.includes(bid.contractor.id)
                       ? list.filter((id) => id !== bid.contractor.id)
                       : [...list, bid.contractor.id]
                   ))}
-                  onTint={(value) => setTint((all) => ({ ...all, [bid.contractor.id]: value }))}
+                  onPaint={(from) => openPaint(bid, from)}
                   onOpen={() => openDossier(bid)}
                   collapsed={collapsed}
                   onFold={() => setCollapsed((on) => !on)}
@@ -159,7 +259,7 @@ export function TenderCompare() {
         {/* Один <tbody> на раздел — так группа и есть группа строк, а не
             подкрашенная строка среди прочих: скринридер объявляет её как
             блок, а браузер не разорвёт её при печати. */}
-        {GROUPS.map((group) => {
+        {groups.map((group) => {
           const open = !folded[group.id];
           return (
             <tbody key={group.id}>
@@ -196,16 +296,22 @@ export function TenderCompare() {
                     «5» в колонке количества на общем кегле читалось бы как
                     пять кубометров чего-то. */}
                 <td className={cx(tableCell.numeric, s.groupMeta)}>{group.positions.length}</td>
-                <td className={s.groupMeta}>позиций</td>
+                <td className={s.groupMeta}>
+                  {plural(group.positions.length, 'позиция', 'позиции', 'позиций')}
+                </td>
                 <td />
                 {bids.map((bid) => <td key={bid.contractor.id} />)}
               </tr>
 
               {open ? group.positions.map((position) => {
-                const gap = spread(position);
+                const gap = spread(position, contractors);
                 return (
                   <tr key={position.id}>
-                    <td className={tableCell.strong}>{position.title}</td>
+                    {/* title — потому что колонка теперь ОБРЕЗАЕТ: ширина
+                        задана контрактом, и длинное название уходит в
+                        многоточие. Это колонка-якорь, с которой читают строку,
+                        и прочитать её целиком должно быть чем. */}
+                    <td className={tableCell.strong} title={position.title}>{position.title}</td>
                     <td className={tableCell.numeric}>{decimal(position.qty)}</td>
                     <td className={tableCell.muted}>{position.unit}</td>
                     {/* Разброса нет, когда расценок меньше двух: прочерк, а не
@@ -252,7 +358,31 @@ export function TenderCompare() {
         onClose={() => setDossier(null)}
         onClick={(e) => { if (e.target === e.currentTarget) dialogRef.current?.close(); }}
       >
-        {dossier ? <Dossier bid={dossier} onClose={() => dialogRef.current?.close()} /> : null}
+        {dossier ? (
+          <Dossier
+            bid={dossier}
+            total={positions.length}
+            onClose={() => dialogRef.current?.close()}
+          />
+        ) : null}
+      </dialog>
+
+      {/* Палитра колонки. Выпадашка, а не окно: подложка прозрачная, клик мимо
+          закрывает (он приходит на сам <dialog>), Escape тоже. */}
+      <dialog
+        ref={paintRef}
+        className={s.pop}
+        aria-label="Цвет колонки"
+        onClose={() => setPaint(null)}
+        onClick={(e) => { if (e.target === e.currentTarget) paintRef.current?.close(); }}
+      >
+        {paint ? (
+          <Painter
+            value={paintValue(paint)}
+            onPick={(color) => setTint((all) => ({ ...all, [paint.contractor.id]: color }))}
+            onReset={() => setTint(({ [paint.contractor.id]: _, ...rest }) => rest)}
+          />
+        ) : null}
       </dialog>
     </>
   );
@@ -275,42 +405,39 @@ function GroupTotal({ group, bids }: { group: PositionGroup; bids: Bid[] }) {
   );
 }
 
-/** Действующий тон колонки: рука важнее ранжира. */
-function choose(tint: Record<string, TintChoice>, bid: Bid): Tone {
-  const picked = tint[bid.contractor.id] ?? 'auto';
-  return picked === 'auto' ? bid.tone : picked;
+/** Действующий цвет колонки: рука важнее ранжира. */
+function choose(tint: Record<string, string>, bid: Bid): string {
+  return tint[bid.contractor.id] ?? toneColor(bid.tone);
 }
 
 /** Карточка подрядчика — она же шапка колонки. Локальная: за её пределами
  *  такой блок ничего не значит, а вынести в shared можно будет, когда
  *  появится второй экран со сравнением по колонкам. */
 function ContractorCard({
-  bid, tone, choice, starred, collapsed, onStar, onTint, onOpen, onFold,
+  bid, total, col, starred, collapsed, onStar, onPaint, onOpen, onFold,
 }: {
   bid: Bid;
-  tone: Tone;
-  choice: TintChoice;
+  /** Сколько всего позиций в смете — знаменатель подписи «расценки есть у N
+   *  из M». Пропом, а не из модуля: длина сметы приходит с данными. */
+  total: number;
+  /** Готовая CSS-строка цвета: карточка не знает, ранжир его дал или рука. */
+  col: string;
   starred: boolean;
   collapsed: boolean;
   onStar: () => void;
-  onTint: (value: TintChoice) => void;
+  /** Отдаёт прямоугольник нажатой кнопки: от него падает выпадашка. */
+  onPaint: (from: DOMRect) => void;
   onOpen: () => void;
   onFold: () => void;
 }) {
   const { contractor, filled, percent, sum, rankLabel } = bid;
-  const status = BID_STATUS[contractor.status];
-  /* Делений зажигается floor(percent/10): 88% — это восемь, а не девять.
-     Округлять вверх значило бы дорисовывать заполнение, которого нет. */
-  const lit = Math.floor(percent / 10);
+  const status = bidStatus(contractor.status);
 
   return (
-    // Клик по карточке открывает досье, но клики по её собственным кнопкам —
-    // нет: тот же приём, что у строки реестра, только там отсеивалась ссылка.
-    <div
-      className={s.card}
-      style={{ '--col': TONE_VAR[tone] } as CSSProperties}
-      onClick={(e) => { if (!(e.target as HTMLElement).closest('button')) onOpen(); }}
-    >
+    // Целиком карточка НЕ кликается: в ней четыре собственных контрола, и
+    // «клик мимо них» открывал модалку всякий раз, когда рука промахивалась.
+    // Досье открывают две явные цели — имя и стрелка напротив статуса.
+    <div className={s.card} style={{ '--col': col } as CSSProperties}>
       <header className={s.cardHead}>
         <button
           type="button"
@@ -323,11 +450,12 @@ function ContractorCard({
           <Icon name={starred ? 'starFilled' : 'star'} />
         </button>
 
-        {/* Настоящая кнопка, а не просто текст: карточка кликабельна целиком,
-            но клавиатуре нужна одна цель, которую можно поймать Tab'ом. */}
-        <button type="button" className={s.cardName} onClick={onOpen}>
-          {contractor.name}
-        </button>
+        {/* Просто текст. Кнопкой имя было, пока карточка кликалась целиком —
+            тогда клавиатуре нужна была цель, которую можно поймать Tab'ом.
+            Теперь такая цель есть своя, стрелка досье: она фокусируется и при
+            opacity:0, а :focus-within её показывает. Имя же нажимали, не
+            собираясь никуда уходить, — и попадали в окно. */}
+        <p className={s.cardName}>{contractor.name}</p>
 
         {/* Место в ранжире осталось ТОЛЬКО текстом для скринридера: цифру в
             углу убрали как лишнюю — порядок колонок и их цвет говорят то же
@@ -349,69 +477,88 @@ function ContractorCard({
 
       {collapsed ? null : (
       <div className={s.cardBody}>
-        {/* Делений ровно столько, сколько позиций: шкала показывает «4 из 6»
-            формой, а не только числом. */}
-        {/* Десять делений по 10% — шкала показывает ВЕЛИЧИНУ, а не «сколько
-            строк из тринадцати»: заполненность считается по стоимости сметы, и
-            деления по позициям обещали бы другую арифметику. Округление вниз:
-            88% это восемь делений, а не девять. */}
-        <div
-          className={s.meter}
-          role="img"
-          aria-label={`Заполненность КП ${percent}%; расценки есть у ${filled} позиций из ${POSITIONS.length}`}
-        >
-          {METER_STEPS.map((step) => (
-            <span
-              key={step}
-              className={cx(s.meterSeg, step < lit && s.isOn, step === lit - 1 && s.isLead)}
-            />
-          ))}
+        {/* Полнота КП и его итог одной строкой — два числа, по которым
+            колонки и сравнивают. Полнота ЧИСЛОМ, а не полосой: полоса на
+            220px показывала силуэт вместо величины, а 88% и 92% на ней
+            неразличимы — при том что решают именно они. */}
+        <div className={s.figures}>
+          <p
+            className={s.fill}
+            title={`Расценки есть у ${filled} позиций из ${total}`}
+          >
+            <span className={s.percent}>{percent}%</span>
+            <span className={s.fillLabel}>заполнено</span>
+          </p>
+          <p className={s.sum}>{money(sum)}</p>
         </div>
 
-        <p className={s.meterRow}>
-          <span className={s.percent}>{percent}%</span>
-          <span className={s.meterHint}>заполненность КП</span>
-        </p>
+        {/* Статус слева, действия справа: строка статуса всё равно кончалась
+            пустотой, и отдельный подвал ради двух кнопок только добавлял
+            карточке высоты. */}
+        <div className={s.meta}>
+          <Badge className={s.cardStatus} tone={status.tone} icon={status.icon}>
+            {status.label}
+          </Badge>
 
-        <p className={s.sum}>{money(sum)}</p>
-
-        <Badge className={s.cardStatus} tone={status.tone} icon={status.icon}>
-          {status.label}
-        </Badge>
-      </div>
-      )}
-
-      {/* Палитра колонки. В покое погашена — проявляется по наведению на
-          карточку и по фокусу внутри неё (рецепт 5): без :focus-within
-          кнопки были бы недостижимы с клавиатуры. Место под неё держится
-          всегда, поэтому карточка не дёргается. */}
-      {collapsed ? null : (
-      <div className={s.tints} role="radiogroup" aria-label={`Цвет колонки «${contractor.name}»`}>
-        {TINTS.map((option) => (
           <button
-            key={option.value}
             type="button"
-            role="radio"
-            aria-checked={choice === option.value}
-            aria-label={option.label}
-            title={option.label}
-            className={cx(s.tint, option.value === 'auto' && s.tintAuto, choice === option.value && s.isOn)}
-            style={option.value === 'auto' ? undefined : ({ '--dot': TONE_VAR[option.value] } as CSSProperties)}
-            onClick={() => onTint(option.value)}
-          />
-        ))}
+            className={cx(s.cardAct, s.cardActPaint)}
+            aria-label={`Цвет колонки «${contractor.name}»`}
+            title="Цвет колонки"
+            onClick={(e) => onPaint(e.currentTarget.getBoundingClientRect())}
+          >
+            <Icon name="palette" />
+          </button>
+
+          {/* Диагональ, а не шеврон: уход в отдельное окно, а не раскрытие на
+              месте. */}
+          <button
+            type="button"
+            className={cx(s.cardAct, s.cardActSpin)}
+            aria-label={`Досье подрядчика «${contractor.name}»`}
+            title="Открыть досье"
+            onClick={onOpen}
+          >
+            <Icon name="arrowRightUp" />
+          </button>
+        </div>
       </div>
       )}
     </div>
   );
 }
 
+/** Содержимое выпадашки: пикер и возврат под расчёт. Своего состояния нет —
+ *  цвет уезжает наверх на каждое движение, и колонка перекрашивается живьём:
+ *  подбирать «читается / не читается» по образцу в панели бесполезно,
+ *  проверяется это на самой таблице.
+ *
+ *  Ни заголовка, ни «Готово»: чью колонку красим, видно по самой колонке —
+ *  она под панелью и меняется на глазах, — а закрывают выпадашку кликом мимо
+ *  или Escape, как любое меню. */
+function Painter({
+  value, onPick, onReset,
+}: {
+  value: string;
+  onPick: (color: string) => void;
+  onReset: () => void;
+}) {
+  return (
+    <>
+      <ColorPicker value={value} onChange={onPick} />
+      <footer className={s.popFoot}>
+        <button type="button" className={s.popReset} onClick={onReset}>По ранжиру</button>
+      </footer>
+    </>
+  );
+}
+
 /** Досье подрядчика — пока заглушка: реквизиты, итог по КП и честная фраза о
  *  том, что раздела ещё нет. Окно с пустотой внутри хуже отсутствия окна,
  *  поэтому здесь стоит то, что УЖЕ известно из сравнения. */
-function Dossier({ bid, onClose }: { bid: Bid; onClose: () => void }) {
+function Dossier({ bid, total, onClose }: { bid: Bid; total: number; onClose: () => void }) {
   const { contractor, percent, filled, sum, rankLabel } = bid;
-  const status = BID_STATUS[contractor.status];
+  const status = bidStatus(contractor.status);
 
   return (
     <div className={s.modalBody}>
@@ -424,7 +571,9 @@ function Dossier({ bid, onClose }: { bid: Bid; onClose: () => void }) {
         <Fact label="ИНН">{contractor.inn}</Fact>
         <Fact label="Контактное лицо">{contractor.contact}</Fact>
         <Fact label="КП поступило">{contractor.submitted}</Fact>
-        <Fact label="Заполнено">{percent}% — {filled} из {POSITIONS.length} позиций</Fact>
+        <Fact label="Заполнено">
+          {percent}% — {filled} из {total} {plural(total, 'позиции', 'позиций', 'позиций')}
+        </Fact>
         <Fact label="Итог по КП">{money(sum)}</Fact>
         <Fact label="Место в сравнении">{rankLabel}</Fact>
       </dl>

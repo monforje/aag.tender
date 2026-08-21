@@ -6,9 +6,15 @@
  *  Фреймворка нет намеренно — то же соглашение, что у registry.check.ts. */
 import { strict as assert } from 'node:assert';
 import {
-  CONTRACTORS, GROUPS, POSITIONS, decimal, groupSum, money, rankBids, spread, sumOf,
+  bidStatus, decimal, flatten, groupSum, money, rankBids, spread, sumOf,
   type ComparePosition, type Contractor,
 } from './comparison';
+import { MOCK_COMPARISON } from './comparison.mock';
+
+// Живая фикстура — ровно так же, как её берёт экран: разделы из ответа,
+// плоский список выводится из них.
+const { groups: GROUPS, contractors: CONTRACTORS } = MOCK_COMPARISON;
+const POSITIONS = flatten(GROUPS);
 
 // ── стенд: две позиции по 10 единиц, чтобы суммы считались в уме ───────────
 const P: ComparePosition[] = [
@@ -84,7 +90,7 @@ assert.deepEqual(CONTRACTORS.map((c) => c.fill), [100, 95, 88]);
 
 // Экран показывает три колонки, и все три должны попадать в свой цвет: без
 // этого зелёная/янтарная/красная шкала на странице не проверяется ничем.
-const live = rankBids();
+const live = rankBids(CONTRACTORS, POSITIONS);
 assert.deepEqual(live.map((b) => b.contractor.name),
   ['АО «МетСнаб»', 'ООО «СтройМонтаж»', 'ООО «ИнженерГрупп»']);
 assert.deepEqual(live.map((b) => b.tone), ['success', 'warning', 'danger']);
@@ -97,7 +103,24 @@ assert.ok(live[1].sum < live[2].sum, 'два неполных между соб�
 
 // Разброс есть у каждой позиции, где расценок хотя бы две: одинаковых цен в
 // фикстуре нет, и нулевой разброс означал бы опечатку в данных.
-assert.deepEqual(POSITIONS.map((p) => spread(p) === null || spread(p)! > 0), POSITIONS.map(() => true));
+assert.deepEqual(
+  POSITIONS.map((p) => { const g = spread(p, CONTRACTORS); return g === null || g > 0; }),
+  POSITIONS.map(() => true),
+);
+
+// ── статус КП: незнакомый id с сервера ────────────────────────────────────
+// Словарь статусов живёт на сервере и пополняется без нас. Новый id обязан
+// дать нейтральную капсулу с самим id, а не уронить экран на undefined.label.
+assert.equal(bidStatus('complete').label, 'КП получено');
+assert.equal(bidStatus('withdrawn').label, 'withdrawn');
+assert.equal(bidStatus('withdrawn').tone, 'neutral');
+
+// ── пустой ответ ──────────────────────────────────────────────────────────
+// Тендер открыт, КП ещё не подано: расчёт обязан вернуть пустой список, а не
+// упасть на Math.min от пустого массива.
+assert.deepEqual(rankBids([], POSITIONS), []);
+assert.equal(spread(P[0], []), null);
+assert.equal(flatten([]).length, 0);
 
 // Формат — часть данных: неразрывные пробелы и запятая приходят из Intl, но
 // валюта и число знаков заданы нами, и подмена локали видна сразу.

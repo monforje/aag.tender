@@ -4,6 +4,8 @@
  *  хронологическим, поэтому весь диапазонный фильтр это обычные `>=` и `<=`
  *  над строками, без Date и без часовых поясов. */
 
+import { plural } from './plural';
+
 /** Дата в ГГГГ-ММ-ДД по МЕСТНОМУ времени.
  *
  *  toISOString() здесь не годится принципиально: он переводит в UTC и в
@@ -74,13 +76,7 @@ function utcDay(iso: string): number {
 }
 
 /** Форма слова «день» при числе: 1 день, 2 дня, 5 дней, 41 день.
- *
- *  Правило склонения не пишется руками (и тем более не «n === 1 ? день :
- *  дней» — на 41 и 22 это сразу видно): его знает Intl.PluralRules, стандарт
- *  платформы. Таблица здесь — только три слова, а не логика выбора. */
-const RU_PLURAL = new Intl.PluralRules('ru-RU');
-const DAY_FORM: Record<string, string> = { one: 'день', few: 'дня', many: 'дней' };
-
+ *  Три слова, а не логика выбора: склонение знает `plural` из lib/plural. */
 export function daysWord(n: number): string {
-  return DAY_FORM[RU_PLURAL.select(Math.abs(n))] ?? 'дней';
+  return plural(n, 'день', 'дня', 'дней');
 }

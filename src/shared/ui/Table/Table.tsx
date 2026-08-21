@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { cx } from '@/shared/lib/cx';
 import s from './Table.module.css';
 
 /**
@@ -51,6 +52,15 @@ export const tableCell = {
  *         caption — итог под данными (сколько показано из скольких), а не
  *         элемент полосы фильтров: он описывает таблицу, а среди контролов
  *         читался как ещё один фильтр.
+ *         layout="fixed" — ширины колонок берутся ТОЛЬКО из <colgroup>, а не
+ *         из содержимого. Нужно там, где колонки СРАВНИВАЮТ между собой:
+ *         авторазметка меряет колонку по самому длинному значению, и у кого
+ *         длиннее имя, у того шире колонка — хотя читают их как равные.
+ *         Заодно это единственный режим, в котором width у <col> вообще
+ *         исполняется: при авторазметке это лишь пожелание.
+ *         Плата — обрезка: колонка больше не растягивается под текст, поэтому
+ *         в этом режиме длинное значение уходит в многоточие (ячейкам,
+ *         отданным блоку, обрезка не грозит — см. .cell--card).
  * A11Y:   настоящая <table> с <th scope="col"> — скринридер объявляет
  *         заголовок колонки при переходе по ячейкам; <caption> становится
  *         именем таблицы. Ни то ни другое не заменяется набором <div>.
@@ -61,10 +71,15 @@ export const tableCell = {
  *   <tbody>{rows.map((r) => <tr key={r.id}><td className={tableCell.mono}>{r.id}</td></tr>)}</tbody>
  * </Table>
  */
-export function Table({ caption, children }: { caption?: ReactNode; children: ReactNode }) {
+export function Table({ caption, layout, children }: {
+  caption?: ReactNode;
+  /** 'fixed' — ширины из <colgroup> (см. UX). По умолчанию авторазметка. */
+  layout?: 'auto' | 'fixed';
+  children: ReactNode;
+}) {
   return (
     <div className={s.tableWrap}>
-      <table className={s.table}>
+      <table className={cx(s.table, layout === 'fixed' && s.tableFixed)}>
         {caption ? <caption className={s.caption}>{caption}</caption> : null}
         {children}
       </table>

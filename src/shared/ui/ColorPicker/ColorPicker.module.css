@@ -1,0 +1,125 @@
+/* Пикер цвета. Геометрия снята с shadcn/ui color-picker: площадка сверху, под
+   ней две полосы одной высоты, внизу ряд полей. Числа наши — радиусы и
+   заливки берутся из токенов, а не из tailwind-шкалы оригинала.
+
+   --picked (выбранный цвет целиком) и --pure (чистый оттенок, без
+   насыщенности и яркости) ставит компонент инлайном: дальше их читают
+   площадка, обе полосы и бегунок прозрачности. Переменные, а не пять
+   инлайновых стилей: значение одно, потребителей пятеро. */
+/* Плотность: 8px между площадкой и полосами, 4px между самими полосами.
+   Полосы — одна пара органов «оттенок и прозрачность», и разводить их на тот
+   же зазор, что и площадку, значит рассыпать панель на три отдельных блока. */
+.picker{ display: flex; flex-direction: column; gap: 4px; }
+.picker > .area{ margin-bottom: 4px; }
+.picker > .row{ margin-top: 4px; }
+
+/* Площадка. Два градиента поверх чистого оттенка — это и есть срез HSV при
+   фиксированном H: белый по горизонтали даёт насыщенность, чёрный по
+   вертикали — яркость. Канва для этого не нужна. */
+.area{
+  position: relative; height: 132px;
+  border-radius: var(--cu-radii-3);
+  background:
+    linear-gradient(to top, #000, transparent),
+    linear-gradient(to right, #fff, var(--pure));
+  cursor: crosshair;
+  /* Палец на площадке ВЫБИРАЕТ цвет, а не листает страницу: без этого первое
+     же движение по вертикали уедет в скролл окна. */
+  touch-action: none;
+}
+.area:focus-visible{ outline: var(--cu-focus-ring); outline-offset: 2px; }
+
+/* Бегунок — кольцо, а не точка: он стоит поверх произвольного цвета, и
+   заливка любого тона на каком-нибудь фоне станет невидимой. Белый контур с
+   чёрной тенью читается и на белом, и на чёрном углу площадки. */
+.area__handle{
+  position: absolute; width: 12px; height: 12px;
+  margin: -6px 0 0 -6px; border-radius: 50%;
+  border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.28);
+  pointer-events: none;
+}
+
+/* --- ПОЛОСЫ --------------------------------------------------------------
+   Нативный range: клавиатура, повтор при удержании и перетаскивание уже
+   написаны браузером. Взамен приходится гасить его собственную отрисовку —
+   appearance:none и своя дорожка с бегунком, иначе поверх радуги останется
+   системная полоса. */
+.slider{
+  appearance: none; -webkit-appearance: none;
+  width: 100%; height: 10px; border-radius: var(--cu-radii-round);
+  cursor: pointer;
+}
+.slider:focus-visible{ outline: var(--cu-focus-ring); outline-offset: 2px; }
+
+/* Радуга — по всем шести секторам HSV, вручную: linear-gradient между
+   красным и красным дал бы серую середину, потому что интерполяция идёт по
+   RGB, а не по кругу оттенков. */
+.slider--hue{
+  background: linear-gradient(to right,
+    #f00 0%, #ff0 17%, #0f0 33%, #0ff 50%, #00f 67%, #f0f 83%, #f00 100%);
+}
+
+/* Прозрачность — выбранный цвет поверх шахматки. Шахматка сама по себе
+   означает «здесь ничего нет» и рисуется двумя conic-градиентами, а не
+   картинкой. */
+.slider--alpha{
+  background:
+    linear-gradient(to right, transparent, var(--picked)),
+    repeating-conic-gradient(var(--cu-fill-subtle) 0 25%, transparent 0 50%) 0 0 / 8px 8px;
+}
+
+/* Бегунок обеих полос. Правила -webkit- и -moz- нельзя объединить в один
+   селектор: браузер отбрасывает ВСЁ правило целиком, если не понял хотя бы
+   один селектор в списке, — и оба остались бы без бегунка. */
+.slider::-webkit-slider-thumb{
+  appearance: none; -webkit-appearance: none;
+  width: 14px; height: 14px; border-radius: 50%;
+  border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.28);
+  background: var(--picked);
+}
+.slider::-moz-range-thumb{
+  width: 14px; height: 14px; border-radius: 50%; border: 2px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0,0,0,.28);
+  background: var(--picked);
+}
+
+/* --- РЯД ПОЛЕЙ -----------------------------------------------------------
+   Пипетка, формат, значение и проценты. Значение растягивается, остальные
+   держат свою ширину: длинной здесь бывает только запись цвета. */
+.row{ display: flex; align-items: center; gap: 4px; }
+
+.eyedrop{
+  display: flex; align-items: center; justify-content: center;
+  width: var(--cu-size-7); height: var(--cu-size-7); flex: 0 0 auto;
+  border: 1px solid var(--cu-border-default); border-radius: var(--cu-radii-3);
+  color: var(--cu-content-secondary); --icon-size: 14px;
+  transition: background-color var(--cu-animation-duration) var(--cu-animation-timing);
+}
+.eyedrop:hover{ background: var(--cu-state-hover-subtle); }
+.eyedrop:focus-visible{ outline: var(--cu-focus-ring); outline-offset: 1px; }
+
+/* Формат и поля — одной высоты (28px) и одной рамки: это один ряд органов
+   ввода, а не три разных контрола рядом. 28px, а не панельные 32: ряд стоит
+   под площадкой в выпадашке шириной 264px, и на четыре элемента в нём
+   приходится меньше места, чем на полосу кнопок. */
+.format, .field{
+  height: var(--cu-size-7);
+  padding: 0 6px;
+  border: 1px solid var(--cu-border-default); border-radius: var(--cu-radii-3);
+  background: var(--cu-background-main);
+  font-size: 12px; line-height: 26px; color: var(--cu-content-primary);
+}
+.format{
+  flex: 0 0 auto; padding-right: 2px; cursor: pointer;
+  color: var(--cu-content-secondary);
+}
+.field{
+  flex: 1 1 auto; min-width: 0;
+  font-variant-numeric: tabular-nums; letter-spacing: .01em;
+}
+/* Проценты — по содержимому: «100%» никогда не длиннее четырёх знаков, а
+   растянутое поле забирало бы ширину у записи цвета. */
+.field--alpha{ flex: 0 0 auto; width: 44px; padding: 0 4px; text-align: center; }
+.format:focus-visible, .field:focus-visible{
+  outline: var(--cu-focus-ring); outline-offset: -1px;
+}

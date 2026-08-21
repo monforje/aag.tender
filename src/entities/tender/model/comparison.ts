@@ -1,6 +1,13 @@
 /** Сравнение коммерческих предложений по одному тендеру: позиции сметы слева,
  *  подрядчики колонками справа.
  *
+ *  ЗДЕСЬ ТОЛЬКО КОНТРАКТ И СЧЁТ — НИ ОДНОЙ СТРОКИ ДАННЫХ. Смета и КП приходят
+ *  снаружи (сегодня из `comparison.mock.ts`, завтра из ответа API) и передаются
+ *  в функции явным аргументом. Значений по умолчанию у аргументов НЕТ
+ *  намеренно: `rankBids()` без аргументов подставляла бы демо-подрядчиков, и
+ *  на живом экране это заметили бы по чужим именам в колонках, а в `spread()`
+ *  — вообще никак: проценты правдоподобны любые.
+ *
  *  Живёт в entities, а не в слайсе страницы, по той же причине, что и реестр:
  *  цифры на карточке подрядчика (сумма, место) и цифры в теле таблицы (цена
  *  позиции, итог группы, разброс) считаются ИЗ ОДНИХ И ТЕХ ЖЕ строк.
@@ -34,46 +41,6 @@ export interface PositionGroup {
   positions: ComparePosition[];
 }
 
-/** Смета тендера T-2026-014 «Устройство монолитного фундамента». */
-export const GROUPS: PositionGroup[] = [
-  {
-    id: 'materials',
-    title: 'Материалы',
-    positions: [
-      { id: 'm1', title: 'Бетон B25 W8 F150', qty: 420, unit: 'м³' },
-      { id: 'm2', title: 'Арматура А500С Ø12', qty: 100, unit: 'т' },
-      { id: 'm3', title: 'Щебень фр. 20–40', qty: 180, unit: 'м³' },
-      { id: 'm4', title: 'Плёнка полиэтиленовая 200 мкм', qty: 840, unit: 'м²' },
-      { id: 'm5', title: 'Добавка пластифицирующая', qty: 2100, unit: 'кг' },
-    ],
-  },
-  {
-    id: 'works',
-    title: 'Работы',
-    positions: [
-      { id: 'w1', title: 'Устройство опалубки стен и плит', qty: 3150, unit: 'м²' },
-      { id: 'w2', title: 'Укладка и уплотнение бетона', qty: 420, unit: 'м³' },
-      { id: 'w3', title: 'Вязка арматурных каркасов', qty: 100, unit: 'т' },
-      { id: 'w4', title: 'Устройство бетонной подготовки', qty: 940, unit: 'м²' },
-      { id: 'w5', title: 'Геодезическое сопровождение', qty: 1, unit: 'компл.' },
-    ],
-  },
-  {
-    id: 'waterproofing',
-    title: 'Гидроизоляция и швы',
-    positions: [
-      { id: 'g1', title: 'Гидроизоляция обмазочная, 2 слоя', qty: 2480, unit: 'м²' },
-      { id: 'g2', title: 'Устройство деформационных швов', qty: 310, unit: 'м' },
-      { id: 'g3', title: 'Герметизация примыканий', qty: 190, unit: 'м' },
-    ],
-  },
-];
-
-/** Плоский список — для расчётов, которым разделы безразличны (итог по КП,
- *  сколько позиций закрыто). Выводится из GROUPS, а не пишется вторым списком:
- *  два перечня одних и тех же позиций разъехались бы на первой же правке. */
-export const POSITIONS: ComparePosition[] = GROUPS.flatMap((g) => g.positions);
-
 /** Состояние КП. Отвечает на вопрос «можно ли по этому предложению принимать
  *  решение», а не «сколько строк заполнено» — заполненность стоит на карточке
  *  отдельно. Пример, ради которого статус вообще нужен полем: КП заполнено
@@ -86,6 +53,14 @@ export const BID_STATUS: Record<BidStatusId, { label: string; tone: Tone; icon: 
   revision: { label: 'На уточнении', tone: 'warning', icon: 'clock' },
   partial: { label: 'Заполнено частично', tone: 'info', icon: 'activity' },
 };
+
+/** Статус по id — ФУНКЦИЕЙ, а не обращением к таблице. Граница доверия: id
+ *  приходит из ответа сервера, где словарь статусов живёт своей жизнью и
+ *  пополняется без нас. Незнакомое значение обязано дать нейтральную капсулу
+ *  с самим id — видно, что статус новый, — а не уронить экран на
+ *  `undefined.label`. */
+export const bidStatus = (id: string): { label: string; tone: Tone; icon: IconName } =>
+  BID_STATUS[id as BidStatusId] ?? { label: id, tone: 'neutral', icon: 'flag' };
 
 export interface Contractor {
   id: string;
@@ -105,35 +80,20 @@ export interface Contractor {
   prices: Record<string, number>;
 }
 
-export const CONTRACTORS: Contractor[] = [
-  {
-    id: 'ms', name: 'АО «МетСнаб»', status: 'complete', fill: 100,
-    inn: '7743013901', contact: 'Ковалёв Денис Сергеевич', submitted: '04.08.2026',
-    prices: {
-      m1: 4755, m2: 42067, m3: 1646, m4: 96, m5: 41,
-      w1: 585, w2: 1143, w3: 7773, w4: 439, w5: 216070,
-      g1: 348, g2: 1326, g3: 896,
-    },
-  },
-  {
-    id: 'ig', name: 'ООО «ИнженерГрупп»', status: 'revision', fill: 95,
-    inn: '5024118820', contact: 'Наумова Елена Игоревна', submitted: '07.08.2026',
-    prices: {
-      m1: 5166, m2: 45869, m3: 1690, m5: 46,
-      w1: 599, w2: 1265, w3: 7918, w5: 240580,
-      g1: 381, g2: 1342, g3: 985,
-    },
-  },
-  {
-    id: 'sm', name: 'ООО «СтройМонтаж»', status: 'partial', fill: 88,
-    inn: '7714452103', contact: 'Гареев Тимур Ринатович', submitted: '11.08.2026',
-    prices: {
-      m1: 5182, m2: 49585, m3: 1910, m5: 45,
-      w1: 671, w2: 1209, w3: 9043, w5: 220940,
-      g2: 1544, g3: 955,
-    },
-  },
-];
+/** Ответ на «дай сравнение по тендеру» — ровно то, чем живёт экран, и ничего
+ *  больше. Смета отдельно от КП, а не расценки внутри позиции: подрядчик
+ *  вправе позицию не закрыть, и место для этого «нет» есть только в КП. */
+export interface Comparison {
+  groups: PositionGroup[];
+  contractors: Contractor[];
+}
+
+/** Плоский список позиций — для расчётов, которым разделы безразличны (итог по
+ *  КП, сколько позиций закрыто). ВЫВОДИТСЯ из разделов, а не приходит вторым
+ *  полем ответа: два перечня одних и тех же позиций разъехались бы на первой
+ *  же правке — хоть у нас, хоть на сервере. */
+export const flatten = (groups: PositionGroup[]): ComparePosition[] =>
+  groups.flatMap((g) => g.positions);
 
 /** Итог по одному подрядчику — всё, что показывает его карточка в шапке. */
 export interface Bid {
@@ -179,10 +139,7 @@ export function groupSum(group: PositionGroup, contractor: Contractor): number {
  *  Ранг — ПОДСКАЗКА, а не вердикт: сроки, гарантии и опыт в цифрах здесь не
  *  участвуют. Ровно поэтому цвет колонки можно перекрасить руками — базовый
  *  расчёт даёт первое приближение, решение остаётся за человеком. */
-export function rankBids(
-  contractors: Contractor[] = CONTRACTORS,
-  positions: ComparePosition[] = POSITIONS,
-): Bid[] {
+export function rankBids(contractors: Contractor[], positions: ComparePosition[]): Bid[] {
   const scored = contractors.map((contractor) => ({
     contractor,
     filled: positions.filter((p) => contractor.prices[p.id] !== undefined).length,
@@ -213,7 +170,7 @@ export function rankBids(
  *  «насколько я переплачу, если возьму не самого дешёвого». Меньше двух
  *  расценок — сравнивать не с чем, и это null, а не 0: ноль означал бы
  *  «все предложили одинаково».  */
-export function spread(position: ComparePosition, contractors: Contractor[] = CONTRACTORS): number | null {
+export function spread(position: ComparePosition, contractors: Contractor[]): number | null {
   const prices = contractors
     .map((c) => c.prices[position.id])
     .filter((p): p is number => p !== undefined);

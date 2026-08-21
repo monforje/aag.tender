@@ -24,17 +24,18 @@
    информационная поверхность, и она обязана читаться как предмет, а не как
    продолжение полосы заголовков.
 
-   min-width держит ширину КОЛОНКИ: у <col width> это лишь рекомендация,
-   которую алгоритм таблицы вправе проигнорировать, а min-width содержимого он
-   обязан уважить. 220px — минимум, на котором сумма в рублях и капсула
-   статуса не переносятся.
+   СВОЕЙ ШИРИНЫ У КАРТОЧКИ НЕТ. Её задаёт колонка (см. контракт ниже), и своего
+   min-width здесь стоять не должно: при table-layout:fixed содержимое на
+   ширину колонки не влияет вовсе, так что второе число было бы не вторым
+   мнением, а ложью — оно бы молча ничего не делало, пока не переросло бы
+   колонку и не полезло из неё. Нижний упор — один, --bid-min.
 
    Наследство от `.table th` (nowrap, semibold, secondary) снимается здесь же:
    внутри карточки текст обычный, а не заголовок колонки. */
 .card{
   --wash: 7%;
   position: relative;
-  min-width: 220px; height: 100%;
+  height: 100%;
   display: flex; flex-direction: column;
   padding: 13px 12px 10px;
   /* Тот же цвет, что у колонки под ней, только по белому, а не по прозрачному:
@@ -47,7 +48,6 @@
   white-space: normal;
   font-weight: var(--cu-font-weight-regular);
   color: var(--cu-content-primary);
-  cursor: pointer;
   /* Шапка ПРИПОДНЯТА над телом таблицы: тень падает только вниз, на строки —
      карточки читаются как ряд предметов над списком, а не как его первая
      строка. Ступень 2 — та же, что у самой ленты таблицы над холстом
@@ -69,6 +69,62 @@
    сливаются в кашу. Работает это только при border-collapse:collapse — он у
    <Table> и стоит. Последняя колонка линейки не получает: там край ленты. */
 .col--rule{ border-right: 1px solid var(--cu-border-default); }
+
+/* ── ШИРИНА КОЛОНОК — КОНТРАКТ, А НЕ СОДЕРЖИМОЕ ──────────────────────────
+   Таблица идёт с layout="fixed", значит эти правила — единственный источник
+   ширины: ни длина названия позиции, ни длина имени подрядчика на неё больше
+   не влияют. Ради этого режим и включён. Колонок подрядчиков ровно столько,
+   сколько подали КП, — раскладка обязана держаться и на двух, и на восьми, и
+   ни одно число ниже не описывает конкретное КП.
+
+   ЧЕМ ЭТО БЫЛО РАНЬШЕ: `width: clamp(176px, (100% - 420px) / var(--bids), 280px)`
+   при авторазметке. Правило не работало НИКОГДА, причём двумя способами
+   сразу: процент внутри calc()/clamp() на <col> не разрешается — вся
+   декларация откатывается в auto, — а 420px были догадкой о ширине левого
+   блока, который на деле мерялся по содержимому и занимал 502px. Колонки
+   расходились по длине имён: на ленте 1457px выходило 245 / 290 / 296 вместо
+   объявленных «одинаковых, не шире 280».
+
+   ОТСЮДА cqw. Лента объявлена контейнером запросов (см. Table.module.css), и
+   100cqw — её ширина ОБЫЧНОЙ ДЛИНОЙ, а не процентом: в арифметику она входит.
+
+   Три числа вилки:
+   --bid-min  176px — пол: на нём итог в рублях и капсула статуса в карточке
+                      ещё не переносятся;
+   --bid-max  280px — потолок: шире колонка начинает пустеть;
+   между      — РАВНАЯ ДОЛЯ свободного места, одна на всех, поэтому колонки и
+                выходят одинаковыми: значение считается один раз (--bid) и
+                достаётся каждой колонке подрядчика.
+
+   ЛЕВЫЙ БЛОК БОЛЬШЕ НЕ ДОГАДКА: --lead складывается из ширин трёх своих
+   колонок, и подвинуть любую из них теперь нельзя, не подвинув сумму.
+   Названию позиции достаётся ОСТАТОК, но не меньше --title-min: у авторазметки
+   излишек забирала единственная колонка без ширины, а при fixed «без ширины»
+   значит «сколько осталось» — на узкой ленте это был бы ноль.
+
+   Когда остатка не хватает и на пол, сумма колонок перерастает ленту и та
+   прокручивается по горизонтали — как прокручивалась всегда. Формулы для
+   этого согласованы: в точке, где --bid упирается в --bid-min, --title
+   упирается в --title-min, и разрыва между режимами нет. */
+.cols{
+  --w-qty: 104px;
+  --w-unit: 88px;
+  --w-spread: 96px;
+  --lead: calc(var(--w-qty) + var(--w-unit) + var(--w-spread));
+  --title-min: 280px;
+  --bid-min: 176px;
+  --bid-max: 280px;
+  --bid: clamp(
+    var(--bid-min),
+    (100cqw - var(--lead) - var(--title-min)) / var(--bids),
+    var(--bid-max)
+  );
+}
+.col--title{ width: max(var(--title-min), 100cqw - var(--lead) - var(--bids) * var(--bid)); }
+.col--qty{ width: var(--w-qty); }
+.col--unit{ width: var(--w-unit); }
+.col--spread{ width: var(--w-spread); }
+.col--bid{ width: var(--bid); }
 
 /* Рецепт (4) каталога состояний: карточка — белая поверхность на светлом
    фоне, заливать её нечем, поэтому ответ на курсор — кольцо. Ни сдвига, ни
@@ -115,17 +171,16 @@
 .star.is-on svg{ fill: currentColor; stroke: none; }
 .star:focus-visible{ outline: var(--cu-focus-ring); outline-offset: 1px; }
 
-/* Имя. Настоящая кнопка — единственная клавиатурная цель карточки; кликается
-   при этом вся карточка целиком. Многоточие, а не перенос: три колонки в
-   шапке обязаны остаться одной высоты, иначе таблица поедет. */
+/* Имя. Просто текст: кнопкой оно было, пока карточка кликалась целиком, и
+   нажатие на имя уводило в окно, которого не просили. Многоточие, а не
+   перенос: три колонки в шапке обязаны остаться одной высоты, иначе таблица
+   поедет. */
 .card__name{
-  width: 100%; text-align: center;
+  min-width: 0; text-align: center;
   font-size: 14px; line-height: 20px; font-weight: var(--cu-font-weight-semibold);
   color: var(--cu-content-primary);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  border-radius: var(--cu-radii-3);
 }
-.card__name:focus-visible{ outline: var(--cu-focus-ring); outline-offset: 2px; }
 
 /* Стрелка свёртывания. Стоит на месте бывшего кружка с местом в ранжире:
    номер убран как третье повторение того, что уже сказано порядком колонок и
@@ -148,85 +203,97 @@
    второе, но не первое (так же повёрнут тоггл раскрытия в дереве). */
 .fold.is-on{ transform: rotate(-90deg); }
 
-.card__body{ display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
-/* Капсула статуса — inline-элемент в колоночном флексе: без align-self она
-   растянулась бы во всю ширину карточки и перестала быть капсулой. */
-.card__status{ align-self: start; }
+.card__body{ display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
 
-/* --- ШКАЛА ЗАПОЛНЕНИЯ ----------------------------------------------------
-   СЕГМЕНТЫ, А НЕ СПЛОШНАЯ ПОЛОСА. Заполнение КП — величина дискретная:
-   позиций шесть, и промежуточных значений между «4 из 6» и «5 из 6» не
-   бывает. Сплошная полоса рисовала бы непрерывность, которой нет, и «66%»
-   пришлось бы читать глазами каждый раз; по делениям это считывается формой.
+/* Шкала и сумма — одной строкой. min-width:0 на полосе обязателен: без него
+   flex-элемент не сжимается ниже своего содержимого, и длинная сумма
+   вытолкнула бы шкалу за край карточки. */
+.figures{ display: flex; align-items: center; gap: 10px; }
 
-   Заливка — градиентом от осветлённого тона к самому тону: плоский цвет на
-   8px читается как прямоугольник, градиент даёт объём, не добавляя второго
-   цвета. Ведущий сегмент обведён мягким ореолом того же тона — взгляд сразу
-   попадает в точку «докуда дошли», не пересчитывая деления. */
-.meter{ display: flex; gap: 3px; height: 8px; }
-.meter__seg{
-  flex: 1 1 0; border-radius: 2px;
-  background: var(--cu-fill-subtle);
-  transition: background var(--cu-animation-duration) var(--cu-animation-timing);
+/* Строка статуса и действий. Капсула прижата влево, две иконки — вправо:
+   margin-right:auto на капсуле, а не justify-content:space-between, иначе
+   кнопки разъехались бы по краям, когда их две.
+
+   margin-top:auto прижимает строку к низу карточки — раньше это делал подвал
+   с палитрой. Без него у соседа с именем в две строки статус встал бы выше,
+   и три карточки перестали бы читаться рядами. */
+.meta{ display: flex; align-items: center; gap: 2px; margin-top: auto; }
+.card__status{ margin-right: auto; min-width: 0; }
+
+/* Две кнопки карточки — палитра и стрелка досье. Рецепт (5), как у звезды: в
+   покое их нет, проявляются по наведению на карточку и по фокусу внутри неё.
+   Место держится всегда (opacity, а не display) — шапка таблицы не дёргается,
+   когда курсор идёт по колонкам. Клавиатурная цель у досье есть и без
+   стрелки — кнопка имени.
+   Поворот — ответ на наведение НА САМУ КНОПКУ: полный оборот, а не сдвиг,
+   потому что сдвигать иконку в углу некуда. */
+.card__act{
+  display: flex; align-items: center; justify-content: center;
+  width: var(--cu-size-6); height: var(--cu-size-6); flex: 0 0 auto;
+  border-radius: var(--cu-radii-3);
+  color: var(--cu-content-tertiary); --icon-size: 16px;
+  opacity: 0;
+  transition: opacity var(--cu-animation-duration) var(--cu-animation-timing),
+              background-color var(--cu-animation-duration) var(--cu-animation-timing);
 }
-.meter__seg.is-on{
-  background: linear-gradient(180deg, color-mix(in srgb, var(--col) 62%, #fff), var(--col));
-}
-.meter__seg.is-lead{ box-shadow: 0 0 0 3px color-mix(in srgb, var(--col) 18%, transparent); }
+.card:hover .card__act, .card:focus-within .card__act{ opacity: 1; }
+.card__act:hover{ background: var(--cu-state-hover); color: var(--cu-content-primary); }
+.card__act:focus-visible{ outline: var(--cu-focus-ring); outline-offset: 1px; }
+.card__act svg{ transition: transform 450ms var(--cu-animation-timing); }
+/* Поворот — только у стрелки: у неё он значит «уходим отсюда». На палитре
+   вертящаяся иконка не значила бы ничего. */
+.card__act--spin:hover svg{ transform: rotate(360deg); }
+/* Палитра вместо движения НАЛИВАЕТСЯ цветом своей колонки — ответ на курсор
+   тот же по силе, но говорит о том, что кнопка делает. */
+.card__act--paint:hover{ color: var(--col); }
 
-/* Процент и расшифровка — на одной строке, по разным краям: слева величина,
-   справа то, из чего она получена. Baseline, а не center: у них разный кегль,
-   и по центру они выглядели бы съехавшими. */
-.meter__row{ display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+/* --- ПОЛНОТА КП ----------------------------------------------------------
+   ЧИСЛО, А НЕ ШКАЛА. Здесь стояли по очереди десять делений и сплошная
+   полоса — обе врали: на 220px разница между 88% и 92% неразличима, а решают
+   именно эти проценты. Слово «заполнено» рядом с числом обязательно: голый
+   процент в шапке колонки читался бы как доля от суммы.
+
+   Число и подпись стоят СТОЛБИКОМ, а не в строку: набранные в одну линию
+   «88%» и «заполнено» читались как фраза, и глаз проходил её целиком вместо
+   того, чтобы взять одно число.
+
+   Подпись — капитель 10/12 третичным: тот же язык, которым в этом интерфейсе
+   говорят ПОДПИСИ (.group-meta здесь же, .field__label в сводке). Кегль
+   числа 15 — на ступень ниже итога (17): полнота КП это оговорка к сумме, а
+   не второе число того же веса. cursor:help + title («расценки есть у 5 из 6
+   позиций») — тот же третий язык «здесь есть пояснение», что у прочерка в
+   незакрытой позиции. */
+.fill{
+  display: flex; flex-direction: column;
+  flex: 1 1 auto; min-width: 0;
+  cursor: help;
+}
 .percent{
-  font-size: 13px; line-height: 18px; font-weight: var(--cu-font-weight-semibold);
+  font-size: 15px; line-height: 18px; font-weight: var(--cu-font-weight-semibold);
+  color: var(--cu-content-primary);
   font-variant-numeric: tabular-nums;
 }
-.meter__hint{ font-size: 11px; line-height: 16px; color: var(--cu-content-tertiary); }
+.fill__label{
+  font-size: 10px; line-height: 12px; font-weight: var(--cu-font-weight-medium);
+  text-transform: uppercase; letter-spacing: .06em;
+  color: var(--cu-content-tertiary);
+}
 
 /* Итог — самое крупное число карточки: за ним сюда и приходят. 17/22 —
    ступень над заголовком колонки (14) и ниже заголовка страницы (20).
    tabular-nums обязателен: три суммы стоят рядом и сравниваются разряд в
-   разряд, а пропорциональные цифры сбивают эту вертикаль. */
+   разряд, а пропорциональные цифры сбивают эту вертикаль.
+   nowrap: сумма стоит в одной строке со шкалой и переноситься ей нельзя —
+   сжимается шкала (у неё min-width:0), а не число. */
 .sum{
-  font-size: 17px; line-height: 22px; font-weight: var(--cu-font-weight-semibold);
-  font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
+  font-size: 16px; line-height: 21px; font-weight: var(--cu-font-weight-semibold);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
 }
 
-/* --- ПАЛИТРА КОЛОНКИ -----------------------------------------------------
-   Рецепт (5), тот же, что у звезды: в покое погашена, проявляется по
-   наведению на карточку и по фокусу внутри неё. Место под неё держится
-   всегда (opacity, а не display), поэтому шапка таблицы не дёргается, когда
-   курсор идёт по колонкам.
-
-   Шесть кружков, а не выпадающее меню: меню внутри .table-wrap обрезалось бы
-   его же overflow-x (сколько бы ни было z-index), а выносить панель в
-   верхний слой ради шести значений — механика дороже задачи. */
-.tints{
-  display: flex; align-items: center; gap: 5px;
-  /* margin-top:auto, а не фиксированный отступ: палитра — подвал карточки, и
-     когда у соседа имя переносится на вторую строку, все три ряда кружков
-     обязаны остаться на одной линии. */
-  margin-top: auto; padding-top: 12px;
-  opacity: 0;
-  transition: opacity var(--cu-animation-duration) var(--cu-animation-timing);
-}
-.card:hover .tints, .card:focus-within .tints{ opacity: 1; }
-
-.tint{
-  width: 14px; height: 14px; flex: 0 0 auto; border-radius: 50%;
-  background: var(--dot);
-  transition: box-shadow var(--cu-animation-duration) var(--cu-animation-timing);
-}
-/* «По ранжиру» — пустой пунктирный кружок: цвета у него нет, он его СНИМАЕТ,
-   возвращая колонку под расчёт. */
-.tint--auto{ background: none; border: 1.5px dashed var(--cu-content-quaternary); }
-/* Выбранный — кольцо через белый зазор: обводка вплотную к цветному кружку
-   сливается с ним у тёмных тонов. */
-.tint.is-on{
-  box-shadow: 0 0 0 2px var(--cu-background-main), 0 0 0 3.5px var(--cu-content-primary);
-}
-.tint:focus-visible{ outline: var(--cu-focus-ring); outline-offset: 3px; }
+/* Палитра колонки живёт в <ColorPicker> (shared/ui) и своих стилей здесь не
+   имеет: ряд из шести кружков заменён свободным выбором цвета, и от этого
+   экрана окну нужны только ширина и подвал — см. .modal--narrow ниже. */
 
 /* --- РАЗДЕЛЫ СМЕТЫ -------------------------------------------------------
    Шапка раздела и его итог — не «строки таблицы покрасивее», а рамка вокруг
@@ -361,3 +428,78 @@
 .note-icon{ --icon-size: 20px; color: var(--cu-content-quaternary); }
 
 .modal__foot{ display: flex; justify-content: flex-end; }
+
+/* --- ПАЛИТРА: ВЫПАДАШКА ИЗ ШАПКИ КОЛОНКИ ---------------------------------
+   Это <dialog>, хотя ведёт себя как меню. Причина одна: панель падает из
+   шапки таблицы, а .table-wrap прокручивается по горизонтали и обрезает всё,
+   что вылезло за его край, — z-index к обрезке отношения не имеет. Верхний
+   слой умеет только <dialog>, и от него же достаются Escape, клик мимо и
+   возврат фокуса на кнопку.
+
+   Взамен снимается всё, что делает <dialog> ОКНОМ: центрирование через
+   margin:auto, рамка и тёмная подложка. Координаты ставит на элемент сам
+   компонент (--pop-top / --pop-right замеряются по нажатой кнопке), привязка
+   правым краем — панель растёт ВЛЕВО, иначе на последней колонке она вышла
+   бы за экран.
+
+   Запасные значения в var() не косметика: без них незаданная переменная даёт
+   `top: auto`, и панель уезжает в левый верхний угол — ровно то, что и
+   происходило, пока координаты шли через состояние React.
+
+   Пишется ВСЯ четвёрка inset, а не только top и right. У `dialog:modal` в
+   UA-стилях стоит `inset: 0`, и незаданные left/bottom остаются нулями: при
+   заданной ширине коробка оказывается переопределена, а в этом споре по
+   правилам CSS выигрывает LEFT — панель прилипала к левому краю экрана,
+   сколько бы ни было в `right`. auto снимает спор. */
+.pop{
+  position: fixed; margin: 0;
+  inset: var(--pop-top, 12px) var(--pop-right, 12px) auto auto;
+  width: 232px; max-width: calc(100vw - 24px);
+  padding: 10px; border: 0; border-radius: var(--cu-radii-4);
+  background: var(--cu-background-main);
+  /* Ступень 4 С ХЭЙРЛАЙНОМ, в отличие от досье: под панелью нет тёмной
+     подложки, и на белой шапке одна тень не даёт краю читаться. */
+  box-shadow: var(--cu-elevation-border-4);
+  color: var(--cu-content-primary);
+  /* Появление и УХОД. Три строки после transform — это то, ради чего
+     анимация выпадашки обычно и не делается: display и overlay меняются
+     дискретно, и без allow-discrete браузер снимает <dialog> с верхнего слоя
+     мгновенно, обрывая исчезновение на первом кадре. @starting-style задаёт,
+     откуда начинать, — без него у только что вставленного элемента нет
+     предыдущего значения, и переходить не от чего. */
+  opacity: 0; transform: translateY(-6px) scale(.97); transform-origin: top right;
+  transition:
+    opacity var(--cu-animation-duration) var(--cu-animation-timing),
+    transform var(--cu-animation-duration) var(--cu-animation-timing),
+    overlay var(--cu-animation-duration) var(--cu-animation-timing) allow-discrete,
+    display var(--cu-animation-duration) var(--cu-animation-timing) allow-discrete;
+}
+.pop[open]{ opacity: 1; transform: none; }
+@starting-style{
+  .pop[open]{ opacity: 0; transform: translateY(-6px) scale(.97); }
+}
+/* Откинута вверх — значит и растёт снизу вверх: и точка роста, и направление
+   выезда переворачиваются, иначе панель «выпадает» из кнопки в ту сторону, с
+   которой её не открывали. */
+.pop[data-up]{ transform-origin: bottom right; transform: translateY(6px) scale(.97); }
+.pop[data-up][open]{ transform: none; }
+@starting-style{
+  .pop[data-up][open]{ opacity: 0; transform: translateY(6px) scale(.97); }
+}
+/* Подложка прозрачная: это меню, а не окно, — затемнять за ним нечего. Клик
+   по ней всё равно приходит на сам <dialog> и закрывает панель. */
+.pop::backdrop{ background: transparent; }
+/* showModal() переводит фокус на сам <dialog>, и браузер обводит его своим
+   кольцом — рамка вокруг всей панели, которой никто не просил. */
+.pop:focus, .pop:focus-visible{ outline: none; }
+
+/* Возврат под расчёт. Текстовой кнопкой, а не <Button>: это отмена ручного
+   выбора, и по весу она обязана быть тише самого пикера. */
+.pop__foot{ display: flex; justify-content: flex-end; margin-top: 8px; }
+.pop__reset{
+  padding: 4px 8px; border-radius: var(--cu-radii-3);
+  font-size: 12px; line-height: 16px; color: var(--cu-content-tertiary);
+  transition: background-color var(--cu-animation-duration) var(--cu-animation-timing);
+}
+.pop__reset:hover{ background: var(--cu-state-hover-subtle); color: var(--cu-content-primary); }
+.pop__reset:focus-visible{ outline: var(--cu-focus-ring); outline-offset: 1px; }
