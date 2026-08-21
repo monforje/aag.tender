@@ -1,0 +1,1078 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Сравнение КП — управление, пометки, попап</title>
+
+<!-- Живое превью Приложения Д (filter_audit.md): полоса управления, формулы
+     ячейки, виды строк с подытогами, попап по таймингам NN/g, инсайты.
+     Tailwind — только геометрия страницы и таблицы; всё, чего у Tailwind нет
+     (мазок маркера, ценник, штриховка, микрошкалы, меню, попап) — обычным CSS
+     на токенах проекта. Таблица повторяет Table.module.css: рамка ленты
+     сверху/снизу, шапка заливкой, хэйрлайн между строками — и ничего сверх.
+     Скрипт провендорен в assets/tailwind.js: демо обязано открываться без
+     сети — CDN-версия без интернета роняет ВСЮ геометрию (flex, отступы,
+     рамки таблицы), и страница выглядит раздетой. -->
+<script src="assets/tailwind.js"></script>
+
+<style>
+  /* ── токены проекта (src/app/styles/global.css), вырезка ── */
+  :root{
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", roboto, "Helvetica Neue", helvetica, arial, sans-serif;
+    --content-primary:#202020; --content-secondary:#646464; --content-tertiary:#838383;
+    --border:#e8e8e8;
+    --fill-subtle:rgba(0,0,0,.035);   /* шапка таблицы */
+    --hover-subtle:rgba(0,0,0,.05);   /* ховер строки (крупная поверхность) */
+    --hover:rgba(0,0,0,.06);          /* компактный контрол */
+    --ring:0 0 0 1px rgba(0,0,0,.16);
+    --elev-border-1:0 0 1px 0 rgba(0,0,0,.2667), 0 1px 2px 0 rgba(0,0,0,.05);
+    --elev-2:0 1px 3px rgba(0,0,0,.106), 0 1px 2px -1px rgba(0,0,0,.106);
+    --elev-border-4:0 0 1px 0 rgba(0,0,0,.2667), 0 10px 15px -3px rgba(0,0,0,.1), 0 4px 6px -4px rgba(0,0,0,.1);
+    --tone-info:rgb(29,110,220);    --tone-info-ink:rgb(24,88,176);    --tone-info-fill:rgba(29,110,220,.1);
+    --tone-success:rgb(0,138,86);   --tone-success-ink:rgb(0,116,72);  --tone-success-fill:rgba(0,138,86,.1);
+    --tone-warning:rgb(214,119,10); --tone-warning-ink:rgb(176,96,6);  --tone-warning-fill:rgba(214,119,10,.1);
+    --tone-danger:rgb(233,61,130);  --tone-danger-ink:rgb(197,40,105); --tone-danger-fill:rgba(233,61,130,.1);
+    --tone-neutral:rgb(150,150,150);--tone-neutral-ink:#646464;        --tone-neutral-fill:rgba(0,0,0,.06);
+    --round:666px;
+    --anim:.2s cubic-bezier(.42,0,.58,1);
+  }
+  body{ margin:0; font-family:var(--font); }
+
+  /* Иконка = Solar-путь в квадрате 24; размер даёт класс, толщину — правило.
+     Ровно как в src/shared/ui/Icon: пропами Solar размер не задаём. */
+  .icn{ width:16px; height:16px; flex:none; fill:none; stroke:currentColor; stroke-width:1.5; }
+  .icn-sm{ width:13px; height:13px; }
+  .icn-xs{ width:11px; height:11px; }
+  .icn-fill{ fill:currentColor; stroke:none; }
+
+  /* ═══════════ ПОМЕТКИ ЯЧЕЕК ═══════════ */
+
+  /* 2.1 минимум: мазок маркера под цифрой + ценник-бирка на ниточке.
+     Форма ценника — не украшение: у «минимума» смысл ярлыка на товаре, и
+     силуэт читается раньше, чем текст (в ряду одинаковых капсул — не читается).
+     Бирка рисуется SVG (итерации — filter_audit/assets/tag-*.svg): наклон
+     12° вокруг центра ПРОКОЛА — точка подвеса и ось качания совпадают,
+     поэтому бирка висит и качается физически честно. Нить провисает вниз
+     кривой Безье с вертикальными плечами — под собственным весом, не струной. */
+  .price{ position:relative; display:inline-block; white-space:nowrap; }
+  .price--min{
+    background:linear-gradient(180deg, transparent 55%, var(--tone-success-fill) 55%);
+    border-radius:2px;
+  }
+  .tag{
+    position:absolute; top:46%; left:calc(100% - 6px); z-index:2;
+    width:47px; height:36px;
+    /* точка подвеса = начало нити у угла цены (svg-координаты 1.5,0.5) */
+    transform-origin:3% 2%;
+    cursor:help;
+  }
+  .tag svg{ display:block; width:100%; height:100%; overflow:visible; }
+  .tag:focus-visible{ outline:1px solid var(--content-secondary); outline-offset:2px; border-radius:6px; }
+  /* ХОВЕР БИРКИ: она же и есть цель — раскачка вокруг точки подвеса через
+     независимое свойство rotate (никаких других трансформаций на .tag нет,
+     конфликтовать не с чем). Попап открывает тот же ховер — см. §7 JS:
+     триггер data-popup перенесён с ячейки минимума на саму бирку. */
+  @keyframes tag-swing{
+    0%{ rotate:0deg } 22%{ rotate:16deg } 48%{ rotate:-11deg }
+    72%{ rotate:6deg } 88%{ rotate:-2deg } 100%{ rotate:0deg }
+  }
+  .tag:hover{ animation:tag-swing .9s cubic-bezier(.36,.07,.19,.97); }
+  @media (prefers-reduced-motion: reduce){
+    .tag:hover{ animation:none; }
+  }
+
+  /* ЗАПАС ТОРГА — монета у ОСНОВАНИЯ цены, слева: справа-снизу уже висит «МИН»,
+     второй биркой он бы дублировался. Монета прислонена к цене под наклоном
+     (статичный rotate через независимое свойство — hover-анимация ведёт
+     transform, и они не спорят). Анимация — перекатывание НА РЕБРЕ: монету
+     покачивают, приподняв за край, физика другой породы, чем взмах на нитке. */
+  .badge-torg{
+    position:absolute; left:-25px; z-index:2;
+    top:calc(50% - 12px);          /* центр монеты на 1.5px выше средней линии цены */
+    width:21px; height:21px;
+    rotate:-14deg;
+    transform-origin:78% 82%;      /* точка опоры о базовую линию цены */
+    cursor:help; color:var(--tone-info);
+  }
+  .badge-torg svg{ display:block; width:100%; height:100%; overflow:visible; }
+  @keyframes torg-rock{
+    0%{ transform:rotate(0deg) } 25%{ transform:rotate(11deg) }
+    55%{ transform:rotate(-8deg) } 80%{ transform:rotate(4deg) } 100%{ transform:rotate(0deg) }
+  }
+  .badge-torg:hover{ animation:torg-rock .7s cubic-bezier(.36,.07,.19,.97); }
+  .badge-torg:focus-visible{ outline:1px solid var(--content-secondary); outline-offset:2px; border-radius:50%; }
+
+  /* МАРКЕРЫ-АНАЛИТИКИ (ключ, дороже медианы, разброс): самостоятельные глифы
+     БЕЗ подвеса — нитка и колечко остались только у ценника.
+     Общие у них лишь курсор, фокусное кольцо и отключение движения;
+     размер, место и анимация у каждого свои, под смысл. */
+  .badge-key,.badge-med,.badge-spread{
+    position:relative; display:inline-block;
+    cursor:help;
+  }
+  .badge-key svg,.badge-med svg,.badge-spread svg{ display:block; width:100%; height:100%; overflow:visible; }
+  .badge-key:focus-visible,.badge-med:focus-visible,.badge-spread:focus-visible{
+    outline:1px solid var(--content-secondary); outline-offset:2px; border-radius:4px;
+  }
+
+  /* КЛЮЧ — в ПРАВОЙ части строки, после названия, с ЛЁГКИМ НАКЛОНОМ: воткнут
+     «наискосок», как ключ, оставленный в замке. Наклон — независимое свойство
+     rotate, поэтому key-turn (transform) его не затирает: оборот происходит
+     вокруг уже наклонённого вертикального положения. */
+  .badge-key{ width:28px; height:18px; margin-left:6px; vertical-align:-2px;
+              color:var(--tone-warning);
+              rotate:-18deg; transform-origin:50% 60%; }
+  @keyframes key-turn{ from{ transform:perspective(90px) rotateY(0deg); }
+                       to  { transform:perspective(90px) rotateY(360deg); } }
+  .badge-key:hover{ animation:key-turn .7s cubic-bezier(.36,.07,.19,.97); }
+
+  /* ДОРОЖЕ МЕДИАНЫ — «леденец» по СЕРЕДИНЕ высоты цены: бусина над пунктиром
+     читается уровнем, стоящим в одной строке с цифрой, а не прижатым к её
+     верхушке. Тон neutral-ink — самый тихий маркер таблицы: отсчёт, а не
+     тревога и не возможность; info отдан монете запаса торга. */
+  .badge-med{ width:22px; height:19px; margin-left:3px; vertical-align:middle;
+              color:var(--tone-neutral-ink); }
+  @keyframes med-rise{
+    0%{ transform:translateY(0); } 45%{ transform:translateY(-1.4px); } 100%{ transform:translateY(0); }
+  }
+  .badge-med:hover .mk-rise{ animation:med-rise .55s cubic-bezier(.34,1.4,.64,1); }
+
+  /* РАЗБРОС — линейка размаха в колонке разброса. Анимация — засечки
+     разъезжаются на ±1.15px (пик выверен в ассете, за бокс не выходит),
+     диапазон «дышит» ШИРИНОЙ, а не качанием или подъёмом. */
+  .badge-spread{ width:24px; height:16px; margin-left:4px; vertical-align:-3px;
+                 color:var(--tone-danger); }
+  @keyframes spread-open{
+    0%{ transform:translateX(0); } 45%{ transform:translateX(-1.15px); } 100%{ transform:translateX(0); }
+  }
+  @keyframes spread-open-r{
+    0%{ transform:translateX(0); } 45%{ transform:translateX(1.15px); } 100%{ transform:translateX(0); }
+  }
+  .badge-spread:hover .mk-cap-l{ animation:spread-open .55s cubic-bezier(.34,1.4,.64,1); }
+  .badge-spread:hover .mk-cap-r{ animation:spread-open-r .55s cubic-bezier(.34,1.4,.64,1); }
+
+  @media (prefers-reduced-motion: reduce){
+    .tag:hover,.badge-torg:hover{ animation:none; }
+    .badge-key:hover{ animation:none; }
+    .badge-med:hover .mk-rise,
+    .badge-spread:hover .mk-cap-l,
+    .badge-spread:hover .mk-cap-r{ animation:none; }
+  }
+
+  /* 2.2 аномалия: штриховка «внимание» + рейка + загнутый угол.
+     Три разных приёма одного тона — заливка ячейки не годится: цена внутри
+     обязана остаться читаемой, а пометка обязана быть видна боковым зрением. */
+  .cell--anomaly{
+    position:relative;
+    box-shadow:inset 3px 0 0 var(--tone-warning);
+    background-image:repeating-linear-gradient(-45deg,
+      var(--tone-warning-fill) 0 5px, transparent 5px 10px);
+  }
+  .cell--anomaly::after{
+    content:""; position:absolute; top:0; right:0;
+    border:5px solid transparent; border-top-color:var(--tone-warning); border-right-color:var(--tone-warning);
+  }
+
+  /* 2.3 нет цены (пробел в данных) против отказа (решение подрядчика) */
+  .cell--missing{ outline:1px dashed var(--border); outline-offset:-4px; }
+  .dash{ color:var(--content-tertiary); }
+  .chip{ display:inline-flex; align-items:center; gap:4px; height:18px; padding:0 8px;
+         border-radius:var(--round); font-size:11px; font-weight:500; white-space:nowrap; }
+  .chip--neutral{ background:var(--tone-neutral-fill); color:var(--tone-neutral-ink); }
+
+  /* 2.4 снята / корректировка сметы */
+  s{ color:var(--content-tertiary); text-decoration-thickness:1px; }
+  .sub{ display:block; margin-top:2px; font-size:12px; line-height:16px; color:var(--content-tertiary); }
+  .row--removed{ opacity:.55; }
+
+  /* 2.6 разброс: процент + микрошкала. Шкала общая для всех строк (25 % = вся
+     длина) — иначе сравнивать бары между строками нельзя, а весь их смысл
+     именно в сравнении сверху вниз. */
+  .spread-bar{ display:block; width:24px; height:3px; margin-top:3px; margin-left:auto;
+               border-radius:var(--round); background:var(--tone-neutral-fill); overflow:hidden; }
+  .spread-bar i{ display:block; height:100%; border-radius:inherit; }
+  .spread--none       .spread-bar i{ background:var(--tone-neutral); }
+  .spread--noticeable .spread-bar i{ background:var(--tone-warning); }
+  .spread--high       .spread-bar i{ background:var(--tone-danger); }
+
+  /* 2.7 потенциал торга */
+  .pot{ display:inline-flex; align-items:center; gap:3px; padding:0 6px; border-radius:var(--round);
+        background:var(--tone-success-fill); color:var(--tone-success-ink);
+        font-size:11px; line-height:16px; font-variant-numeric:tabular-nums; }
+
+  /* доля веса (вид «По весу»): та же микрошкала, но шкала — 100 % среза */
+  .share{ display:inline-block; width:34px; height:3px; vertical-align:middle; margin-right:6px;
+          border-radius:var(--round); background:var(--tone-neutral-fill); overflow:hidden; }
+  .share i{ display:block; height:100%; background:var(--tone-info); border-radius:inherit; }
+
+  /* отклонение сверх допуска — симметрично в обе стороны (Д.3) */
+  .dev-hot{ color:var(--tone-danger-ink); font-weight:500; }
+
+  /* строки-служебки: заголовок раздела и подытог */
+  .row--sec td{ padding-top:14px; font-size:11px; letter-spacing:.06em; text-transform:uppercase;
+                color:var(--content-tertiary); font-weight:600; }
+  .row--sum td{ background:var(--fill-subtle); font-weight:500; }
+  .row--flash td{ background:var(--hover) !important; }   /* ответ инсайта, живёт 2,4 с */
+
+  /* ═══════════ ПОЛОСА УПРАВЛЕНИЯ (Д.1) ═══════════ */
+
+  /* пресеты — сегмент-контрол, ЕДИНСТВЕННЫЙ кнопочный элемент полосы */
+  .seg{ display:flex; padding:2px; border-radius:8px; background:var(--fill-subtle); }
+  .seg button{ height:26px; padding:0 12px; border-radius:6px; border:0;
+               background:none; cursor:pointer; font:inherit; color:var(--content-secondary);
+               transition:background var(--anim), color var(--anim), box-shadow var(--anim); }
+  .seg button:hover{ color:var(--content-primary); }
+  .seg button[aria-checked="true"]{ background:#fff; color:var(--content-primary);
+                                    box-shadow:var(--elev-border-1); font-weight:500; }
+
+  /* чип «Изменён · Сброс» (Д.2): состояние ушло от базы пресета — молча не теряем */
+  .modchip{ display:inline-flex; align-items:center; gap:5px; height:24px; padding:0 8px 0 7px;
+            border:0; border-radius:var(--round); cursor:pointer; font:inherit; font-size:12px;
+            background:var(--tone-info-fill); color:var(--tone-info-ink);
+            transition:filter var(--anim); }
+  .modchip:hover{ filter:brightness(.96); }
+
+  /* тихий триггер меню: подпись третичным, значение medium, шеврон */
+  .trg{ display:inline-flex; align-items:center; gap:6px; height:28px; padding:0 8px;
+        border:0; background:none; cursor:pointer; font:inherit; border-radius:6px;
+        transition:background var(--anim); white-space:nowrap; }
+  .trg:hover{ background:var(--hover-subtle); }
+  .trg:focus-visible{ outline:none; box-shadow:var(--ring); }
+  .trg .cap{ color:var(--content-tertiary); }
+  .trg .val{ font-weight:500; }
+  .trg .icn{ stroke:var(--content-tertiary); }
+
+  /* триггер предикатов: один на все пять, число активных — на полосе */
+  .fbtn{ display:inline-flex; align-items:center; gap:6px; height:28px; padding:0 10px;
+         border:0; background:none; cursor:pointer; font:inherit; font-weight:500;
+         border-radius:6px; transition:background var(--anim); }
+  .fbtn:hover{ background:var(--hover-subtle); }
+  .fbtn:focus-visible{ outline:none; box-shadow:var(--ring); }
+  .fbub{ min-width:16px; height:16px; padding:0 4px; border-radius:var(--round);
+         background:var(--tone-info); color:#fff; font-size:11px; line-height:16px;
+         font-weight:600; font-variant-numeric:tabular-nums; text-align:center; }
+
+  /* панель меню; в проекте это <Popover> на нативном <dialog>, тут div для демо */
+  .wrap{ position:relative; }
+  .menu{ position:absolute; top:34px; left:0; z-index:20; min-width:240px; padding:4px;
+         background:#fff; border-radius:8px; box-shadow:var(--elev-border-4); display:none; }
+  .wrap.open .menu{ display:block; }
+  .wrap.right .menu{ left:auto; right:0; }
+  .mi{ display:flex; align-items:center; gap:8px; width:100%; height:30px; padding:0 8px;
+       border:0; background:none; cursor:pointer; font:inherit; text-align:left;
+       border-radius:6px; transition:background var(--anim); }
+  .mi:hover{ background:var(--hover-subtle); }
+  .dot{ width:8px; height:8px; border-radius:50%; flex:none; }
+  /* Глифы предикатов в меню фильтров: те же маркеры, что живут в ячейках,
+     выровнены по общей высоте 16px и посажены на фиксированную колонку 26px —
+     названия пунктов стоят на одной вертикали. Один смысл — один глиф везде. */
+  .ficon{ display:inline-flex; align-items:center; justify-content:center;
+          width:26px; flex:none; }
+  .ficon svg{ display:block; height:16px; width:auto; overflow:visible; }
+  .mi .n{ flex:1; }
+  .mi .c{ color:var(--content-tertiary); font-size:12px; font-variant-numeric:tabular-nums; }
+  .mi .ck{ visibility:hidden; color:var(--tone-success-ink); }
+  .mi[aria-checked="true"] .ck{ visibility:visible; }
+  .foot{ display:flex; justify-content:space-between; align-items:center;
+         padding:6px 8px 2px; margin-top:4px; border-top:1px solid var(--border); }
+  .reset{ display:inline-flex; align-items:center; gap:5px;
+          border:0; background:none; cursor:pointer; font:inherit; font-size:13px;
+          color:var(--content-secondary); padding:2px 6px; border-radius:6px;
+          transition:background var(--anim); }
+  .reset:hover:not(:disabled){ background:var(--hover-subtle); color:var(--content-primary); }
+  .reset:disabled{ opacity:.4; cursor:default; }
+  .done{ border:0; cursor:pointer; font:inherit; font-weight:500; color:#fff;
+         background:var(--content-primary); padding:4px 12px; border-radius:6px; }
+
+  /* ═══════════ ИНСАЙТЫ (Д.6) ═══════════ */
+  .ins{ display:flex; align-items:flex-start; gap:10px; width:100%; padding:10px 12px;
+        border:0; border-radius:8px; background:#fff; box-shadow:var(--elev-border-1);
+        cursor:pointer; font:inherit; text-align:left; transition:box-shadow var(--anim); }
+  .ins:hover{ box-shadow:var(--elev-border-4); }
+  .ins .icn{ margin-top:1px; color:var(--ins-tone); }
+  .ins b{ display:block; font-size:13px; font-weight:600; }
+  .ins span{ display:block; margin-top:2px; font-size:12px; line-height:17px; color:var(--content-secondary); }
+  .ins em{ display:block; margin-top:4px; font-style:normal; font-size:11px; color:var(--content-tertiary); }
+  .ins[data-tone="danger"]{ --ins-tone:var(--tone-danger); }
+  .ins[data-tone="success"]{ --ins-tone:var(--tone-success); }
+  .ins[data-tone="info"]{ --ins-tone:var(--tone-info); }
+
+  /* ═══════════ ПОПАП ЯЧЕЙКИ: нативный <dialog>, карточка (Д.5) ═══════════
+     Поверхность и АНАТОМИЯ — как шапка карточки тендера (TenderSummary):
+     белая карточка радиусом 12 на сером холсте, поля «подпись · значение»
+     с фиксированной колонкой подписи. Три зоны: шапка-капитель по центру,
+     тело из полей, футер с пояснением на приглушённой заливке. Состояние
+     тона читают ЗНАЧЕНИЯ (запас торга и разброс в тоне), а не глиф в шапке.
+     К бирке попап центрируется и висит вплотную (2px) — ромб хвостика
+     дотягивается до кромки ценника, и панель читается продолжением ниточки,
+     а не принадлежностью соседней ячейки. */
+  dialog.cell-popup{
+    position:fixed; margin:0; width:272px; padding:0;
+    border:0; border-radius:12px;
+    background:#fff; color:var(--content-primary);
+    box-shadow:var(--elev-border-4);
+    /* Немодальный show() НЕ уносит диалог в top layer — он красится в общем
+       порядке, и бирки со своим z-index:2 лежат поверх панели. Слой задаём
+       явно, выше меню (20): подсказка о данных важнее любой мебели. */
+    z-index:60;
+    opacity:0; transform:translateY(4px);
+    transition:opacity .13s ease, transform .13s ease;
+  }
+  dialog.cell-popup.is-visible{ opacity:1; transform:translateY(0); }
+  dialog.cell-popup:focus, dialog.cell-popup:focus-visible{ outline:none; }  /* фокусное кольцо на подсказке читалось бы как ошибка ввода */
+  dialog.cell-popup::before{   /* хвостик — повёрнутый квадрат; центр по --arrow-x */
+    content:""; position:absolute; top:-5px; left:var(--arrow-x, 50%); width:10px; height:10px;
+    background:#fff; transform:translateX(-50%) rotate(45deg);
+  }
+  dialog.cell-popup.is-above::before{ top:auto; bottom:-5px; transform:translateX(-50%) rotate(225deg); }
+  dialog.cell-popup::backdrop{ background:transparent; }  /* подсказка, а не окно */
+
+  /* Шапка — капитель по центру, как заголовки разделов таблицы (.row--sec):
+     называет ЧТО ЭТО, цвет состояния оставляя значениям тела. */
+  .phead{ padding:10px 16px 8px; border-bottom:1px solid var(--border); text-align:center; }
+  .ptitle{ font-size:11px; line-height:14px; font-weight:600; letter-spacing:.07em;
+           text-transform:uppercase; color:var(--content-secondary); }
+
+  /* Тело — поля «подпись · значение»: та же сетка, что .field в TenderSummary
+     (фиксированная колонка подписи выстраивает все четыре строки на общей
+     вертикали), значения прижаты вправо — они числа и живут в числовой колонке. */
+  .pbody{ display:flex; flex-direction:column; gap:2px; padding:9px 16px; }
+  .pfield{ display:grid; grid-template-columns:112px minmax(0,1fr);
+           align-items:center; column-gap:12px; }
+  .plabel{ font-size:13px; line-height:18px; color:var(--content-secondary); white-space:nowrap; }
+  .pval{ font-size:13px; line-height:18px; font-weight:500; font-variant-numeric:tabular-nums;
+         color:var(--content-primary); white-space:nowrap; text-align:right; }
+  /* цена за единицу — второй строкой ПОД ценой, а не через « · » в одну строку:
+     пара не влезает в колонку значения, а переносить цену нельзя */
+  .punit{ display:block; margin-top:1px; font-size:11px; line-height:13px;
+          font-weight:400; color:var(--content-tertiary); }
+  .pval strong{ font-weight:600; }                 /* на случай разметки внутри значения */
+  .pval--tone{ color:var(--pop-ink); }             /* состояние читается ЗНАЧЕНИЕМ */
+  .pspread{ display:flex; align-items:center; justify-content:flex-end; gap:8px; min-width:0; }
+  .ptrack{ width:64px; flex:none; height:4px; border-radius:var(--round);
+           background:var(--hover); overflow:hidden; }
+  .pfill{ display:block; height:100%; border-radius:inherit; background:var(--pop-tone); }
+
+  /* Футер — всё, что пояснение, а не число: причина аномалии или критерий
+     минимума. Заливкой отделён от числового тела, скругление повторяет
+     нижние углы карточки (overflow:hidden нельзя — срежет хвостик). */
+  .pfoot{ margin-top:7px; padding:9px 16px 10px; border-top:1px solid var(--border);
+          background:var(--fill-subtle); border-radius:0 0 11px 11px; }
+  .pdesc{ font-size:11.5px; line-height:16px; color:var(--content-secondary); }
+
+  dialog.cell-popup[data-tone="success"]{ --pop-tone:var(--tone-success); --pop-ink:var(--tone-success-ink); }
+  dialog.cell-popup[data-tone="warning"]{ --pop-tone:var(--tone-warning); --pop-ink:var(--tone-warning-ink); }
+  dialog.cell-popup[data-tone="danger"]{ --pop-tone:var(--tone-danger); --pop-ink:var(--tone-danger-ink); }
+  dialog.cell-popup[data-tone="info"]{ --pop-tone:var(--tone-info); --pop-ink:var(--tone-info-ink); }
+  dialog.cell-popup[data-tone="neutral"]{ --pop-tone:var(--tone-neutral); --pop-ink:var(--tone-neutral-ink); }
+</style>
+</head>
+
+<body class="bg-[#f9f9f9] text-[var(--content-primary)]">
+<div class="mx-auto max-w-[1120px] px-6 py-8">
+
+  <h1 class="m-0 text-base font-semibold leading-[22px]">Сравнение КП</h1>
+  <div class="mb-4 mt-1 flex gap-4 text-xs text-[var(--content-tertiary)]">
+    <span>показано <b id="cShown" class="font-semibold tabular-nums text-[var(--content-primary)]">–</b></span>
+    <span>отказов <b id="cDeclined" class="font-semibold tabular-nums text-[var(--content-primary)]">–</b></span>
+    <span>без цены <b id="cMissing" class="font-semibold tabular-nums text-[var(--content-primary)]">–</b></span>
+    <span>аномалий <b id="cAnomaly" class="font-semibold tabular-nums text-[var(--content-primary)]">–</b></span>
+  </div>
+
+  <!-- ═══ ПОЛОСА: сегмент · чип «изменён» · два тихих меню · один поповер ═══ -->
+  <div class="mb-3 flex flex-wrap items-center gap-2">
+
+    <div class="seg" role="radiogroup" aria-label="Пресет" id="seg">
+      <button type="button" role="radio" aria-checked="true"  data-preset="overview">Обзор</button>
+      <button type="button" role="radio" aria-checked="false" data-preset="bidding">Торги</button>
+      <button type="button" role="radio" aria-checked="false" data-preset="anomalies">Аномалии</button>
+    </div>
+
+    <!-- Д.2: пресет присваивает четыре оси; любое ручное движение поднимает чип -->
+    <button type="button" class="modchip" id="modChip" hidden
+            title="Состояние ушло от базы пресета — вернуть исходную нарезку">
+      <span data-icon="refresh" data-cls="icn icn-xs"></span>Изменён · Сброс
+    </button>
+
+    <span class="mx-1 h-5 w-px bg-[var(--border)]"></span>
+
+    <div class="wrap" data-menu>
+      <button type="button" class="trg" aria-haspopup="menu" aria-expanded="false">
+        <span class="cap">Показатель:</span><span class="val" id="lblMetric">Цена</span>
+        <span data-icon="chevron" data-cls="icn icn-sm"></span>
+      </button>
+      <div class="menu" role="menu" data-single data-target="metric">
+        <button type="button" class="mi" role="menuitemradio" data-value="price"><span class="n">Цена</span><span class="ck" data-icon="check" data-cls="icn icn-sm"></span></button>
+        <button type="button" class="mi" role="menuitemradio" data-value="deviation"><span class="n">Отклонение</span><span class="ck" data-icon="check" data-cls="icn icn-sm"></span></button>
+        <button type="button" class="mi" role="menuitemradio" data-value="potential"><span class="n">Потенциал</span><span class="ck" data-icon="check" data-cls="icn icn-sm"></span></button>
+      </div>
+    </div>
+
+    <div class="wrap" data-menu>
+      <button type="button" class="trg" aria-haspopup="menu" aria-expanded="false">
+        <span data-icon="sort" data-cls="icn icn-sm"></span>
+        <span class="cap">Строки:</span><span class="val" id="lblRows">По разделам</span>
+        <span data-icon="chevron" data-cls="icn icn-sm"></span>
+      </button>
+      <div class="menu" role="menu" data-single data-target="rows">
+        <button type="button" class="mi" role="menuitemradio" data-value="sections"><span class="n">По разделам</span><span class="ck" data-icon="check" data-cls="icn icn-sm"></span></button>
+        <button type="button" class="mi" role="menuitemradio" data-value="weight"><span class="n">По весу</span><span class="ck" data-icon="check" data-cls="icn icn-sm"></span></button>
+        <button type="button" class="mi" role="menuitemradio" data-value="potential"><span class="n">По потенциалу</span><span class="ck" data-icon="check" data-cls="icn icn-sm"></span></button>
+      </div>
+    </div>
+
+    <span style="flex:1"></span>
+
+    <div class="wrap right" data-menu data-filters>
+      <button type="button" class="fbtn" aria-haspopup="menu" aria-expanded="false">
+        <span data-icon="filter" data-cls="icn icn-sm"></span>Фильтры
+        <span class="fbub" hidden data-fbub>0</span>
+      </button>
+      <div class="menu" role="menu" data-multi style="min-width:276px">
+        <button type="button" class="mi" role="menuitemcheckbox" data-pred="key">
+          <span class="ficon" data-ficon="key"></span>
+          <span class="n">Ключевые</span><span class="c" data-cnt>–</span><span class="ck" data-icon="check" data-cls="icn icn-sm"></span>
+        </button>
+        <button type="button" class="mi" role="menuitemcheckbox" data-pred="spread">
+          <span class="ficon" data-ficon="spread"></span>
+          <span class="n">Высокий разброс</span><span class="c" data-cnt>–</span><span class="ck" data-icon="check" data-cls="icn icn-sm"></span>
+        </button>
+        <button type="button" class="mi" role="menuitemcheckbox" data-pred="anomaly">
+          <span class="ficon" data-ficon="anomaly"></span>
+          <span class="n">Аномалии</span><span class="c" data-cnt>–</span><span class="ck" data-icon="check" data-cls="icn icn-sm"></span>
+        </button>
+        <button type="button" class="mi" role="menuitemcheckbox" data-pred="pot">
+          <span class="ficon" data-ficon="torg"></span>
+          <span class="n">Есть потенциал</span><span class="c" data-cnt>–</span><span class="ck" data-icon="check" data-cls="icn icn-sm"></span>
+        </button>
+        <button type="button" class="mi" role="menuitemcheckbox" data-pred="med">
+          <span class="ficon" data-ficon="med"></span>
+          <span class="n">Дороже медианы строки</span><span class="c" data-cnt>–</span><span class="ck" data-icon="check" data-cls="icn icn-sm"></span>
+        </button>
+        <div class="foot">
+          <button type="button" class="reset" data-reset disabled>
+            <span data-icon="refresh" data-cls="icn icn-xs"></span>Сбросить всё
+          </button>
+          <button type="button" class="done" data-done>Готово</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="mb-4 mt-0 text-xs text-[var(--content-tertiary)]">
+    Фильтры комбинируются по И · пустой набор = показать всё · счётчик в пункте — сколько строк пропустит
+    ЭТОТ предикат на всех данных · подытоги и итог считаются из ВИДИМЫХ строк.
+  </p>
+
+  <!-- лента таблицы: ровно как .table-wrap — рамка сверху/снизу, тень, прокрутка -->
+  <div class="relative overflow-x-auto border-y border-[var(--border)] bg-white shadow-[var(--elev-2)]" id="tw">
+    <table id="cmp" class="w-full border-collapse text-sm leading-5">
+      <caption id="cap" class="caption-bottom px-3 py-2 text-left text-xs text-[var(--content-tertiary)]">–</caption>
+      <thead class="bg-[var(--fill-subtle)] text-[var(--content-secondary)]">
+        <tr>
+          <th class="h-10 whitespace-nowrap py-0 pl-3 pr-2 text-left align-middle text-sm font-semibold">Позиция</th>
+          <th class="h-10 whitespace-nowrap p-2 text-right align-middle text-sm font-semibold">СтройМонтаж
+            <span class="block text-xs font-normal text-[var(--content-tertiary)]">КП v2 · покрытие 88 %</span></th>
+          <th class="h-10 whitespace-nowrap p-2 text-right align-middle text-sm font-semibold">МонолитГрупп
+            <span class="block text-xs font-normal text-[var(--content-tertiary)]">КП v1 · покрытие 100 %</span></th>
+          <th class="h-10 whitespace-nowrap p-2 text-right align-middle text-sm font-semibold">СпецЖБИ
+            <span class="block text-xs font-normal text-[var(--content-tertiary)]">КП v1 · покрытие 95 %</span></th>
+          <th class="h-10 whitespace-nowrap py-0 pl-2 pr-3 text-right align-middle text-sm font-semibold">Разброс</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+      <tfoot id="tfoot" class="border-t border-[var(--border)]"></tfoot>
+    </table>
+  </div>
+
+  <!-- ═══ ПАНЕЛЬ АНАЛИЗА (Д.6): вывод + якорь, клик подсвечивает строку ═══ -->
+  <h2 class="mb-2 mt-6 text-xs font-semibold uppercase tracking-wider text-[var(--content-tertiary)]">Панель анализа</h2>
+  <div class="grid gap-2 sm:grid-cols-3" id="insights"></div>
+
+  <!-- ═══ ЛЕГЕНДА ═══ -->
+  <h2 class="mb-2 mt-6 text-xs font-semibold uppercase tracking-wider text-[var(--content-tertiary)]">Легенда</h2>
+  <div class="grid gap-x-8 gap-y-2 text-xs text-[var(--content-secondary)] sm:grid-cols-2" id="legend"></div>
+
+</div>
+
+<!-- один попап на таблицу: содержимое подставляется, элемент не пересоздаётся.
+     Анатомия карточки тендера: шапка-капитель → поля «подпись · значение» →
+     футер с пояснением. -->
+<dialog id="popup" class="cell-popup" data-tone="success" role="tooltip">
+  <div class="phead"><span class="ptitle" id="pTitle"></span></div>
+  <div class="pbody">
+    <div class="pfield"><span class="plabel">Значение</span><span class="pval"><span id="pValue"></span><span class="punit" id="pUnit" hidden></span></span></div>
+    <div class="pfield" id="pSavingRow" hidden><span class="plabel">Запас торга</span><span class="pval pval--tone" id="pSaving"></span></div>
+    <div class="pfield"><span class="plabel">К медиане строки</span><span class="pval" id="pDelta"></span></div>
+    <div class="pfield" title="Шкала общая для всех строк: 25 % — вся длина">
+      <span class="plabel">Разброс строки</span>
+      <span class="pspread"><span class="ptrack"><i class="pfill" id="pFill"></i></span><span class="pval pval--tone" id="pSpread"></span></span>
+    </div>
+  </div>
+  <div class="pfoot"><span class="pdesc" id="pDesc"></span></div>
+</dialog>
+
+<script>
+  /* Solar @solar-icons/react@2.0.1 — path-данные вынуты из пакета побайтово (Д.7).
+     Толщина 1.5 и размер задаются CSS, как в src/shared/ui/Icon. */
+  const ICONS = {
+    chevron: "<path d=\"M19 9L12 15L5 9\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
+    filter: "<path d=\"M19 3H5C3.58579 3 2.87868 3 2.43934 3.4122C2 3.8244 2 4.48782 2 5.81466V6.50448C2 7.54232 2 8.06124 2.2596 8.49142C2.5192 8.9216 2.99347 9.18858 3.94202 9.72255L6.85504 11.3624C7.49146 11.7206 7.80967 11.8998 8.03751 12.0976C8.51199 12.5095 8.80408 12.9935 8.93644 13.5872C9 13.8722 9 14.2058 9 14.8729L9 17.5424C9 18.452 9 18.9067 9.25192 19.2613C9.50385 19.6158 9.95128 19.7907 10.8462 20.1406C12.7248 20.875 13.6641 21.2422 14.3321 20.8244C15 20.4066 15 19.4519 15 17.5424V14.8729C15 14.2058 15 13.8722 15.0636 13.5872C15.1959 12.9935 15.488 12.5095 15.9625 12.0976C16.1903 11.8998 16.5085 11.7206 17.145 11.3624L20.058 9.72255C21.0065 9.18858 21.4808 8.9216 21.7404 8.49142C22 8.06124 22 7.54232 22 6.50448V5.81466C22 4.48782 22 3.8244 21.5607 3.4122C21.1213 3 20.4142 3 19 3Z\"/>",
+    check: "<circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\"M8.5 12.5L10.5 14.5L15.5 9.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
+    close: "<circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\"M14.5 9.50002L9.5 14.5M9.49998 9.5L14.5 14.5\" stroke-linecap=\"round\"/>",
+    danger: "<path d=\"M5.31171 10.7615C8.23007 5.58716 9.68925 3 12 3C14.3107 3 15.7699 5.58716 18.6883 10.7615L19.0519 11.4063C21.4771 15.7061 22.6897 17.856 21.5937 19.428C20.4978 21 17.7864 21 12.3637 21H11.6363C6.21356 21 3.50217 21 2.40626 19.428C1.31034 17.856 2.52291 15.7061 4.94805 11.4063L5.31171 10.7615Z\"/><path d=\"M12 8V13\" stroke-linecap=\"round\"/><path d=\"M12 16H12.0001\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
+    info: "<circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\"M12 17V11\" stroke-linecap=\"round\"/><path d=\"M12 8H12.0001\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
+    refresh: "<path d=\"M3.67981 13L3.67981 11.3333C3.67981 6.73096 7.4402 3 12.0789 3C15.1178 3 17.7799 4.60136 19.2545 7M2 11.3333L3.67981 13L5.35962 11.3333\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M20.3139 11V12.6667C20.3139 17.269 16.5391 21 11.8827 21C8.83213 21 6.15995 19.3986 4.67969 17M22.0001 12.6667L20.3139 11L18.6277 12.6667\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
+    sort: "<path d=\"M4 16L13 16\" stroke-linecap=\"round\"/><path d=\"M6 11H13\" stroke-linecap=\"round\"/><path d=\"M8 6L13 6\" stroke-linecap=\"round\"/><path d=\"M17 4L17 20L20 16\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
+    graph: "<path d=\"M2 12C2 7.28595 2 4.92893 3.46447 3.46447C4.92893 2 7.28595 2 12 2C16.714 2 19.0711 2 20.5355 3.46447C22 4.92893 22 7.28595 22 12C22 16.714 22 19.0711 20.5355 20.5355C19.0711 22 16.714 22 12 22C7.28595 22 4.92893 22 3.46447 20.5355C2 19.0711 2 16.714 2 12Z\"/><path d=\"M7 14L9.29289 11.7071C9.68342 11.3166 10.3166 11.3166 10.7071 11.7071L12.2929 13.2929C12.6834 13.6834 13.3166 13.6834 13.7071 13.2929L17 10M14.5 10H17V12.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
+  };
+
+  const icon = (name, cls) => `<svg class="${cls || 'icn'}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name]}</svg>`;
+
+  /* Ценник-бирка «мин» — финальная итерация из assets/tag-final.svg, инлайном:
+     цвета берутся из тонов проекта через var(--tone-*), а наклон и прокол
+     зашиты в геометрию (см. разбор в самом файле ассета). */
+  const tagSVG = () =>
+    `<svg viewBox="0 0 52 40" aria-hidden="true">`
+    + `<g transform="rotate(12 10 17)">`
+    + `<path fill="var(--tone-success)" fill-rule="evenodd" d="M 11 5 L 43 5 Q 47 5 47 9 L 47 25 Q 47 29 43 29 L 11 29 L 4.2 21.4 Q 2.5 19.4 2.5 17 Q 2.5 14.6 4.2 12.6 Z M 12.2 17 a 2.2 2.2 0 1 0 -4.4 0 a 2.2 2.2 0 1 0 4.4 0 Z"/>`
+    + `<circle cx="10" cy="17" r="3.6" fill="none" stroke="#fff" stroke-opacity=".9" stroke-width="1.2"/>`
+    + `<text x="29" y="20" text-anchor="middle" fill="#fff" font-size="8.5" font-weight="700" letter-spacing=".8">МИН</text>`
+    + `</g>`
+    + `<path fill="none" stroke="var(--tone-success)" stroke-width="1.1" stroke-linecap="round" d="M 1.5 .5 C 1.7 7.5 4.2 12.8 8.6 16"/>`
+    + `</svg>`;
+
+  /* Маркеры — финальные ассеты (assets/{key,median,spread}-final.svg), инлайном
+     с токенами тонов. Ключ/медиана/разброс — самостоятельные глифы без подвеса;
+     у медианы и разброса внутри сохранены классы mk-rise / mk-cap-l,r —
+     к ним цепляются hover-анимации. */
+  const keySVG = () =>
+    `<svg viewBox="0 0 28 18" aria-hidden="true"><g fill="none" stroke="var(--tone-warning)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">`
+    + `<circle cx="7" cy="9" r="5"/><circle cx="7" cy="9" r="1.9" stroke-width="1.3"/>`
+    + `<path d="M12 9 H25.5"/><path d="M19.5 9 V13.4"/><path d="M23 9 V12.2"/></g></svg>`;
+
+  /* ЗАПАС ТОРГА — монета (assets/potential-final.svg): гурт r=9, внутренний
+     ободок альфой .4, знак рубля без обводки. Тон info: зелёный занят минимумом,
+     иначе пара сливалась бы в одно пятно. Стоит по центру высоты цены слева,
+     наклон и опора — в CSS (.badge-torg). */
+  const torgSVG = () =>
+    `<svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="var(--tone-info)" stroke-width="1.8">`
+    + `<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="6.6" stroke-opacity=".4" stroke-width="1"/>`
+    + `<text x="12" y="15.4" text-anchor="middle" fill="var(--tone-info)" stroke="none" font-size="9" font-weight="700">₽</text>`
+    + `</g></svg>`;
+
+  /* АНОМАЛИЯ — миниатюра собственного устройства ячейки: рамка с диагональной
+     штриховкой (в ячейке — repeating-linear-gradient + рейка слева). Глиф
+     повторяет лечение, а не изобретает новое слово. */
+  const anomalySVG = () =>
+    `<svg viewBox="0 0 17 17" aria-hidden="true"><g fill="none" stroke="var(--tone-warning)" stroke-width="1.6" stroke-linecap="round">`
+    + `<rect x="1.5" y="1.5" width="14" height="14" rx="3"/>`
+    + `<path d="M4 9.5 L9.5 4"/><path d="M4.5 13 L13 4.5"/><path d="M7.5 13 L13 7.5"/>`
+    + `</g></svg>`;
+
+  const spreadSVG = () =>
+    `<svg viewBox="0 0 24 16" aria-hidden="true"><g fill="none" stroke="var(--tone-danger)" stroke-width="1.7" stroke-linecap="round">`
+    + `<path class="mk-axis" d="M3 8 H21" stroke-linecap="butt"/><path class="mk-cap-l" d="M3 4.8 V11.2"/><path class="mk-cap-r" d="M21 4.8 V11.2"/>`
+    + `<circle cx="10.2" cy="8" r="2.1" fill="var(--tone-danger)" stroke="none"/></g></svg>`;
+
+  const medSVG = () =>
+    `<svg viewBox="0 0 22 19" aria-hidden="true"><g fill="none" stroke="var(--tone-neutral-ink)" stroke-linecap="butt">`
+    + `<g class="mk-rise"><path d="M11 15.7 V7" stroke-width="1.8"/><circle cx="11" cy="6" r="2.4" fill="var(--tone-neutral-ink)"/></g>`
+    + `<path d="M2 15 H20" stroke-width="1.4" stroke-dasharray="2 1.2"/></g></svg>`;
+
+  /* Атрибуты триггера попапа для брелока: тот же контракт data-popup,
+     что у ценника и аномалии, — попап один на всех, различие только в тоне
+     и содержимом. Пустые value/delta/spread честно пустые. */
+  const charmAttrs = ({ tone, title, desc, value = '', delta = '', spread = '' }) =>
+    ` data-popup tabindex="0" role="button" aria-label="${esc(title)}"`
+    + ` data-tone="${tone}" data-title="${esc(title)}" data-desc="${esc(desc)}"`
+    + ` data-saving="" data-value="${esc(value)}" data-delta="${esc(delta)}" data-spread="${spread}"`;
+
+  /* Глифы предикатов в меню фильтров — те же маркеры, что красят ячейки.
+     У аномалии теперь тоже глиф: штрихованная рамка — миниатюра её же
+     клеточного устройства. */
+  const FICONS = { key:keySVG, spread:spreadSVG, med:medSVG, torg:torgSVG, anomaly:anomalySVG };
+  document.querySelectorAll('[data-ficon]').forEach((el) => {
+    const make = FICONS[el.dataset.ficon];
+    if (make) el.innerHTML = make();
+  });
+
+  /* плейсхолдеры в разметке: <span data-icon="filter" data-cls="icn icn-sm"> */
+  document.querySelectorAll('[data-icon]').forEach((el) => {
+    el.innerHTML = icon(el.dataset.icon, el.dataset.cls);
+  });
+
+  /* ═══════════ 1. ДАННЫЕ ═══════════
+     Вход по контракту §5: цена, потенциал и ПРИЧИНА аномалии приходят извне;
+     всё остальное ниже считается на фронте. */
+  const SUPPLIERS = [
+    { id:'sm', name:'СтройМонтаж'  },
+    { id:'mg', name:'МонолитГрупп' },
+    { id:'sj', name:'СпецЖБИ'      },
+  ];
+  const SECTIONS = ['Бетон и ЖБИ', 'Кабельная продукция', 'Опалубка и расходники'];
+
+  const ITEMS = [
+    { id:1, sec:0, name:'Бетон B25 W8 F150 · 420 м³', key:true, unit:'4 755 ₽/м³',
+      cells:{ sm:{ price:2177000 }, mg:{ price:1997100, potential:179900 }, sj:{ price:2041000, potential:136000 } } },
+    { id:2, sec:0, name:'Арматура A500 · 1200 т',
+      cells:{ sm:{ price:4120000, anomaly:'Цена ниже остальных КП сильнее допуска ±3 % — поставщик мог не учесть доставку или взял другой сортамент.' },
+              mg:{ price:4315900, potential:164100 },
+              sj:{ price:4480000 } } },
+    { id:3, sec:1, name:'Кабель ВБбШв 4×16 · 800 м',
+      cells:{ sm:{ price:863400 }, mg:null, sj:{ declined:true } } },
+    { id:4, sec:2, name:'Опалубка щитовая', corrected:{ from:'1200 м²', to:'1260 м²' },
+      cells:{ sm:{ price:1240000, potential:70500 }, mg:{ price:1198000, potential:112500 }, sj:{ price:1310500 } } },
+    { id:5, sec:2, name:'Грунт для обратной засыпки · 380 м³', removed:true, cells:{} },
+  ];
+
+  /* ═══════════ 2. ФОРМУЛЫ ═══════════ */
+  const money = (n) => n.toLocaleString('ru-RU') + ' ₽';
+  const pct   = (v, sign) => (sign && v > 0 ? '+' : v < 0 ? '−' : '') +
+                             Math.abs(v).toFixed(1).replace('.', ',') + ' %';
+
+  function median(list){
+    const a = [...list].sort((x, y) => x - y);
+    const m = a.length >> 1;
+    return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2;
+  }
+
+  /* Один проход по строке: всё производное считается ЗДЕСЬ и только здесь —
+     таблица, фильтры, счётчики и попап читают одни и те же числа. */
+  ITEMS.forEach((it) => {
+    const cells = SUPPLIERS.map((s) => it.cells[s.id]).filter((c) => c && c.price != null);
+    it.prices = cells.map((c) => c.price);
+    it.median = it.prices.length ? median(it.prices) : null;
+
+    /* §4.2: разброс — по ВСЕМ ценам, включая аномальную; метка выводится из
+       процента, а не приходит рядом с ним. Порог: high ≥ 15 %, noticeable ≥ 7 %. */
+    it.spread = it.prices.length > 1
+      ? (Math.max(...it.prices) - Math.min(...it.prices)) / Math.min(...it.prices) * 100
+      : null;
+    it.tag = it.spread == null ? null : it.spread >= 15 ? 'high' : it.spread >= 7 ? 'noticeable' : 'none';
+
+    /* §4.6: минимум присуждается лучшей НЕаномальной цене — аномалия остаётся
+       только в разбросе, иначе экран советует брать подозрительную цифру. */
+    const fair = SUPPLIERS.filter((s) => it.cells[s.id] && it.cells[s.id].price != null && !it.cells[s.id].anomaly);
+    /* и второе условие: минимум присуждается, только если есть ЧТО сравнивать.
+       Единственное КП в строке — не «лучшая цена», а отсутствие конкуренции. */
+    it.minId = (fair.length && it.prices.length > 1) ? fair.reduce((b, s) => it.cells[s.id].price < it.cells[b.id].price ? s : b).id : null;
+
+    it.maxPot = Math.max(0, ...SUPPLIERS.map((s) => (it.cells[s.id] && it.cells[s.id].potential) || 0));
+    it.weight = it.prices.length ? Math.max(...it.prices) : 0;      /* §3.1: вес = максимальная цена */
+  });
+  /* §3.2: доля веса считается от Σ weight СРЕЗА — сумма долей даёт 100 %.
+     Сломанный «% среза» из макета делил вес строки на чужой итог подрядчика. */
+  const SUM_W = ITEMS.reduce((s, it) => s + it.weight, 0);
+  ITEMS.forEach((it) => { it.share = SUM_W ? it.weight / SUM_W * 100 : 0; });
+
+  /* Отклонение — ЗАМЕНА, а не решение (§2.2, Д.3): настоящая база отклонения
+     это внешняя эталонная цена, которой в контракте пока нет. Медиана строки
+     годится показать режим и ни для чего больше. */
+  const dev = (it, c) => it.median ? (c.price - it.median) / it.median * 100 : 0;
+
+  /* ═══════════ 3. ПРЕСЕТЫ И СОСТОЯНИЕ (§1, Д.2) ═══════════
+     Пресет присваивает ЧЕТЫРЕ оси целиком — это не набор фильтров. */
+  const PRESETS = {
+    overview:  { mainMetric:'price',     extra:[],        rowView:'sections',  filters:[] },
+    bidding:   { mainMetric:'potential', extra:['price'], rowView:'potential', filters:['pot'] },
+    anomalies: { mainMetric:'deviation', extra:['price'], rowView:'weight',    filters:['anomaly'] },
+  };
+  const state = { preset:'overview', mainMetric:'price', extra:[], rowView:'sections', filters:new Set() };
+
+  const M_LABEL = { price:'Цена', deviation:'Отклонение', potential:'Потенциал' };
+  const R_LABEL = { sections:'По разделам', weight:'По весу', potential:'По потенциалу' };
+
+  /* §2: показатели ячейки — главный крупно, остальные подстрочником, максимум три */
+  const shownMetrics = () => [...new Set([state.mainMetric, ...state.extra])].slice(0, 3);
+
+  /* ═══════════ 4. ПРЕДИКАТЫ (§4) ═══════════ */
+  const PRED = {
+    key:     (it) => !!it.key,
+    spread:  (it) => it.tag === 'high',
+    anomaly: (it) => SUPPLIERS.some((s) => it.cells[s.id] && it.cells[s.id].anomaly),
+    pot:     (it) => it.maxPot > 0,                                  /* §4.4: в проде порог ≥ X ₽, «> 0» ловит копейку */
+    med:     (it) => it.median != null && it.prices.some((p) => p > it.median),
+  };
+
+  /* ═══════════ 5. РЕНДЕР ═══════════ */
+  const tbody = document.getElementById('tbody');
+  const tfoot = document.getElementById('tfoot');
+  const TD    = 'whitespace-nowrap p-2 text-right align-middle tabular-nums';
+  const TR    = 'border-b border-[var(--border)] transition-colors hover:bg-[var(--hover-subtle)]';
+
+  const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+
+  function metricValue(it, c, metric){
+    if (metric === 'price')     return money(c.price);
+    if (metric === 'potential') return c.potential ? '+' + money(c.potential) : '—';
+    const d = dev(it, c);
+    /* Д.3: допуск симметричен — «дешевле на 8,5 %» такой же повод спросить, как «дороже» */
+    return `<span class="${Math.abs(d) > 5 ? 'dev-hot' : ''}">${pct(d, true)}</span>`;
+  }
+
+  function cellHTML(it, sup){
+    const c = it.cells[sup.id];
+    if (it.removed)     return `<td class="${TD} dash">—</td>`;
+    if (!c)             return `<td class="${TD} cell--missing dash">—<span class="sub">нет цены</span></td>`;
+    if (c.declined)     return `<td class="${TD}"><span class="chip chip--neutral">${icon('close', 'icn icn-xs')}Отказ</span></td>`;
+
+    const [main, ...extra] = shownMetrics();
+    const isMin = it.minId === sup.id && state.mainMetric === 'price';   /* Д.3: разметка минимума гаснет вне режима «Цена» */
+
+    let head = metricValue(it, c, main);
+    if (main === 'price') {
+      /* Триггер попапа — САМА бирка, а не ячейка: раскачка и объяснение
+         появляются только когда курсор на ценнике (Д.3: пометка тихая,
+         пока к ней не обратились). Атрибуты data-popup уезжают с <td>
+         на .tag, вместе с tabindex — клавиатура попадает в ту же цель. */
+      const tagAttrs = isMin
+        ? ` data-popup tabindex="0" role="button" aria-label="Минимальное значение"`
+          + ` data-tone="success" data-title="Минимальное значение"`
+          + ` data-desc="Лучшая цена среди НЕаномальных предложений строки."`
+          + ` data-saving="${c.potential ? esc('+' + money(c.potential)) : ''}"`
+          + ` data-value="${esc(money(c.price))}" data-unit="${it.unit ? esc(it.unit) : ''}"`
+          + ` data-delta="${esc(pct(dev(it, c), true))}" data-spread="${it.spread == null ? '' : it.spread.toFixed(1)}"`
+        : '';
+      /* Ценник и монета — разные объекты у одной цены: МИН висит справа-снизу
+         на нитке, запас торга прислонён монетой слева-снизу. Ни формы, ни
+         места, ни анимации не пересекаются. */
+      const tags = [];
+      if (isMin) {
+        tags.push(`<span class="tag"${tagAttrs}>${tagSVG()}</span>`);
+      }
+      if (c.potential > 0) {
+        tags.push(`<span class="badge-torg"${charmAttrs({ tone:'info', title:'Заявленный запас торга', desc:'Сумма, которую подрядчик сам обозначил как возможную к скидке: вход в торг, а не вывод.', value:'+' + money(c.potential) })}>${torgSVG()}</span>`);
+      }
+      head = `<span class="price ${isMin ? 'price--min' : ''}">${head}${tags.join('')}</span>`;
+      /* «заметно дороже медианы» — леденец у ВЕРХНЕГО края цены, порог тот же,
+         что красит отклонение (±5 %). У минимума и аномалии брелка нет: их
+         смыслы уже заняты ценником и штриховкой, второй глиф про то же — шум. */
+      if (!isMin && !c.anomaly && it.median != null) {
+        const d = dev(it, c);
+        if (d > 5) head += `<span class="badge-med"${charmAttrs({ tone:'neutral', title:'Заметно дороже медианы', desc:'Конкуренты предлагают ту же позицию дешевле медианы строки больше чем на 5 %.', value:money(c.price), delta:pct(d, true) })}>${medSVG()}</span>`;
+      }
+    }
+    const subs = extra.map((m) =>
+      `<span class="sub">${m === 'price' ? metricValue(it, c, m)
+        : m === 'potential' ? (c.potential ? '+' + money(c.potential) : 'без запаса')
+        : metricValue(it, c, m) + ' к медиане'}</span>`).join('');
+
+    /* попап навешивается только туда, где есть ЧТО объяснять (§4.6);
+       у минимума триггер — бирка (см. выше), здесь остаётся аномалия */
+    let attrs = '';
+    if (c.anomaly) {
+      attrs = ` data-popup tabindex="0" data-tone="warning" data-title="Аномальная цена"`
+            + ` data-desc="${esc(c.anomaly)}" data-saving="" data-value="${esc(money(c.price))}"`;
+    }
+    if (attrs) attrs += ` data-delta="${esc(pct(dev(it, c), true))}" data-spread="${it.spread == null ? '' : it.spread.toFixed(1)}"`;
+
+    return `<td class="${TD}${c.anomaly ? ' cell--anomaly' : ''}"${attrs}><span class="font-medium">${head}</span>${subs}</td>`;
+  }
+
+  function spreadHTML(it){
+    if (it.spread == null) return `<td class="${TD} pl-2 pr-3 dash">—${it.removed ? '' : '<span class="sub">одно КП</span>'}</td>`;
+    /* маркер только на «высоком» разбросе — тот же порог, что у фильтра */
+    const hot = it.tag === 'high'
+      ? `<span class="badge-spread"${charmAttrs({ tone:'danger', title:'Высокий разброс', desc:'Цены КП расходятся на 15 % и больше — сверяйте состав объёма, прежде чем сравнивать итоги.', value:pct(it.spread), spread:it.spread.toFixed(1) })}>${spreadSVG()}</span>`
+      : '';
+    return `<td class="${TD} pl-2 pr-3 spread--${it.tag}">${pct(it.spread)}${hot}`
+         + `<span class="spread-bar"><i style="width:${Math.min(it.spread / 25 * 100, 100)}%"></i></span></td>`;
+  }
+
+  function nameHTML(it){
+    /* Ключевая позиция — ключ в ПРАВОЙ части строки, после названия: левый
+       край всех строк остаётся единым (звезда до этого ломала его и вдобавок
+       пересекалась с инпутом избранного). Триггер попапа — сам глиф. */
+    const keyBadge = it.key
+      ? `<span class="badge-key"${charmAttrs({ tone:'warning', title:'Ключевая позиция', desc:'Наибольший вес в смете среза: цена здесь двигает итог сильнее остальных строк.' })}>${keySVG()}</span>`
+      : '';
+    const name = it.removed ? `<s>${it.name}</s>` : it.name;
+    let sub = '';
+    if (it.corrected) sub += `<span class="sub"><s>${it.corrected.from}</s> → ${it.corrected.to} · объём скорректирован</span>`;
+    if (it.removed)   sub += `<span class="sub">позиция снята из сметы</span>`;
+    /* доля веса показывается там, где по ней и отсортировано, — иначе это шум */
+    if (state.rowView === 'weight') sub += `<span class="sub"><span class="share"><i style="width:${it.share}%"></i></span>${it.share.toFixed(1).replace('.', ',')} % веса среза</span>`;
+    return `<td class="whitespace-nowrap py-2 pl-3 pr-2 align-middle">${name}${keyBadge}${sub}</td>`;
+  }
+
+  const rowHTML = (it) => `<tr data-id="${it.id}" class="${TR}${it.removed ? ' row--removed' : ''}">`
+    + nameHTML(it) + SUPPLIERS.map((s) => cellHTML(it, s)).join('') + spreadHTML(it) + '</tr>';
+
+  /* Подытог/итог складываются из ПЕРЕДАННЫХ строк, то есть из видимых (Д.4).
+     Визуальная фильтрация с неизменным итогом — это враньё в подытоге. */
+  const sumRow = (label, list, cls) => `<tr class="${cls}">`
+    + `<td class="whitespace-nowrap py-2 pl-3 pr-2 align-middle">${label}</td>`
+    + SUPPLIERS.map((s) => {
+        const sum = list.reduce((acc, it) => acc + ((it.cells[s.id] && it.cells[s.id].price) || 0), 0);
+        return `<td class="${TD}">${sum ? money(sum) : '—'}</td>`;
+      }).join('')
+    + `<td class="${TD} pl-2 pr-3"></td></tr>`;
+
+  function render(){
+    hidePopup(true);                                   /* строки пересоздаются — держать попап не за что */
+    const vis = ITEMS.filter((it) => [...state.filters].every((p) => PRED[p](it)));
+
+    let html = '';
+    if (!vis.length) {
+      html = `<tr><td colspan="5" class="px-3 py-10 text-center text-[var(--content-tertiary)]">`
+           + `Ни одна позиция не проходит фильтры · <button type="button" data-empty-reset class="underline">сбросить</button></td></tr>`;
+    } else if (state.rowView === 'sections') {
+      SECTIONS.forEach((sec, i) => {
+        const group = vis.filter((it) => it.sec === i);
+        if (!group.length) return;
+        html += `<tr class="row--sec"><td colspan="5" class="px-3">${sec}</td></tr>`
+              + group.map(rowHTML).join('')
+              + sumRow(`Итого · ${sec}`, group, 'row--sum border-b border-[var(--border)]');
+      });
+    } else {
+      /* §3.1: плоский список, отсортированный по одному числу, — заголовки
+         разделов в таком порядке смысла не имеют и подытогов тут нет */
+      const key = state.rowView === 'weight' ? 'weight' : 'maxPot';
+      html = [...vis].sort((a, b) => b[key] - a[key]).map(rowHTML).join('');
+    }
+    tbody.innerHTML = html;
+    tfoot.innerHTML = vis.length ? sumRow('Итого по срезу', vis, 'font-medium') : '';
+
+    document.getElementById('cShown').textContent    = `${vis.length} / ${ITEMS.length}`;
+    document.getElementById('cDeclined').textContent = ITEMS.filter((it) => SUPPLIERS.some((s) => it.cells[s.id] && it.cells[s.id].declined)).length;
+    document.getElementById('cMissing').textContent  = ITEMS.filter((it) => !it.removed && SUPPLIERS.some((s) => !it.cells[s.id])).length;
+    document.getElementById('cAnomaly').textContent  = ITEMS.filter(PRED.anomaly).length;
+    document.getElementById('cap').textContent =
+      `Показано ${vis.length} из ${ITEMS.length} позиций · показатель «${M_LABEL[state.mainMetric]}» · ${R_LABEL[state.rowView].toLowerCase()} · `
+      + (state.filters.size ? `фильтров: ${state.filters.size} (применены до подытогов)` : 'без фильтров');
+  }
+
+  /* ═══════════ 6. КОНТРОЛЫ (Д.1) ═══════════ */
+  const seg     = document.getElementById('seg');
+  const modChip = document.getElementById('modChip');
+  const fWrap   = document.querySelector('[data-filters]');
+  const multi   = fWrap.querySelector('[data-multi]');
+  const fbub    = fWrap.querySelector('[data-fbub]');
+  const resetBtn = multi.querySelector('[data-reset]');
+
+  const sameSet = (a, b) => a.size === b.length && b.every((x) => a.has(x));
+  /* Д.2: modified — ушли ли мы от базы пресета хоть по одной из четырёх осей */
+  function isModified(){
+    const b = PRESETS[state.preset];
+    return state.mainMetric !== b.mainMetric || state.rowView !== b.rowView
+        || !sameSet(state.filters, b.filters)
+        || state.extra.length !== b.extra.length || !state.extra.every((m) => b.extra.includes(m));
+  }
+
+  function syncControls(){
+    seg.querySelectorAll('[role="radio"]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.preset === state.preset)));
+    document.getElementById('lblMetric').textContent = M_LABEL[state.mainMetric];
+    document.getElementById('lblRows').textContent   = R_LABEL[state.rowView];
+    document.querySelectorAll('[data-target="metric"] .mi').forEach((i) => i.setAttribute('aria-checked', String(i.dataset.value === state.mainMetric)));
+    document.querySelectorAll('[data-target="rows"] .mi').forEach((i)   => i.setAttribute('aria-checked', String(i.dataset.value === state.rowView)));
+    multi.querySelectorAll('[data-pred]').forEach((i) => i.setAttribute('aria-checked', String(state.filters.has(i.dataset.pred))));
+    fbub.hidden = !state.filters.size;
+    fbub.textContent = state.filters.size;
+    resetBtn.disabled = !state.filters.size;
+    modChip.hidden = !isModified();
+  }
+
+  const update = () => { syncControls(); render(); };
+
+  function applyPreset(id){
+    const p = PRESETS[id];
+    Object.assign(state, { preset:id, mainMetric:p.mainMetric, extra:[...p.extra], rowView:p.rowView, filters:new Set(p.filters) });
+    update();
+  }
+
+  seg.addEventListener('click', (e) => {
+    const b = e.target.closest('[role="radio"]');
+    if (b) applyPreset(b.dataset.preset);
+  });
+  modChip.addEventListener('click', () => applyPreset(state.preset));   /* единственное действие чипа — вернуть базу */
+
+  /* открытие/закрытие меню; мультивыбор НЕ закрывается по клику (closeOnSelect=false) */
+  const closeAll = (except) => document.querySelectorAll('[data-menu]').forEach((w) => {
+    if (w === except) return;
+    w.classList.remove('open');
+    w.querySelector(':scope > button').setAttribute('aria-expanded', 'false');
+  });
+  document.querySelectorAll('[data-menu]').forEach((wrap) => {
+    const btn = wrap.querySelector(':scope > button');
+    btn.addEventListener('click', () => {
+      const open = wrap.classList.toggle('open');
+      btn.setAttribute('aria-expanded', String(open));
+      closeAll(wrap);
+    });
+  });
+  document.addEventListener('click', (e) => { if (!e.target.closest('[data-menu]')) closeAll(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeAll(); });
+
+  document.querySelectorAll('[data-single]').forEach((menu) => {
+    menu.addEventListener('click', (e) => {
+      const item = e.target.closest('.mi');
+      if (!item) return;
+      if (menu.dataset.target === 'metric') state.mainMetric = item.dataset.value;
+      else                                  state.rowView    = item.dataset.value;
+      closeAll();                                   /* одиночный выбор — выбрал и закрыл */
+      update();
+    });
+  });
+
+  multi.querySelectorAll('[data-pred]').forEach((item) => {
+    const n = ITEMS.filter(PRED[item.dataset.pred]).length;   /* сколько пропустит ЭТОТ предикат на всех данных */
+    item.querySelector('[data-cnt]').textContent = n;
+    if (!n) item.style.opacity = '.45';                       /* пустой предикат честно тусклый, но кликабельный */
+  });
+  multi.addEventListener('click', (e) => {
+    const item = e.target.closest('.mi[data-pred]');
+    if (!item) return;
+    state.filters.has(item.dataset.pred) ? state.filters.delete(item.dataset.pred) : state.filters.add(item.dataset.pred);
+    update();
+  });
+  resetBtn.addEventListener('click', () => { state.filters.clear(); update(); });
+  multi.querySelector('[data-done]').addEventListener('click', () => closeAll());
+  tbody.addEventListener('click', (e) => { if (e.target.closest('[data-empty-reset]')) { state.filters.clear(); update(); } });
+
+  /* ═══════════ 7. ПОПАП ЯЧЕЙКИ (Д.5) ═══════════
+     Тайминги NN/g «Timing Guidelines for Exposing Hidden Content»:
+     показ после остановки курсора 350 мс, переезд между ячейками мгновенный,
+     сокрытие через 500 мс — этого хватает на мост курсора ячейка → панель.
+     WCAG 1.4.13: подсказку можно увести курсором (hoverable), она не исчезает
+     сама (persistent) и снимается Escape (dismissible). */
+  const SHOW_DELAY = 350, HIDE_DELAY = 500, ANIM = 130;
+  const popup = document.getElementById('popup');
+  const tw = document.getElementById('tw');
+  let activeCell = null, showT = null, hideT = null, isOpen = false;
+
+  function fill(cell){
+    const tone = cell.dataset.tone;
+    popup.dataset.tone = tone;
+    document.getElementById('pTitle').textContent = cell.dataset.title;
+    /* причина аномалии — в футер, числа — в тело (§4.3): читать их надо
+       в разных местах, поэтому они и разнесены по зонам карточки */
+    document.getElementById('pDesc').textContent = cell.dataset.desc;
+    const savingRow = document.getElementById('pSavingRow');
+    savingRow.hidden = !cell.dataset.saving;                       /* пустой строки «Запас торга» не бывает */
+    document.getElementById('pSaving').innerHTML = cell.dataset.saving || '';
+    document.getElementById('pValue').textContent = cell.dataset.value;
+    const unit = document.getElementById('pUnit');
+    unit.hidden = !cell.dataset.unit;                              /* единицы нет — второй строки тоже */
+    unit.textContent = cell.dataset.unit || '';
+    document.getElementById('pDelta').textContent = cell.dataset.delta;
+    const sp = parseFloat(cell.dataset.spread) || 0;
+    document.getElementById('pSpread').textContent = sp ? pct(sp) : '—';
+    document.getElementById('pFill').style.width = Math.min(sp / 25 * 100, 100) + '%';
+  }
+
+  function position(cell){
+    const r = cell.getBoundingClientRect();
+    const w = popup.offsetWidth, h = popup.offsetHeight;
+    const cx = r.left + r.width / 2;
+    let left = cx - w / 2;                            /* панель ЦЕНТРИРУЕТСЯ на бирке: хвостик читается продолжением ниточки */
+    let top  = r.bottom + 2;                          /* 2px, а не «воздух»: ромб хвостика дотягивается до кромки бирки и слегка касается её */
+    popup.classList.remove('is-above');
+    if (top + h > innerHeight - 12) { top = r.top - h - 2; popup.classList.add('is-above'); }
+    left = Math.max(12, Math.min(left, innerWidth - w - 12));
+    popup.style.left = left + 'px';
+    popup.style.top  = top + 'px';
+    /* хвостик целится в центр бирки, даже когда край экрана сдвинул панель */
+    popup.style.setProperty('--arrow-x', Math.max(9, Math.min(cx - left, w - 9)) + 'px');
+  }
+
+  function show(cell){
+    fill(cell);
+    /* show(), а НЕ showModal(): top layer нужен ради выхода из overflow-x
+       таблицы, а модальность — нет. showModal() делает остальную страницу
+       inert: курсор перестаёт доходить до ячеек, mouseout не приходит, попап
+       не закрывается — страница «висит» до перезагрузки. Подсказка не окно. */
+    if (!popup.open) popup.show();
+    requestAnimationFrame(() => position(cell));      /* размер известен только после открытия */
+    popup.classList.add('is-visible');
+    if (activeCell) activeCell.removeAttribute('aria-describedby');
+    cell.setAttribute('aria-describedby', 'popup');
+    activeCell = cell; isOpen = true;
+  }
+
+  function hidePopup(now){
+    clearTimeout(showT); clearTimeout(hideT);
+    if (!isOpen) return;
+    if (activeCell) activeCell.removeAttribute('aria-describedby');
+    activeCell = null; isOpen = false;
+    popup.classList.remove('is-visible');
+    if (now) popup.close();
+    else setTimeout(() => { if (!isOpen) popup.close(); }, ANIM);
+  }
+
+  const scheduleHide = () => {
+    clearTimeout(showT); clearTimeout(hideT);
+    hideT = setTimeout(() => { if (!popup.matches(':hover')) hidePopup(); }, HIDE_DELAY);
+  };
+
+  tbody.addEventListener('mouseover', (e) => {
+    const cell = e.target.closest('[data-popup]');
+    if (!cell || cell === activeCell) return;         /* движение внутри той же цели ничего не перезапускает */
+    clearTimeout(showT); clearTimeout(hideT);
+    showT = setTimeout(() => show(cell), isOpen ? 0 : SHOW_DELAY);   /* уже открыт — переезжаем мгновенно */
+  });
+  tbody.addEventListener('mouseout', (e) => {
+    const cell = e.target.closest('[data-popup]');
+    if (cell && !cell.contains(e.relatedTarget)) scheduleHide();
+  });
+  popup.addEventListener('mouseenter', () => { clearTimeout(hideT); });   /* мост курсора: попап можно навести */
+  popup.addEventListener('mouseleave', scheduleHide);
+
+  /* клавиатура получает то же объяснение без мыши */
+  tbody.addEventListener('focusin',  (e) => { const c = e.target.closest('[data-popup]'); if (c) show(c); });
+  tbody.addEventListener('focusout', (e) => { if (e.target.closest('[data-popup]')) hidePopup(); });
+
+  tw.addEventListener('scroll', () => hidePopup(true), { passive:true });  /* панель не «плывёт» над чужой строкой */
+  addEventListener('scroll', () => hidePopup(true), true);
+  addEventListener('resize', () => { if (activeCell) position(activeCell); });
+  /* Escape закрывает подсказку (WCAG 1.4.13 dismissible). У немодального
+     <dialog> события cancel нет — платформа его шлёт только модальному. */
+  addEventListener('keydown', (e) => { if (e.key === 'Escape' && isOpen) hidePopup(); });
+
+  /* ═══════════ 8. ИНСАЙТЫ (Д.6) И ЛЕГЕНДА ═══════════ */
+  const INSIGHTS = [
+    { tone:'danger',  ic:'danger', anchor:2, rule:'правило · Риски и аномалии',
+      title:'Аномалия по арматуре', text:'СтройМонтаж ниже медианы строки сильнее допуска — нужно обоснование до сравнения итогов.' },
+    { tone:'success', ic:'graph',  anchor:1, rule:'правило · Точки торгов',
+      title:'Точки торгов', text:'Бетон и опалубка дают наибольший заявленный запас — начинать торг с них.' },
+    { tone:'info',    ic:'info',   anchor:3, rule:'правило · Покрытие сметы',
+      title:'Кабель без конкуренции', text:'Одно КП из трёх: разброс не считается, торговаться не с кем.' },
+  ];
+  document.getElementById('insights').innerHTML = INSIGHTS.map((i) =>
+    `<button type="button" class="ins" data-tone="${i.tone}" data-anchor="${i.anchor}">${icon(i.ic, 'icn')}`
+    + `<span style="flex:1"><b>${i.title}</b><span>${i.text}</span><em>${i.rule}</em></span></button>`).join('');
+
+  /* Подсветка временная (2,4 с): это ответ на вопрос, а не состояние данных */
+  document.getElementById('insights').addEventListener('click', (e) => {
+    const card = e.target.closest('.ins');
+    if (!card) return;
+    const tr = tbody.querySelector(`tr[data-id="${card.dataset.anchor}"]`);
+    if (!tr) { alert('Строка-якорь скрыта текущими фильтрами — сбросьте фильтр, чтобы увидеть её.'); return; }
+    tr.scrollIntoView({ block:'nearest', behavior:'smooth' });
+    tr.classList.add('row--flash');
+    setTimeout(() => tr.classList.remove('row--flash'), 2400);
+  });
+
+  const LEGEND = [
+    [`<span class="price price--min" style="padding-right:2px">1 997 100 ₽<span class="tag" style="position:static;display:inline-block;width:34px;height:26px;vertical-align:-8px;margin-left:2px">${tagSVG()}</span></span>`, 'минимум строки — ценник-бирка на ниточке; гаснет вне режима «Цена»'],
+    [`<span class="price" style="padding-left:26px">2 041 000 ₽<span class="badge-torg" style="left:auto;position:static;display:inline-block;width:20px;height:20px;vertical-align:middle;margin-left:3px">${torgSVG()}</span></span>`, 'запас торга — монета у цены слева, наклонена к цифре'],
+    ['<span class="cell--anomaly" style="display:inline-block;padding:2px 10px">4 120 000 ₽</span>', 'аномалия — штриховка, рейка и загнутый угол; цена читается насквозь'],
+    [`Бетон B25<span class="badge-key">${keySVG()}</span>`, 'ключевая позиция — ключ справа от названия'],
+    ['<span class="cell--missing dash" style="display:inline-block;padding:2px 10px">—</span>', 'нет цены: пробел в данных'],
+    [`<span class="chip chip--neutral">${icon('close', 'icn icn-xs')}Отказ</span>`, 'отказ: решение подрядчика, а не пробел'],
+    ['<s>1200 м²</s> → 1260 м²', 'корректировка сметы — дифф, а не молчаливая подмена'],
+    [`<span class="spread--high">14,2 %<span class="badge-spread" style="margin-left:3px">${spreadSVG()}</span><span class="spread-bar" style="margin-left:0"><i style="width:57%"></i></span></span>`, 'разброс по строке; ≥ 15 % — маркер «высокий разброс»'],
+    [`+5,8 % к медиане <span class="badge-med" style="vertical-align:-5px">${medSVG()}</span>`, 'заметно дороже медианы строки — леденец у верхнего края цены'],
+    ['<span class="share"><i style="width:51%"></i></span>51 % веса среза', 'доля веса — от Σ весов среза, сумма долей = 100 %'],
+  ];
+  document.getElementById('legend').innerHTML = LEGEND.map(([sample, text]) =>
+    `<div class="flex items-center gap-3 py-1"><span class="w-[150px] shrink-0 text-right text-[var(--content-primary)]">`
+    + sample
+    + `</span><span>${text}</span></div>`).join('');
+
+  applyPreset('overview');
+</script>
+
+</body>
+</html>
