@@ -1,41 +1,8 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useState } from 'react';
 import { cx } from '@/shared/lib/cx';
 import { isoLocal, isoToDmy, parseDmy, startOfMonth } from '@/shared/lib/date';
-import { Icon } from '@/shared/ui/Icon';
+import { CalendarMonth } from '@/shared/ui/Calendar';
 import s from './RangeCalendar.module.css';
-
-const WEEKDAYS = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс'];
-/* Только месяц: год приписываем сами. Формат {month,year} у ru-локали даёт
-   «август 2026 г.» — этот хвост «г.» в шапке месяца лишний. */
-const MONTH_NAME = new Intl.DateTimeFormat('ru-RU', { month: 'long' });
-/* Короткое имя — для списка месяцев: у shadcn formatMonthDropdown берёт
-   {month:'short'} ровно затем, чтобы подпись влезала в ширину месяца. */
-const MONTH_SHORT = new Intl.DateTimeFormat('ru-RU', { month: 'short' });
-const MONTHS = Array.from({ length: 12 }, (_, m) => MONTH_SHORT.format(new Date(2000, m, 1)));
-
-/** Годы для списка: десятилетие в обе стороны плюс сам показанный год, если он
- *  вне этого окна — иначе <select> остался бы без текущего значения и показал
- *  бы пустоту. */
-function yearOptions(year: number): number[] {
-  const now = new Date().getFullYear();
-  const lo = Math.min(now - 10, year);
-  const hi = Math.max(now + 10, year);
-  return Array.from({ length: hi - lo + 1 }, (_, i) => lo + i);
-}
-
-/** Шесть недель по семь дней, от понедельника, с хвостами соседних месяцев.
- *  Шесть строк всегда: иначе высота панели скачет при листании и всё, что
- *  ниже, прыгает под курсором. */
-function weeks(view: Date): Date[][] {
-  const first = new Date(view.getFullYear(), view.getMonth(), 1);
-  const start = new Date(first);
-  start.setDate(1 - ((first.getDay() + 6) % 7)); // getDay(): вс=0, а неделя с пн
-  return Array.from({ length: 6 }, (_, week) => Array.from({ length: 7 }, (_, day) => {
-    const d = new Date(start);
-    d.setDate(start.getDate() + week * 7 + day);
-    return d;
-  }));
-}
 
 /**
  * Календарь диапазона: две границы, каждая правится отдельно — руками или мышью.
@@ -101,9 +68,7 @@ export function RangeCalendar({ from, to, onChange }: {
   /** КАКУЮ границу поставит следующий клик. Переключается тем, что человек
    *  ставит курсор в нужное поле. */
   const [edge, setEdge] = useState<'from' | 'to'>('from');
-  const gridRef = useRef<HTMLDivElement>(null);
 
-  const today = isoLocal(new Date());
   /* Полоса, которую тянет курсор: подвижен тот край, за который взялись,
      второй стоит на месте. Тёмные пилюли остаются на настоящих значениях —
      под курсором ходит только заливка. */
@@ -151,19 +116,6 @@ export function RangeCalendar({ from, to, onChange }: {
     onChange(...(a && b && a > b ? [b, a] as const : [a, b] as const));
   };
 
-  /** Стрелки водят фокус по дням. Кнопки идут строго подряд по датам, поэтому
-   *  ±1 это соседний день, ±7 — та же неделя, и переход между месяцами
-   *  получается сам собой. */
-  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    const step = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 }[e.key];
-    if (!step || !gridRef.current) return;
-    const days = [...gridRef.current.querySelectorAll<HTMLButtonElement>('button[data-day]')];
-    const at = days.indexOf(document.activeElement as HTMLButtonElement);
-    if (at < 0) return;
-    e.preventDefault();
-    days[Math.min(Math.max(at + step, 0), days.length - 1)]?.focus();
-  };
-
   /** Поле — оно же переключатель очереди: поставил курсор в «по» — значит
    *  правишь конец, и клик по сетке правит именно его. */
   const field = (key: 'from' | 'to', label: string, value: string) => (
@@ -192,116 +144,34 @@ export function RangeCalendar({ from, to, onChange }: {
         {field('to', 'до', to)}
       </div>
 
-      <div className={s.months} ref={gridRef} onKeyDown={onKeyDown}>
+      <div className={s.months}>
         {views.map((month, index) => (
-          <div key={index} className={cx(s.month, index === 1 && s.monthSecond)}>
-            {/* Своя навигация у каждого окна: стрелки двигают ТОЛЬКО его,
-                списки уводят сразу в нужный месяц и год. */}
-            <div className={s.monthCaption}>
-              <button
-                type="button"
-                className={cx(s.nav, s.navPrev)}
-                aria-label={`Предыдущий месяц, ${MONTH_NAME.format(month)}`}
-                onClick={() => setView(index, new Date(month.getFullYear(), month.getMonth() - 1, 1))}
-              >
-                <Icon name="chevronDown" />
-              </button>
-
-              <div className={s.dropdowns}>
-                <span className={s.dropdownRoot}>
-                  <select
-                    className={s.dropdown}
-                    aria-label="Месяц"
-                    value={month.getMonth()}
-                    onChange={(e) => setView(index, new Date(month.getFullYear(), Number(e.target.value), 1))}
-                  >
-                    {MONTHS.map((name, m) => <option key={name} value={m}>{name}</option>)}
-                  </select>
-                  <span className={s.captionLabel} aria-hidden="true">
-                    {MONTHS[month.getMonth()]}
-                    <Icon name="chevronDown" className={s.captionChevron} />
-                  </span>
-                </span>
-
-                <span className={s.dropdownRoot}>
-                  <select
-                    className={s.dropdown}
-                    aria-label="Год"
-                    value={month.getFullYear()}
-                    onChange={(e) => setView(index, new Date(Number(e.target.value), month.getMonth(), 1))}
-                  >
-                    {yearOptions(month.getFullYear()).map((y) => <option key={y} value={y}>{y}</option>)}
-                  </select>
-                  <span className={s.captionLabel} aria-hidden="true">
-                    {month.getFullYear()}
-                    <Icon name="chevronDown" className={s.captionChevron} />
-                  </span>
-                </span>
-              </div>
-
-              <button
-                type="button"
-                className={cx(s.nav, s.navNext)}
-                aria-label={`Следующий месяц, ${MONTH_NAME.format(month)}`}
-                onClick={() => setView(index, new Date(month.getFullYear(), month.getMonth() + 1, 1))}
-              >
-                <Icon name="chevronDown" />
-              </button>
-            </div>
-
-            <table className={s.monthGrid}>
-              <thead>
-                <tr className={s.weekdays}>
-                  {WEEKDAYS.map((w) => <th key={w} scope="col" className={s.weekday}>{w}</th>)}
-                </tr>
-              </thead>
-              <tbody onMouseLeave={() => setHover('')}>
-                {weeks(month).map((week) => (
-                  <tr key={isoLocal(week[0])} className={s.week}>
-                    {week.map((date) => {
-                      const iso = isoLocal(date);
-                      const isStart = iso === from;
-                      const isEnd = iso === to;
-                      const middle = Boolean(lo && hi && iso > lo && iso < hi);
-                      /* Полоса на ячейке рисуется только тогда, когда с этой
-                         стороны есть к чему примыкать: у одиночной даты
-                         подпирать пилюлю нечем и не нужно. */
-                      const bandStart = iso === lo && Boolean(hi) && lo !== hi;
-                      const bandEnd = iso === hi && Boolean(lo) && lo !== hi;
-                      return (
-                        <td
-                          key={iso}
-                          className={cx(
-                            s.day,
-                            middle && s.dayMiddle,
-                            bandStart && s.dayStart,
-                            bandEnd && s.dayEnd,
-                          )}
-                        >
-                          <button
-                            type="button"
-                            data-day={iso}
-                            aria-pressed={isStart || isEnd}
-                            className={cx(
-                              s.dayBtn,
-                              date.getMonth() !== month.getMonth() && s.dayBtnOutside,
-                              iso === today && s.dayBtnToday,
-                              middle && s.dayBtnMiddle,
-                              (isStart || isEnd) && s.dayBtnEdge,
-                            )}
-                            onMouseEnter={() => setHover(iso)}
-                            onClick={() => pick(iso)}
-                          >
-                            {date.getDate()}
-                          </button>
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <CalendarMonth
+            key={index}
+            className={cx(index === 1 && s.monthSecond)}
+            month={month}
+            onMonth={(next) => setView(index, next)}
+            onPick={pick}
+            onHoverDay={setHover}
+            onLeave={() => setHover('')}
+            /* Что считать полосой, знает только диапазон: подложка ячейки —
+               его класс, а пилюля и «без фона» — флаги общей сетки. Так все
+               фоны кнопки остаются в одном файле и не спорят за
+               специфичность. */
+            dayState={(iso) => {
+              const middle = Boolean(lo && hi && iso > lo && iso < hi);
+              /* Полоса на ячейке рисуется только тогда, когда с этой стороны
+                 есть к чему примыкать: у одиночной даты подпирать пилюлю
+                 нечем и не нужно. */
+              const bandStart = iso === lo && Boolean(hi) && lo !== hi;
+              const bandEnd = iso === hi && Boolean(lo) && lo !== hi;
+              return {
+                td: cx(middle && s.dayMiddle, bandStart && s.dayStart, bandEnd && s.dayEnd),
+                selected: iso === from || iso === to,
+                plain: middle,
+              };
+            }}
+          />
         ))}
       </div>
     </div>

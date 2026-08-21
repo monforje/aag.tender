@@ -1,0 +1,59 @@
+/* ПАНЕЛЬ, ПРИВЯЗАННАЯ К КНОПКЕ. Это <dialog>, хотя ведёт себя как меню.
+   Причина одна: панель обязана выйти за пределы своего контейнера — из ячейки
+   таблицы, которая прокручивается по горизонтали и обрезает всё, что вылезло
+   за её край. Обрезка к z-index отношения не имеет, и верхний слой умеет
+   только <dialog>; от него же достаются Escape, клик мимо и возврат фокуса.
+
+   Взамен снимается всё, что делает <dialog> ОКНОМ: центрирование через
+   margin:auto, рамка и тёмная подложка. Координаты ставит на элемент сам
+   компонент — --pop-top и --pop-right замеряются по нажатой кнопке.
+
+   Запасные значения в var() не косметика: без них незаданная переменная даёт
+   `top: auto`, и панель уезжает в левый верхний угол.
+
+   Пишется ВСЯ четвёрка inset, а не только top и right. У `dialog:modal` в
+   UA-стилях стоит `inset: 0`, и незаданные left/bottom остаются нулями: при
+   заданной ширине коробка оказывается переопределена, а в этом споре по
+   правилам CSS выигрывает LEFT — панель прилипала к левому краю экрана,
+   сколько бы ни было в `right`. auto снимает спор. */
+.pop{
+  position: fixed; margin: 0;
+  inset: var(--pop-top, 12px) var(--pop-right, 12px) auto auto;
+  width: var(--pop-width, 232px); max-width: calc(100vw - 24px);
+  padding: 10px; border: 0; border-radius: var(--cu-radii-4);
+  background: var(--cu-background-main);
+  /* Ступень 4 С ХЭЙРЛАЙНОМ, в отличие от <Modal>: под панелью нет тёмной
+     подложки, и на белом одна тень не даёт краю читаться. */
+  box-shadow: var(--cu-elevation-border-4);
+  color: var(--cu-content-primary);
+  /* Появление и УХОД. Три строки после transform — это то, ради чего
+     анимация выпадашки обычно и не делается: display и overlay меняются
+     дискретно, и без allow-discrete браузер снимает <dialog> с верхнего слоя
+     мгновенно, обрывая исчезновение на первом кадре. @starting-style задаёт,
+     откуда начинать, — без него у только что вставленного элемента нет
+     предыдущего значения, и переходить не от чего. */
+  opacity: 0; transform: translateY(-6px) scale(.97); transform-origin: top right;
+  transition:
+    opacity var(--cu-animation-duration) var(--cu-animation-timing),
+    transform var(--cu-animation-duration) var(--cu-animation-timing),
+    overlay var(--cu-animation-duration) var(--cu-animation-timing) allow-discrete,
+    display var(--cu-animation-duration) var(--cu-animation-timing) allow-discrete;
+}
+.pop[open]{ opacity: 1; transform: none; }
+@starting-style{
+  .pop[open]{ opacity: 0; transform: translateY(-6px) scale(.97); }
+}
+/* Откинута вверх — значит и растёт снизу вверх: и точка роста, и направление
+   выезда переворачиваются, иначе панель «выпадает» из кнопки в ту сторону, с
+   которой её не открывали. Атрибут ставит компонент по замеру. */
+.pop[data-up]{ transform-origin: bottom right; transform: translateY(6px) scale(.97); }
+.pop[data-up][open]{ transform: none; }
+@starting-style{
+  .pop[data-up][open]{ opacity: 0; transform: translateY(6px) scale(.97); }
+}
+/* Подложка прозрачная: это меню, а не окно, — затемнять за ним нечего. Клик
+   по ней всё равно приходит на сам <dialog> и закрывает панель. */
+.pop::backdrop{ background: transparent; }
+/* showModal() переводит фокус на сам <dialog>, и браузер обводит его своим
+   кольцом — рамка вокруг всей панели, которой никто не просил. */
+.pop:focus, .pop:focus-visible{ outline: none; }

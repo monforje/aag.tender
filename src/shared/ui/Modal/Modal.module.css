@@ -1,0 +1,41 @@
+/* МОДАЛЬНОЕ ОКНО — нативный <dialog>. Фокус, Escape, подложка и верхний слой
+   достаются от платформы; здесь только внешность.
+
+   Reset проекта <dialog> не касается (он перечисляет теги поимённо), поэтому
+   собственные стили браузера — рамку, паддинг и центрирование через
+   margin:auto — снимаем сами. */
+.modal{
+  width: min(var(--modal-width, 520px), calc(100vw - 32px));
+  padding: 0; border: 0; border-radius: var(--cu-radii-6);
+  background: var(--cu-background-main);
+  /* Чистая тень, а НЕ --cu-elevation-border-4: у той первый слой работает
+     хэйрлайн-границей, и она нужна там, где белое лежит на белом (меню,
+     флайаут). Здесь под окном тёмная подложка — контур ей рисовать не от
+     чего, а на скруглённом углу он читался как лишняя рамка. */
+  box-shadow: var(--cu-elevation-4);
+  color: var(--cu-content-primary);
+}
+/* showModal() переводит фокус на сам <dialog>, и браузер обводит его своим
+   кольцом — рамка вокруг всего окна, которой никто не просил. Гасим здесь, а
+   фокус отдаём первой кнопке окна (autoFocus): пропадать ему нельзя. */
+.modal:focus, .modal:focus-visible{ outline: none; }
+.modal::backdrop{ background: rgba(32,32,32,.35); }
+
+/* ТЕЛО. Отдельной обёрткой, а не паддингом на самом <dialog>: клик по
+   подложке приходит с target === <dialog>, и без вложенного блока его не
+   отличить от клика по содержимому. Заодно здесь живёт вертикальный ритм
+   окна — 16px между блоками, — чтобы каждое следующее окно не изобретало
+   свой. */
+.modal__body{ display: flex; flex-direction: column; gap: 16px; padding: 16px; }
+
+/* Строка заголовка: <h2> и что угодно рядом с ним — капсула статуса, счётчик.
+   Перенос разрешён, иначе длинное имя выдавливает соседа за край. */
+.modal__head{ display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.modal__title{
+  font-size: 18px; line-height: 24px;
+  font-weight: var(--cu-font-weight-semibold); color: var(--cu-content-primary);
+}
+
+/* Действия вправо: у окна выход — последний шаг, и стоять он должен там, где
+   его ищет рука, а не на левом краю. */
+.modal__foot{ display: flex; justify-content: flex-end; }

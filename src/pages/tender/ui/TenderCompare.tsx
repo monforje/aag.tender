@@ -1,10 +1,12 @@
-import { useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useState, type CSSProperties, type ReactNode } from 'react';
 import { cx } from '@/shared/lib/cx';
 import { Badge, type Tone } from '@/shared/ui/Badge';
 import { Button } from '@/shared/ui/Button';
 import { Icon } from '@/shared/ui/Icon';
 import { ColorPicker } from '@/shared/ui/ColorPicker';
+import { Modal, modalPart } from '@/shared/ui/Modal';
 import { ScreenPlaceholder } from '@/shared/ui/Page';
+import { Popover } from '@/shared/ui/Popover';
 import { Table, tableCell } from '@/shared/ui/Table';
 import { VisuallyHidden } from '@/shared/ui/VisuallyHidden';
 import { plural } from '@/shared/lib/plural';
@@ -127,53 +129,13 @@ export function TenderCompare({ groups, contractors }: Comparison) {
   const [tint, setTint] = useState<Record<string, string>>({});
   const [starred, setStarred] = useState<string[]>([]);
   const [dossier, setDossier] = useState<Bid | null>(null);
-  const dialogRef = useRef<HTMLDialogElement>(null);
-  /* Палитра — ВТОРОЙ <dialog>, а не переключатель содержимого внутри первого:
-     открываются они из разных мест и закрываются независимо, а один <dialog>
-     на двоих означал бы ещё одно состояние «что сейчас показываем».
-     Именно <dialog>, хотя это выпадашка, а не окно: она падает из шапки
-     таблицы, а таблица прокручивается по горизонтали и обрезает всё, что
-     вылезло за её пределы, — никакой z-index этого не отменяет. Верхний слой
-     умеет только <dialog> (плюс от него же Escape и клик мимо). */
-  const [paint, setPaint] = useState<Bid | null>(null);
-  const paintRef = useRef<HTMLDialogElement>(null);
-
-
-  const openDossier = (bid: Bid) => {
-    setDossier(bid);
-    dialogRef.current?.showModal();
-  };
-
-  const openPaint = (bid: Bid, from: DOMRect) => {
-    const pop = paintRef.current;
-    if (!pop) return;
-    setPaint(bid);
-    /* Координаты ставятся ПРЯМО НА ЭЛЕМЕНТ, а не через состояние: showModal()
-       вызывается в этом же тике, до перерисовки, и панель успела бы открыться
-       со старыми координатами — а на первом открытии и вовсе без них, то есть
-       в левом верхнем углу.
-       Привязка правым краем, а не левым: панель растёт ВЛЕВО от кнопки,
-       которая стоит у правого края карточки, — по левому краю на последней
-       колонке она уехала бы за экран. */
-    /* Не ближе 12px к правому краю: таблица прокручивается по горизонтали, и
-       у последней колонки кнопка может стоять почти на самом краю — панель
-       вышла бы за экран целиком. */
-    pop.style.setProperty('--pop-right', `${Math.max(12, Math.round(window.innerWidth - from.right))}px`);
-    pop.style.setProperty('--pop-top', `${Math.round(from.bottom + 4)}px`);
-    pop.showModal();
-
-    /* Высота МЕРЯЕТСЯ, а не берётся константой: у закрытого <dialog> layout'а
-       нет вовсе (display:none), поэтому замер идёт сразу после showModal() —
-       в том же тике, до отрисовки, так что скачка не видно. Константа же
-       разъедется при первой правке пикера.
-       Если снизу не помещается — панель откидывается ВВЕРХ от кнопки. Шапка
-       таблицы стоит достаточно низко на странице, чтобы это был обычный
-       случай, а не край. */
-    const height = pop.offsetHeight;
-    const up = from.bottom + 4 + height > window.innerHeight - 12;
-    pop.toggleAttribute('data-up', up);
-    if (up) pop.style.setProperty('--pop-top', `${Math.max(12, Math.round(from.top - 4 - height))}px`);
-  };
+  /* Палитра — ВТОРАЯ панель, а не переключатель содержимого внутри досье:
+     открываются они из разных мест и закрываются независимо, а одна на двоих
+     означала бы ещё одно состояние «что сейчас показываем». И типы у них
+     разные: окно знает только «открыто», выпадашка — ещё и «откуда упала»,
+     поэтому её состояние хранит не флаг, а КП вместе с прямоугольником
+     нажатой кнопки. Механика обеих — в <Modal> и <Popover>.  */
+  const [paint, setPaint] = useState<{ bid: Bid; at: DOMRect } | null>(null);
 
   /* Цвет, с которого открывается окно: свой, если колонку уже красили, иначе
      вычисленный тон ранжира — пикеру нужно от чего оттолкнуться. */
@@ -247,8 +209,8 @@ export function TenderCompare({ groups, contractors }: Comparison) {
                       ? list.filter((id) => id !== bid.contractor.id)
                       : [...list, bid.contractor.id]
                   ))}
-                  onPaint={(from) => openPaint(bid, from)}
-                  onOpen={() => openDossier(bid)}
+                  onPaint={(at) => setPaint({ bid, at })}
+                  onOpen={() => setDossier(bid)}
                   collapsed={collapsed}
                   onFold={() => setCollapsed((on) => !on)}
                 />
@@ -348,42 +310,33 @@ export function TenderCompare({ groups, contractors }: Comparison) {
         })}
       </Table>
 
-      {/* Досье — нативный <dialog>: фокус заперт, Escape закрывает, подложка
-          рисуется браузером. Клик по подложке приходит на сам <dialog>
-          (содержимое лежит в .modal__body), и это единственный способ отличить
-          его от клика внутри окна. */}
-      <dialog
-        ref={dialogRef}
-        className={s.modal}
-        onClose={() => setDossier(null)}
-        onClick={(e) => { if (e.target === e.currentTarget) dialogRef.current?.close(); }}
-      >
+      {/* Досье. Содержимое рисуется, только когда окно открыто: иначе
+          <Dossier> держал бы в разметке предыдущего подрядчика, и на закрытии
+          было бы видно, как окно гаснет с чужим именем. */}
+      <Modal open={dossier !== null} onClose={() => setDossier(null)}>
         {dossier ? (
           <Dossier
             bid={dossier}
             total={positions.length}
-            onClose={() => dialogRef.current?.close()}
+            onClose={() => setDossier(null)}
           />
         ) : null}
-      </dialog>
+      </Modal>
 
-      {/* Палитра колонки. Выпадашка, а не окно: подложка прозрачная, клик мимо
-          закрывает (он приходит на сам <dialog>), Escape тоже. */}
-      <dialog
-        ref={paintRef}
-        className={s.pop}
-        aria-label="Цвет колонки"
+      {/* Палитра колонки — выпадашка из кнопки на карточке. */}
+      <Popover
+        anchor={paint?.at ?? null}
         onClose={() => setPaint(null)}
-        onClick={(e) => { if (e.target === e.currentTarget) paintRef.current?.close(); }}
+        label="Цвет колонки"
       >
         {paint ? (
           <Painter
-            value={paintValue(paint)}
-            onPick={(color) => setTint((all) => ({ ...all, [paint.contractor.id]: color }))}
-            onReset={() => setTint(({ [paint.contractor.id]: _, ...rest }) => rest)}
+            value={paintValue(paint.bid)}
+            onPick={(color) => setTint((all) => ({ ...all, [paint.bid.contractor.id]: color }))}
+            onReset={() => setTint(({ [paint.bid.contractor.id]: _, ...rest }) => rest)}
           />
         ) : null}
-      </dialog>
+      </Popover>
     </>
   );
 }
@@ -561,9 +514,9 @@ function Dossier({ bid, total, onClose }: { bid: Bid; total: number; onClose: ()
   const status = bidStatus(contractor.status);
 
   return (
-    <div className={s.modalBody}>
-      <header className={s.modalHead}>
-        <h2 className={s.modalTitle}>{contractor.name}</h2>
+    <>
+      <header className={modalPart.head}>
+        <h2 className={modalPart.title}>{contractor.name}</h2>
         <Badge tone={status.tone} icon={status.icon}>{status.label}</Badge>
       </header>
 
@@ -586,13 +539,13 @@ function Dossier({ bid, total, onClose }: { bid: Bid; total: number; onClose: ()
         Карточка подрядчика — история договоров, допуски и рейтинг — ещё не реализована.
       </p>
 
-      <footer className={s.modalFoot}>
+      <footer className={modalPart.foot}>
         {/* autoFocus, чтобы showModal() не оставлял фокус на самом <dialog>:
-            браузер рисует вокруг него своё кольцо, и это читалось как лишняя
-            рамка окна. */}
+            <Modal> гасит его кольцо, и без своей первой цели фокус пропал бы
+            из виду совсем. */}
         <Button variant="primary" autoFocus onClick={onClose}>Закрыть</Button>
       </footer>
-    </div>
+    </>
   );
 }
 

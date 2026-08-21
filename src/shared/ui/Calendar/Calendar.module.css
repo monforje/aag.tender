@@ -1,0 +1,153 @@
+/* Сетка месяца. ГЕОМЕТРИЯ ПЕРЕНЕСЕНА С shadcn/ui <Calendar> (new-york, v4)
+   один в один, без react-day-picker: у нас нет и не будет этой зависимости, а
+   нужен был именно её вид. Что взято дословно:
+
+     --cell-size: 2rem (32px)      размер клетки;
+     .month         gap-4          16px между шапкой месяца и сеткой;
+     .month-caption h-(--cell-size) px-(--cell-size) — 32px высоты и 32px полей
+                                   по бокам, чтобы под стрелками было место;
+     .caption-label text-sm/medium;
+     .weekday       flex-1, text-[.8rem], muted;
+     .week          mt-2           8px между неделями (строки — flex, поэтому
+                                   margin на них работает, хотя это <tr>);
+     .day           aspect-square, p-0, relative.
+
+   ЧТО ОТ НАС — только палитра, как и у <Table>: bg-primary → rgb(32,32,32),
+   bg-accent → --cu-fill, muted-foreground → --cu-content-tertiary, кольцо
+   фокуса — общее --cu-focus-ring. Иначе в приложении появилась бы вторая
+   несогласованная серая шкала.
+
+   ЭТОТ МОДУЛЬ ДЕРЖИТ ТОЛЬКО ОБЩЕЕ. Всё, что знает про СМЫСЛ выбранного дня
+   (пилюля одиночной даты, полоса диапазона), живёт у потребителя и приезжает
+   сюда классом через DayState. Поэтому здесь нет ни одного правила про
+   «выбрано» — иначе <DatePicker> и <RangeCalendar> начали бы спорить за него. */
+.month{ display: flex; flex-direction: column; gap: 16px; --cell-size: 2rem; }
+
+.month__caption{
+  position: relative; display: flex; align-items: center; justify-content: center;
+  height: var(--cell-size); padding-inline: var(--cell-size);
+}
+/* ВЫБОР МЕСЯЦА И ГОДА. Раскладка от shadcn (dropdowns: flex, gap-1.5, text-sm
+   font-medium), а вот сам список — наш, не нативный <select>: раскрытый
+   <option> рисует операционная система, и внутри аккуратной панели открывалось
+   меню чужой эпохи. Стилизовать его нельзя, поэтому список переехал в
+   <Popover> (разбор — в JSDoc CaptionSelect). */
+.dropdowns{
+  display: flex; height: var(--cell-size); align-items: center; justify-content: center;
+  gap: 6px; font-size: 14px; font-weight: var(--cu-font-weight-medium);
+}
+/* Кнопка-подпись: рамки и тени в покое НЕТ, в отличие от shadcn
+   (rounded-md border shadow-xs). Две обведённые коробки посреди панели читались
+   как поля формы — именно от них шло ощущение «старого». Здесь это ghost-кнопка
+   того же языка, что стрелки листания рядом: в покое просто текст, заливка по
+   наведению (рецепт 1). */
+.caption-select{
+  display: flex; align-items: center; gap: 4px;
+  height: var(--cu-size-7); padding-inline: 8px;
+  border-radius: var(--cu-radii-3);
+  font-size: 14px; font-weight: var(--cu-font-weight-medium);
+  color: var(--cu-content-primary); text-transform: capitalize; user-select: none;
+  transition: background-color var(--cu-animation-duration) var(--cu-animation-timing);
+}
+.caption-select:hover{ background: var(--cu-fill); }
+/* Пока список открыт, кнопка держит заливку: иначе связь «этот список
+   принадлежит этой кнопке» теряется, как только курсор ушёл в список. */
+.caption-select[aria-expanded=true]{ background: var(--cu-fill); }
+.caption-select:focus-visible{ outline: var(--cu-focus-ring); outline-offset: -2px; }
+.caption-chevron{ --icon-size: 14px; color: var(--cu-content-tertiary); }
+
+/* ПАНЕЛЬ СПИСКА. --pop-width читает сам <dialog> <Popover>, поэтому ширина
+   задаётся ЗДЕСЬ, классом на нём, а не переменной на списке внутри: кастомные
+   свойства наследуются вниз по DOM, и с потомка родителю их не передать.
+   Паддинг 4px вместо его 10px: у списка отступ рисуют сами пункты. */
+.caption-pop{ --pop-width: 150px; padding: 4px; }
+/* Сетка лет шире колонки месяцев: три клетки под четырёхзначное число. */
+.caption-pop--grid{ --pop-width: 188px; }
+/* Потолок высоты — двенадцать месяцев влезают целиком, двадцать один год
+   прокручивается. overscroll-behavior отрезает «протаскивание» прокрутки на
+   страницу под панелью, когда список докручен до края. */
+.option-list{
+  display: flex; flex-direction: column;
+  max-height: 264px; overflow-y: auto; overscroll-behavior: contain;
+}
+/* ГОДЫ — СЕТКОЙ. Двадцать один год колонкой требовал прокрутки ради самой
+   частой задачи: увидеть десятилетие и ткнуть. В три колонки те же годы
+   встают семью рядами и видны целиком — прокрутка остаётся только как
+   страховка, а не как обязательный жест.
+
+   Текст по центру клетки и tabular-nums: в столбце четырёхзначных чисел
+   пропорциональные цифры дают рваный левый край. */
+.option-list--grid{
+  display: grid; grid-template-columns: repeat(var(--option-columns, 3), 1fr);
+  gap: 2px;
+}
+.option-list--grid .option{
+  justify-content: center; padding-inline: 4px;
+  font-variant-numeric: tabular-nums;
+}
+.option{
+  display: flex; align-items: center;
+  height: var(--cu-size-7); padding-inline: 8px; border-radius: var(--cu-radii-3);
+  font-size: 13px; font-weight: var(--cu-font-weight-regular);
+  color: var(--cu-content-primary); text-transform: capitalize;
+  cursor: pointer; user-select: none;
+}
+.option:hover{ background: var(--cu-state-hover-subtle); }
+.option:focus-visible{ outline: var(--cu-focus-ring); outline-offset: -2px; }
+/* Выбранный — ступенью выше наведения (рецепт 2: текущее состояние тем же
+   фоном, без второго языка вроде жирного шрифта). */
+.option[aria-selected=true]{ background: var(--cu-state-hover); }
+
+/* Кнопка листания = ghost-кнопка shadcn в размер клетки: 32×32, радиус 6,
+   заливка по наведению. */
+.nav{
+  position: absolute; top: 0; display: flex; align-items: center; justify-content: center;
+  width: var(--cell-size); height: var(--cell-size);
+  border-radius: var(--cu-radii-3); color: var(--cu-content-secondary);
+  transition: background-color var(--cu-animation-duration) var(--cu-animation-timing);
+}
+.nav:hover{ background: var(--cu-fill); color: var(--cu-content-primary); }
+.nav:focus-visible{ outline: var(--cu-focus-ring); outline-offset: -2px; }
+/* Стрелки вбок — та же chevronDown, повёрнутая: отдельных «влево/вправо» в
+   наборе нет, а поворот сохраняет геометрию и толщину. size-4 у shadcn. */
+.nav--prev{ left: 0; --icon-size: 16px; transform: rotate(90deg); }
+.nav--next{ right: 0; --icon-size: 16px; transform: rotate(-90deg); }
+
+.month__grid{ width: 100%; border-collapse: collapse; }
+/* Строки таблицы сделаны флексом — так у shadcn, и только поэтому у .week
+   работает вертикальный отступ. */
+.weekdays{ display: flex; }
+.weekday{
+  flex: 1; font-size: .8rem; font-weight: var(--cu-font-weight-regular);
+  color: var(--cu-content-tertiary); user-select: none;
+}
+.week{ display: flex; width: 100%; margin-top: 8px; }
+.day{
+  position: relative; flex: 1; aspect-ratio: 1 / 1; padding: 0; text-align: center;
+  user-select: none;
+}
+.day-btn{
+  display: flex; align-items: center; justify-content: center;
+  width: 100%; height: 100%; min-width: var(--cell-size);
+  border-radius: var(--cu-radii-3);
+  font-size: 13px; font-weight: var(--cu-font-weight-regular); line-height: 1;
+  color: var(--cu-content-primary);
+  transition: background-color var(--cu-animation-duration) var(--cu-animation-timing);
+}
+.day-btn:hover{ background: var(--cu-fill); }
+.day-btn:focus-visible{ outline: var(--cu-focus-ring); outline-offset: -2px; z-index: 1; }
+/* Дни соседних месяцев: показываем и оставляем кликабельными, как у shadcn
+   (showOutsideDays), но приглушёнными. */
+.day-btn--outside{ color: var(--cu-content-placeholder); }
+/* ФОНЫ КНОПКИ — ТРИ ПРАВИЛА ПОДРЯД, И ПОРЯДОК ЗДЕСЬ ЗНАЧИМ. Все три —
+   одиночные классы, то есть одной специфичности, и спор между ними решает
+   порядок объявления. Держать их в одном файле подряд — единственный способ
+   этот порядок видеть; разъехались бы по модулям — решал бы порядок сборки.
+
+   сегодня  → выбран  → «без фона» (середина диапазона перебивает всё). */
+.day-btn--today{ background: var(--cu-fill); }
+/* Тёмная пилюля выбранного дня — bg-primary у shadcn. */
+.day-btn--selected{ background: rgb(32,32,32); color: #fff; }
+.day-btn--selected:hover{ background: rgb(58,58,58); }
+/* Кнопка отдаёт фон ячейке: сквозь неё видна полоса диапазона. */
+.day-btn--plain{ background: transparent; color: var(--cu-content-primary); }
