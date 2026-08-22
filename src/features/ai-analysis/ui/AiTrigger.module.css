@@ -1,50 +1,173 @@
-/* Кнопка-искра. Поверхность — анатомия IconButton variant="topbar": 28px,
-   радиус 7, заливка-таблетка по наведению (рецепт 1), кольцо фокуса
-   (рецепт 9). Собственная копия, а не сам <IconButton>: внутрь идёт
-   анимированный SVG, а не глиф из карты Icon; параметризовать примитив
+/* Кнопка «Анализ ИИ»: белая бирка 28px, ПРИКЛЕЕННАЯ вплотную под нижней
+   линией main header'а страницы (.main-header, полоса крошек): верхняя
+   грань лежит ровно на этой линии. СКОС — большой ВЫПУКЛЫЙ радиус левого
+   нижнего угла (12px): обычный border-radius, дуга наружу, как у бирки-
+   ярлыка; остальные углы почти прямые. Собственная копия, а не <IconButton>:
+   внутрь идёт анимированный текст + SVG-искра, параметризовать примитив
    можно будет со второго потребителя.
-   
-   РАЗМЕЩЕНИЕ ЗДЕСЬ НЕ ЖИВЁТ: позицию на строке заголовка задаёт страница
-   своим классом через className (см. .aiSlot в TenderSummary.module.css). */
+
+   НИКАКИХ КЛИПОВ И МАСОК — урок трёх итераций: клип режет собственную тень,
+   вогнутая маска гнёт угол внутрь, а выпуклый скос — это просто большой
+   border-radius одного угла. Поэтому у кнопки настоящий фон, рамка и тень,
+   всё рисуется нативно и одинаково в покое, при наведении и в компактном
+   виде (складывание до иконки радиус не ломает).
+
+   РАМКА И ТЕНИ. Хэйрлайн --cu-border-default по периметру; тень — ОДНА
+   тихая ступень (хэйрлайн внутри тени держит край). Наведение добавляет
+   кольцо (рецепт 4 каталога) и лёгкий подъём.
+
+   СКЛЕЙКА С ЛИНИЕЙ. Верхняя грань прижата к границе .main-header снизу;
+   тень светит вниз, стык белый-в-белый шва не имеет, линия шапки читается
+   непрерывной до самой бирки.
+
+   ПАНЕЛЬ ОТКРЫТА — БИРКА УШЛА (.isOpen → visibility:hidden): чат встаёт на
+   ту же линию правым краем, и двум «Анализ ИИ» на одном пятачке не место;
+   у панели свой крестик «Скрыть». Возврат фокуса после закрытия делает сам
+   компонент (см. .tsx).
+
+   ШИММЕР ПОДПИСИ — механика без швов:
+   градиент растянут на 200% ширины слова, оба его края — тёмный текст
+   (--cu-content-primary), в середине одна полоса спектра --cu-ai-*. При
+   повторе (background-repeat по умолчанию) тёмный край смыкается с тёмным —
+   шов невидим; анимация background-position 0% → 100% сдвигает слой ровно на
+   ширину одного тайла, поэтому цикл замыкается без рывка. Покрытие полное на
+   обоих концах: слово никогда не остаётся без заливки. Покой = статичный кадр
+   на 50% (тёмное слово, полоса у правого края) — это же состояние достаётся
+   prefers-reduced-motion.
+
+   РАЗМЕЩЕНИЕ ЗДЕСЬ НЕ ЖИВЁТ: координаты якоря задаёт страница своим классом
+   через className (см. .aiTrigger в TenderPage.module.css) — position у
+   компонента не задаётся вовсе. */
 .trigger{
-  display: flex; align-items: center; justify-content: center;
-  width: 28px; height: 28px; flex: none;
-  border-radius: 7px;
+  display: flex; align-items: center; gap: var(--cu-size-2);
+  height: 28px; flex: none;
+  padding: 0 10px 0 var(--cu-size-2);
+  background: var(--cu-background-main);
+  border: 1px solid var(--cu-border-default);
+  /* Скос — крупный выпуклый радиус левого нижнего угла; верхний левый
+     прямой: он прижат к линии шапки. */
+  border-radius: 0 var(--cu-radii-3) var(--cu-radii-3) var(--cu-radii-6);
+  /* Тень одна и тихая: хэйрлайн внутри неё держит край, подъёма нет. */
+  box-shadow: var(--cu-elevation-border-1);
+  font-size: var(--cu-text-base); font-weight: var(--cu-font-weight-medium);
+  line-height: var(--cu-leading-same);
   cursor: pointer;
-  transition: background-color var(--cu-animation-duration) var(--cu-animation-timing);
+  transition: gap var(--cu-animation-duration) var(--cu-animation-timing),
+              box-shadow var(--cu-animation-duration) var(--cu-animation-timing),
+              background-color var(--cu-animation-duration) var(--cu-animation-timing);
+
+  /* Темп двух живых слоёв задаётся переменными состояния (ниже): шиммер текста
+     и вращение искры читают их из SparkGlyph.module.css через наследование. */
+  --ai-shimmer-duration: 4.2s;
+  --ai-shimmer-play: running;
+  --ai-spin-duration: 6s;
+  --ai-spin-play: running;
 }
+/* Наведение: кольцо поверх хэйрлайна (белую поверхность заливать нечем) и
+   лёгкий подъём на одну ступень. */
 .trigger:hover{
-  background: var(--cu-state-hover);
-  /* Разгон переливания на отклик: та же механика, ускоренный кадр. */
+  box-shadow:
+    var(--cu-state-ring),
+    var(--cu-elevation-border-1),
+    var(--cu-elevation-2);
+  --ai-shimmer-duration: 1.4s;
   --ai-spin-duration: 3s;
 }
-.trigger:active{ background: var(--cu-state-hover-strong); }
+/* Нажатие: ОПАКЕТЫЙ тон той же ступени (--cu-fill — это rgba, он просвечивал
+   бы сквозь тень). */
+.trigger:active{
+  background: color-mix(in srgb, var(--cu-content-primary) 6%, var(--cu-background-main));
+}
 .trigger:focus-visible{
   outline: var(--cu-focus-ring);
   outline-offset: 2px;
 }
 
-/* Панель открыта: текущее состояние (рецепт 2) и стоп-кадр спектра —
-   внимание ушло внутрь панели. Отрицательная задержка кладёт стоп-кадр на
-   определённый угол (~40° при шестисекундном периоде), а не «где застыло». */
+/* Подпись: градиент обрезан по буквам, цвет прозрачный. Прячет переполнение
+   (колейка снаружи схлопывается) и сама уезжает вправо под укорачивающийся
+   край — см. .labelCol ниже. */
+.label{
+  overflow: hidden; white-space: nowrap;
+  background-image: linear-gradient(100deg,
+    var(--cu-content-primary) 0%, var(--cu-content-primary) 40%,
+    var(--cu-ai-a) 48%, var(--cu-ai-b) 54%, var(--cu-ai-c) 60%,
+    var(--cu-content-primary) 68%, var(--cu-content-primary) 100%);
+  background-size: 200% 100%;
+  background-position: 50% 0;             /* покой: тёмное слово, полоса у края */
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: ai-shimmer var(--ai-shimmer-duration) linear infinite;
+  animation-play-state: var(--ai-shimmer-play);
+  transition: transform var(--cu-animation-duration) var(--cu-animation-timing),
+              opacity var(--cu-animation-duration) var(--cu-animation-timing);
+}
+@keyframes ai-shimmer{
+  from{ background-position: 0% 0; }
+  to{   background-position: 100% 0; }
+}
+
+/* ── СКЛАДЫВАНИЕ ДО ИКОНКИ (.isCompact) -------------------------------------
+   Липкая шапка таблицы встаёт на ту же линию, где висит бирка, — подпись
+   уступает место: колейка схлопывается (рецепт 10 каталога состояний в
+   обратную сторону), текст уезжает ВПРАВО и тает, зазор до глифа гаснет.
+   Остаётся квадратик с искрой, шапке таблицы видно всё.
+
+   1fr → 0fr доезжает до ширины ПО СОДЕРЖИМОМУ без магического max-width;
+   overflow у внутренней колейки прячет текст, пока колонка уже слова. */
+.labelCol{
+  display: inline-grid;
+  grid-template-columns: 1fr;
+  min-width: 0;
+  transition: grid-template-columns var(--cu-animation-duration) var(--cu-animation-timing);
+}
+.isCompact .labelCol{ grid-template-columns: 0fr; }
+.isCompact{ gap: 0; }
+.isCompact .label{
+  transform: translateX(14px);
+  opacity: 0;
+}
+
+/* Панель открыта: бирка УБИРАЕТСЯ с линии — чат встаёт на ту же полосу
+   .main-header правым краем, и двум «Анализ ИИ» на одном пятачке не место
+   (у панели свой крестик «Скрыть»). visibility, а не display: мгновенно и без
+   участия раскладки; шиммер заодно ставится на паузу. */
 .isOpen{
-  background: var(--cu-state-hover-strong);
+  visibility: hidden;
+  --ai-shimmer-play: paused;
   --ai-spin-play: paused;
-  --ai-spin-delay: -0.67s;
 }
 
-/* Запрос в полёте: быстрое мерцание вместо спиннера — состояние машины
-   читается темпом того же глифа, второй индикатор не заводится. */
+/* Запрос в полёте: быстрое мерцание вместо спиннера — состояние машины читается
+   темпом того же спектра, второй индикатор не заводится. */
 .isThinking{
-  --ai-spin-duration: 0.9s;
+  --ai-shimmer-play: running;
+  --ai-shimmer-duration: 1s;
   --ai-spin-play: running;
-  --ai-spin-delay: 0s;
+  --ai-spin-duration: 0.9s;
 }
 
-/* Сбой: спектр обесцвечивается — цвет здесь означал жизнь запроса. */
-.isFailed{ --ai-spin-play: paused; }
+/* Сбой: спектр обесцвечивается — цвет здесь означал жизнь запроса. Гасится вся
+   «живая» часть (глиф + текст), поверхность капсулы не тронута. */
+.isFailed .label,
 .isFailed svg{ filter: saturate(0); }
+.isFailed{ --ai-shimmer-play: paused; }
 
-/* Вне экрана и на скрытой вкладке зацикленная анимация не должна жечь кадры:
+/* Вне экрана и на скрытой вкладке зацикленные анимации не должны жечь кадры:
    пауза атрибутом, который ставит IntersectionObserver/visibilitychange. */
-.trigger[data-offscreen]{ --ai-spin-play: paused; }
+.trigger[data-offscreen]{
+  --ai-shimmer-play: paused;
+  --ai-spin-play: paused;
+}
+
+/* prefers-reduced-motion: глобальный кламп global.css гасит ДЛИТЕЛЬНОСТИ и
+   число повторений, но кадр после такого «прогона» не гарантирован. Здесь
+   движение выключается явно: статичный градиент на покойной позиции — цвет
+   ИИ остался, движения нет. */
+@media (prefers-reduced-motion: reduce){
+  .trigger{ transition: none; }
+  .label{
+    animation: none;
+    background-position: 50% 0;
+  }
+}

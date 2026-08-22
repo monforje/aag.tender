@@ -1,0 +1,25 @@
+/* Стили тела досье (см. <DossierModal>). Само окно — <Modal> из shared/ui:
+   оболочка, подложка, тело и части заголовка живут там. Здесь только то, что
+   стоит ВНУТРИ и знает про подрядчика: сетка реквизитов и фраза о нерешённом. */
+
+/* Реквизиты в две колонки: значения короткие, и в один столбец окно вытянулось
+   бы вдвое, оставив половину ширины пустой. Подписи капителью — та же роль и
+   тот же рецепт, что у полей <TenderSummary>. */
+.facts{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; }
+.fact{ display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.fact__label{
+  font-size: 11px; line-height: 14px; font-weight: var(--cu-font-weight-medium);
+  text-transform: uppercase; letter-spacing: .04em;
+  color: var(--cu-content-secondary);
+}
+.fact__value{ font-size: 14px; line-height: 20px; font-variant-numeric: tabular-nums; }
+
+/* Честная фраза о том, чего ещё нет. Тот же смысл, что у <ScreenPlaceholder>,
+   но строкой: у того min-height 320px — он рассчитан на пустой ЭКРАН. */
+.note{
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: var(--cu-radii-4);
+  background: var(--cu-fill-subtle);
+  font-size: 13px; line-height: 18px; color: var(--cu-content-tertiary);
+}
+.note-icon{ --icon-size: 20px; color: var(--cu-content-quaternary); }

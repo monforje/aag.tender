@@ -25,6 +25,10 @@ export interface CellPopupTarget {
   data: CellPopupData;
 }
 
+/** Обработчики цели подсказки — общий тип всех брелоков ячеек: вешается
+ *  развёртыванием на кнопку-триггер рядом с пометкой. */
+export type CellPopupBind = (data: CellPopupData) => ComponentPropsWithoutRef<'button'>;
+
 /* Тайминги NN/g «Timing Guidelines for Exposing Hidden Content» (Д.5 аудита):
    показ после остановки курсора 350 мс — проход по столбцу не хлопает
    попапами; переезд между соседними целями мгновенный; сокрытие через 500 мс —
@@ -127,7 +131,7 @@ export function useCellPopup() {
   };
 
   /* Контейнер целей делегирует события; логика одна на всех целях. */
-  const bind = (data: CellPopupData): ComponentPropsWithoutRef<'button'> => ({
+  const bind: CellPopupBind = (data) => ({
     onMouseEnter: (e) => {
       const el = e.currentTarget;
       clearTimers();

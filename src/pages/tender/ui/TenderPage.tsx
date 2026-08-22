@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { Navigate, useParams } from 'react-router-dom';
 import { Breadcrumbs } from '@/shared/ui/Breadcrumbs';
 import { ScrollArea } from '@/shared/ui/ScrollArea';
@@ -54,21 +54,26 @@ const TABS: SecondaryTab[] = [
  *         пустая вкладка молча — хуже.
  *         Неизвестный номер уводит обратно в реестр, а не показывает пустую
  *         карточку: адрес с чужим id — это опечатка или мёртвая ссылка.
+ *         Чат «Анализ ИИ» живёт на каркасе, а не в потоке страницы: бирка-
+ *         триггер приклеена под нижней линией .main-header (полосы крошек),
+ *         панель выезжает справа ровно по этой полосе — линия её шапки и
+ *         шапки страницы одна; пока чат открыт, бирка спрятана, а закрыть
+ *         его можно крестиком «Скрыть» в шапке панели.
  *
- *         СОСТОЯНИЕ СРАВНЕНИЯ И ПАНЕЛИ «АНАЛИЗ» ЖИВЁТ ЗДЕСЬ, на странице:
- *         им делятся два потребителя — таблица (пресеты, ★) и док (сценарий
- *         просит пресет, карточка ведёт к строке). Ниже компонентов такое
- *         общее состояние не поднять без событий вверх; выше — не нужно.
- *         URL это состояние не ловит намеренно: мебель страницы, как вкладки
- *         и фильтры реестра. Черновик вопроса в доке переживает переключение
- *         вкладок (док смонтирован всегда) и умирает с уходом на другой
- *         тендер — осознанный долг уровня «фильтры не сохраняются».
+ *         СОСТОЯНИЕ СРАВНЕНИЯ И ЧАТА «АНАЛИЗ ИИ» ЖИВЁТ ЗДЕСЬ, на странице:
+ *         им делятся два потребителя — таблица (пресеты, ★) и док (ответы
+ *         про пару читают ★, действие в ответе ведёт к строке). Ниже
+ *         компонентов такое общее состояние не поднять без событий вверх;
+ *         выше — не нужно. URL это состояние не ловит намеренно: мебель
+ *         страницы, как вкладки и фильтры реестра. История чата переживает
+ *         переключение вкладок (док смонтирован всегда) и умирает с уходом
+ *         на другой тендер — осознанный долг уровня «фильтры не сохраняются».
  *
  * A11Y:   <PageHeader breadcrumb> снимает свой левый инсет — крошки несут его
  *         сами, чтобы попасть в общую колонку контента (12px). Единственный
  *         <h1> страницы живёт в <TenderSummary>: в шапке экрана заголовка
- *         нет, там крошки. Закрытие дока возвращает фокус на его триггер —
- *         ссылку держит страница.
+ *         нет, там крошки. Закрытие дока возвращает фокус на бейдж сам
+ *         триггер (preventScroll) — страница при этом не прокручивается.
  *
  * @example
  * <Route path="tenders/registry/:id" element={<TenderPage />} />
@@ -78,12 +83,18 @@ export function TenderPage() {
   const [tab, setTab] = useState(TABS[0].id);
   const tender = tenderById(id);
 
-  /* Срез сравнения, ★ и подсвеченная строка — общий слой таблицы и дока. */
+  /* Срез сравнения, ★ и подсвеченная строка — общий слой таблицы и дока.
+     aiThinking — «генерирует», прочитанное из дока наружу: триггер ускоряет
+     шиммер, пока чат отвечает. */
   const [view, setView] = useState<CompareView>({ preset: 'overview', ...PRESETS.overview });
   const [starred, setStarred] = useState<string[]>([]);
   const [focusRowId, setFocusRowId] = useState<string | null>(null);
   const [aiOpen, setAiOpen] = useState(false);
-  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [aiThinking, setAiThinking] = useState(false);
+  /* Липкая шапка сравнения стоит на верхней линии (прочитано из
+     <TenderCompare>) — в этот момент она делит полосу с биркой «Анализ ИИ»,
+     и та складывается до иконки. */
+  const [headStuck, setHeadStuck] = useState(false);
 
   if (!tender) return <Navigate to="/tenders/registry" replace />;
 
@@ -96,12 +107,9 @@ export function TenderPage() {
         ? list.filter((x) => x !== contractorId)
         : [...list, contractorId]
     ));
-  /* Фокус возвращается к кнопке-искре: закрытие из любого места панели
-     (крестик, Escape) оставляет пользователя там же, где он нажал. */
-  const closeAi = () => {
-    setAiOpen(false);
-    triggerRef.current?.focus();
-  };
+  /* Закрытие только гасит панель: фокус на бейдж возвращает САМ триггер
+     (preventScroll), поэтому закрытие не прокручивает страницу. */
+  const closeAi = () => setAiOpen(false);
 
   return (
     <Screen>
@@ -117,18 +125,7 @@ export function TenderPage() {
           сравнения нужен скроллблок СТРАНИЦЫ без прокручиваемых посредников
           и без своей полосы над линией (см. .module.css). */}
       <ScrollArea variant="page" className={s.scroll}>
-        <TenderSummary
-          tender={tender}
-          aside={
-            <AiTrigger
-              buttonRef={triggerRef}
-              open={aiOpen}
-              controlsId={AI_DOCK_ID}
-              onToggle={() => setAiOpen((v) => !v)}
-              className={s.aiTrigger}
-            />
-          }
-        />
+        <TenderSummary tender={tender} />
         <SecondaryHeader tabs={TABS} activeId={tab} onChange={setTab} variant="canvas" />
         {tab === 'compare' ? (
           /* Данные сравнения приходят СЮДА и уходят в раздел пропами: это
@@ -144,6 +141,9 @@ export function TenderPage() {
             onToggleStar={toggleStar}
             focusRowId={focusRowId}
             onFocusClear={() => setFocusRowId(null)}
+            /* Липкая шапка встала на линию — бирка «Анализ ИИ» складывается
+               до иконки (см. compact у <AiTrigger> ниже). */
+            onHeadStuckChange={setHeadStuck}
           />
         ) : (
           <ScreenPlaceholder icon="clipboardList">
@@ -152,16 +152,27 @@ export function TenderPage() {
         )}
       </ScrollArea>
 
-      {/* Док вне <ScrollArea>: fixed-позиционирование ведёт отсчёт от каркаса,
-          прокрутка страницы на него не влияет. Смонтирован всегда — черновик
-          вопроса живёт, пока живёт страница тендера. */}
+      {/* Триггер и док — вне <ScrollArea>: оба fixed, отсчёт ведут от каркаса,
+          прокрутка страницы на них не влияют. Бирка «Анализ ИИ» приклеена под
+          нижней линией .main-header (координаты — .aiTrigger в .module.css):
+          пока чат открыт — спрятана, а когда липкая шапка таблицы встаёт на
+          ту же линию — складывается до иконки (compact). Сам док смонтирован
+          всегда — история чата живёт, пока живёт страница тендера. */}
+      <AiTrigger
+        open={aiOpen}
+        thinking={aiThinking}
+        compact={headStuck && !aiOpen}
+        controlsId={AI_DOCK_ID}
+        onToggle={() => setAiOpen((v) => !v)}
+        className={s.aiTrigger}
+      />
       <AiDock
         open={aiOpen}
         onClose={closeAi}
         comparison={MOCK_COMPARISON}
         starred={starred}
         onFocusRow={setFocusRowId}
-        onRequestPreset={applyPreset}
+        onThinkingChange={setAiThinking}
       />
     </Screen>
   );

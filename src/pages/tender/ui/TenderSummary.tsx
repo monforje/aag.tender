@@ -1,8 +1,10 @@
-import { useState, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { cx } from '@/shared/lib/cx';
-import { dmyToIso } from '@/shared/lib/date';
-import { DatePicker } from '@/shared/ui/DatePicker';
-import { InlineInput } from '@/shared/ui/InlineInput';
+// Редактирование значений выключено до появления сохранения; вернуть вместе
+// с <InlineInput>/<DatePicker> в разметке ниже.
+// import { dmyToIso } from '@/shared/lib/date';
+// import { DatePicker } from '@/shared/ui/DatePicker';
+// import { InlineInput } from '@/shared/ui/InlineInput';
 import { Badge } from '@/shared/ui/Badge';
 import { Icon, type IconName } from '@/shared/ui/Icon';
 import { VisuallyHidden } from '@/shared/ui/VisuallyHidden';
@@ -38,10 +40,6 @@ const DUE_LEVEL: Record<DueMode, { className?: string; icon: IconName }> = {
  *         Понадобится такой же блок другому домену — сначала выносить в
  *         shared «карточку с полями», а не копировать этот файл: здесь
  *         доменного знания ровно на подбор четырёх полей.
- *
- *         Слот aside — правый край строки названия (сегодня кнопка «Анализ»).
- *         Сводка не знает, что в нём, и не должна: позиционирование — её
- *         забота (.headAside), содержимое — забота страницы.
  *
  * UX:     отвечает на вопросы в порядке их возникновения: что это (название) →
  *         в каком состоянии (статус) → где (объект) → когда (срок) → с кого
@@ -96,7 +94,7 @@ const DUE_LEVEL: Record<DueMode, { className?: string; icon: IconName }> = {
  * @example
  * <TenderSummary tender={tender} />
  */
-export function TenderSummary({ tender, aside }: { tender: TenderRow; aside?: ReactNode }) {
+export function TenderSummary({ tender }: { tender: TenderRow }) {
   const status = STATUS[tender.status];
   const due = bidsDue(tender);
   const level = DUE_LEVEL[due.mode];
@@ -115,18 +113,13 @@ export function TenderSummary({ tender, aside }: { tender: TenderRow; aside?: Re
           (0fr → 1fr), внутренний прячет текст, пока колейка схлопнута.
           Единственный способ доехать до ширины ПО СОДЕРЖИМОМУ без магического
           числа в max-width, которое разъедется на первом же длинном статусе.
-
-          Правый край строки отдан СЛОТУ (aside): сегодня там кнопка «Анализ»,
-          сводка про неё не знает ничего — она рисует чужой узел у своей
-          кромки. Слот вынут из потока (см. .headAside), поэтому раскрытие
-          капсулы по-прежнему не двигает соседей: рецепт 10 остаётся законным. */}
+          Справа от капсулы ничего нет — рецепт 10 остаётся законным. */}
       <div className={s.summaryHead}>
         <h1 className={s.summaryTitle} id={TITLE_ID}>{tender.title}</h1>
         <VisuallyHidden>Статус:</VisuallyHidden>
         <Badge className={s.status} tone={status.tone} icon={status.icon}>
           <span className={s.statusLabel}><span>{status.label}</span></span>
         </Badge>
-        {aside ? <span className={s.headAside}>{aside}</span> : null}
       </div>
 
       <dl className={s.summary} aria-labelledby={TITLE_ID} key={tender.id}>
@@ -135,7 +128,8 @@ export function TenderSummary({ tender, aside }: { tender: TenderRow; aside?: Re
             Приглушить сам разделитель больше нечем — подкрасить кусок текста
             внутри <input> нельзя; цена того, что «объект» стал редактируемым. */}
         <Field icon="buildings2" label="Объект">
-          <InlineInput label="Объект" value={`${tender.portfolio} · ${tender.project}`} />
+          {/* <InlineInput label="Объект" value={`${tender.portfolio} · ${tender.project}`} /> */}
+          {`${tender.portfolio} · ${tender.project}`}
         </Field>
 
         {/* Состояние срока несёт САМА дата, а не подпись рядом с ней: два
@@ -149,15 +143,18 @@ export function TenderSummary({ tender, aside }: { tender: TenderRow; aside?: Re
           label="Срок сбора КП"
           hint={due.hint}
         >
-          <DateValue label="Срок сбора КП" value={dmyToIso(tender.end)} />
+          {/* <DateValue label="Срок сбора КП" value={dmyToIso(tender.end)} /> */}
+          {tender.end}
         </Field>
 
         <Field icon="person" label="Ответственный">
-          <InlineInput label="Ответственный" value={tender.owner} />
+          {/* <InlineInput label="Ответственный" value={tender.owner} /> */}
+          {tender.owner}
         </Field>
 
         <Field icon="sledgehammer" label="Вид работ">
-          <InlineInput label="Вид работ" value={tender.kind} />
+          {/* <InlineInput label="Вид работ" value={tender.kind} /> */}
+          {tender.kind}
         </Field>
       </dl>
     </>
@@ -190,11 +187,14 @@ function Field({ icon, label, children, hint, className }: {
   );
 }
 
-/** Значение-дата. Состояние ЗДЕСЬ, а не в <TenderSummary>: <DatePicker>
+/* Значение-дата. Состояние ЗДЕСЬ, а не в <TenderSummary>: <DatePicker>
  *  управляемый, ему нужен value, а key={tender.id} стоит на <dl> — то есть
  *  граница пересоздания проходит ниже сводки, и состояние обязано лежать под
- *  ней, иначе на другом тендере останется дата предыдущего. */
+ *  ней, иначе на другом тендере останется дата предыдущей.
+ *
+ *  Выключено вместе с редактированием значений — пока дата читается текстом.
 function DateValue({ label, value }: { label: string; value: string }) {
   const [iso, setIso] = useState(value);
   return <DatePicker value={iso} onChange={setIso} label={label} />;
 }
+ */

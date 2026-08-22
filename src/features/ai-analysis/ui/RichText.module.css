@@ -1,0 +1,26 @@
+/* Тело ответа ассистента. Кегль и интерлиньяж НЕ задаются: их держит родитель
+   (.botBody в AiDock.module.css), RichText отвечает только за ритм блоков внутри. */
+
+.rich p{ margin-top: var(--cu-size-2); }
+.rich p:first-child{ margin-top: 0; }
+
+/* Список без маркеров reset'а — точка рисуется сама: 4px, цвет quaternary.
+   Отступ списка от текста меньше, чем между абзацами: пункты связаны общим
+   вступлением («Вот что стоит проверить»), и это одна мысль, а не две. */
+.rich ul{ margin-top: 6px; }
+.rich li{
+  position: relative;
+  padding-left: 14px;
+}
+.rich li + li{ margin-top: 4px; }
+.rich li::before{
+  content: '';
+  position: absolute; left: 2px; top: .55em;
+  width: 4px; height: 4px;
+  border-radius: var(--cu-radii-round);
+  background: var(--cu-content-quaternary);
+}
+
+/* Жирный — единственное выделение формата: имена позиций и суммы. Цвет
+   наследуется, вес semibold по шкале. */
+.rich strong{ font-weight: var(--cu-font-weight-semibold); }

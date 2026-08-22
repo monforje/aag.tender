@@ -14,8 +14,10 @@
   display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; height: 100%;
 }
 
+/* Высота полосы — токен --main-header-height: у неё второй потребитель,
+   панель «Анализ ИИ» выравнивает свою шапку по этой же линии (см. AiDock). */
 .main-header{
-  flex: 0 0 44px; height: 44px;
+  flex: 0 0 var(--main-header-height); height: var(--main-header-height);
   display: flex; align-items: center; justify-content: space-between;
   padding-inline: 8px;
   border-bottom: 1px solid var(--cu-border-default);

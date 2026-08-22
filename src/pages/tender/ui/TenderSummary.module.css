@@ -72,36 +72,8 @@
 .summary__head{
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--cu-size-3);
   margin-bottom: 12px;
-  /* Якорь слота .headAside и КОНТЕЙНЕР его узкого фолбэка: inline-size
-     containment не влияет ни на ширину полосы (она от родителя), ни на
-     высоту (растёт по содержимому, как и жила). */
-  position: relative;
-  container-type: inline-size;
 }
 
-/* --- СЛОТ ПРАВОГО КРАЯ (сегодня — кнопка «Анализ») -----------------------
-   Вне потока НАМЕРЕННО. В потоке правее капсулы статуса появилось бы
-   подвижное тело: раскрытие подписи (рецепт 10 выше) толкало бы кнопку
-   влево на ширину слова «Открыт» — ровно та уезжающая цель, против которой
-   написан запрет каталога. Изъятый из потока узел раскладку не интересует:
-   капсула раскрывается вправо в пустоту, как раньше, глиф стоит под
-   курсором, кнопка не двигается вовсе.
-
-   Узкий фолбэк — container query по самой полосе (не media: ширина важна
-   локальная): на тесном контейнере кнопка возвращается в поток последним
-   элементом строки. */
-.headAside{
-  position: absolute; right: 0; top: 50%;
-  transform: translateY(-50%);
-  display: flex;
-}
-@container (max-width: 559px){
-  .headAside{
-    position: static;
-    transform: none;
-    margin-left: auto;
-  }
-}
 .summary__title{
   font-size: 20px; line-height: 26px; font-weight: var(--cu-font-weight-semibold);
   color: var(--cu-content-primary);

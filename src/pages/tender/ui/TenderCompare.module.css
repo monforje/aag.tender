@@ -1,10 +1,20 @@
 /* Сравнение КП. Экрана-эталона нет — разбор решений в JSDoc компонента и в
    DESIGN-NOTES.md, Часть XII.
 
+   ОДИН МОДУЛЬ НА ВСЁ СЕМЕЙСТВО ТАБЛИЦЫ. Его импортируют TenderCompare,
+   CompareRow, SpreadCell, BidCell, TotalRow и ContractorCard: элементы сцеплены
+   составными селекторами (.card:hover .star, .group-toggle:has(.fold:hover),
+   .spread-none .spread-bar i) и переменной --col, а классы хэшируются
+   помодульно — разъехавшись по модулям, эти правила перестали бы совпадать
+   молча (см. CLAUDE.md, «Стили»; SKILL fsd-component, шаг 5). Границы
+   компонентов и границы стилей здесь не совпадают намеренно; стили досье и
+   палитры при этом живут в своих модулях — общих селекторов с таблицей у них
+   нет.
+
    ГЕОМЕТРИЯ ТАБЛИЦЫ ЗДЕСЬ НЕ ТРОГАЕТСЯ: её задаёт shared/ui/Table, а всё, что
    ему нужно знать про эту страницу, он получает модификатором ячейки
-   (tableCell.card). Ниже — только то, что живёт ВНУТРИ ячейки: карточка
-   подрядчика, её шкала и палитра колонки, плюс окно досье.
+   (tableCell.card). Ниже — только то, что живёт ВНУТРИ ячеек и строк: карточка
+   подрядчика, её шкала, пометки ячеек.
 
    --col — тон колонки, мост через границу модулей. Компонент ставит его
    инлайном (значение приходит из TONE_VAR) на .card и на <col>, а дальше его
@@ -376,48 +386,9 @@
 /* Незакрытая позиция и её устройства переехали в блок ПОМЕТКИ ЯЧЕЕК ниже:
    пробел данных теперь пунктирная рамка с подписью, а отказ — капсула. */
 
-/* --- ДОСЬЕ: СОДЕРЖИМОЕ ОКНА ----------------------------------------------
-   Само окно — <Modal> из shared/ui: оболочка, подложка, тело и части
-   заголовка живут там. Здесь только то, что стоит ВНУТРИ и знает про
-   подрядчика: сетка реквизитов и фраза о нерешённом. */
-/* Реквизиты в две колонки: значения короткие, и в один столбец окно вытянулось
-   бы вдвое, оставив половину ширины пустой. Подписи капителью — та же роль и
-   тот же рецепт, что у полей <TenderSummary>. */
-.facts{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; }
-.fact{ display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.fact__label{
-  font-size: 11px; line-height: 14px; font-weight: var(--cu-font-weight-medium);
-  text-transform: uppercase; letter-spacing: .04em;
-  color: var(--cu-content-secondary);
-}
-.fact__value{ font-size: 14px; line-height: 20px; font-variant-numeric: tabular-nums; }
-
-/* Честная фраза о том, чего ещё нет. Тот же смысл, что у <ScreenPlaceholder>,
-   но строкой: у того min-height 320px — он рассчитан на пустой ЭКРАН. */
-.note{
-  display: flex; align-items: center; gap: 10px;
-  padding: 10px 12px; border-radius: var(--cu-radii-4);
-  background: var(--cu-fill-subtle);
-  font-size: 13px; line-height: 18px; color: var(--cu-content-tertiary);
-}
-.note-icon{ --icon-size: 20px; color: var(--cu-content-quaternary); }
-
-
-/* --- ПАЛИТРА: СОДЕРЖИМОЕ ВЫПАДАШКИ ---------------------------------------
-   Сама выпадашка — <Popover> из shared/ui: верхний слой, привязка к кнопке и
-   откидывание вверх живут там. Здесь только подвал панели.
-
-   Ни заголовка, ни «Готово» у неё нет: чью колонку красим, видно по самой
-   колонке — она под панелью и меняется на глазах, — а закрывают панель кликом
-   мимо или Escape, как любое меню. */
-.pop__foot{ display: flex; justify-content: flex-end; margin-top: 8px; }
-.pop__reset{
-  padding: 4px 8px; border-radius: var(--cu-radii-3);
-  font-size: 12px; line-height: 16px; color: var(--cu-content-tertiary);
-  transition: background-color var(--cu-animation-duration) var(--cu-animation-timing);
-}
-.pop__reset:hover{ background: var(--cu-state-hover-subtle); color: var(--cu-content-primary); }
-.pop__reset:focus-visible{ outline: var(--cu-focus-ring); outline-offset: 1px; }
+/* Стили досье живут в DossierModal.module.css, палитры — в
+   ColumnPainter.module.css: у каждого окна свой модуль, общих селекторов с
+   таблицей у них нет. */
 
 /* ══════════════════════════════════════════════════════════════════════════
    ПОЛОСА УПРАВЛЕНИЯ И СЧЁТЧИКИ. Сама полоса живёт в CompareToolbar.module.css;
@@ -501,19 +472,24 @@
 
 /* Ключевая позиция — ключ ПРАВЕЕ названия, «воткнут наискосок», как ключ,
    оставленный в замке. Наклон — независимое свойство rotate, поэтому
-   key-turn (transform) его не затирает. */
+   key-turn (transform) его не затирает.
+   Переворот крутит SVG ВНУТРИ кнопки, а не саму кнопку: хит-тест следует
+   за трансформацией, и на perspective(90px) кнопка дважды за оборот
+   встаёт ребром — курсор покидает её, :hover падает, анимация рвётся
+   и заводится заново («колбасит»), попап дёргается вслед за mouseleave. */
 .key-mark{
   position: relative; display: inline-block;
   width: 28px; height: 18px; margin-left: 6px; vertical-align: -2px;
   rotate: -18deg; transform-origin: 50% 60%;
   cursor: help; color: var(--cu-tone-warning);
 }
-.key-mark svg{ display: block; width: 100%; height: 100%; overflow: visible; }
+.key-mark svg{ display: block; width: 100%; height: 100%; overflow: visible;
+  transform-origin: 50% 60%; }
 @keyframes key-turn{
   from{ transform: perspective(90px) rotateY(0deg) }
   to{ transform: perspective(90px) rotateY(360deg) }
 }
-.key-mark:hover{ animation: key-turn .7s cubic-bezier(.36,.07,.19,.97); }
+.key-mark:hover svg{ animation: key-turn .7s cubic-bezier(.36,.07,.19,.97); }
 
 /* Дороже медианы — «леденец» по середине высоты цены. Тон neutral-ink — самый
    тихий маркер: отсчёт, а не тревога и не возможность.
@@ -555,7 +531,7 @@
 /* Единая зона reduced-motion: все hover-анимации брелоков гасятся одним
    блоком. */
 @media (prefers-reduced-motion: reduce){
-  .tag:hover, .coin:hover, .key-mark:hover{ animation: none; }
+  .tag:hover, .coin:hover, .key-mark:hover svg{ animation: none; }
   .med-mark:hover [data-mk='rise'],
   .spread-mark:hover [data-mk='cap-l'],
   .spread-mark:hover [data-mk='cap-r']{ animation: none; }
