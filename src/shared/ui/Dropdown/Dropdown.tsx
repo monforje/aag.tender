@@ -30,28 +30,40 @@ interface DropdownProps {
    *  каждом содержимом) — фокус, о котором приходилось помнить в трёх местах
    *  сразу; теперь это свойство меню, а не забота его содержимого. */
   closeOnSelect?: boolean;
+  /** Куда ставит фокус открытие стрелками: в первый/последний пункт или в
+   *  отмеченный — меню одиночного выбора по APG открывается на текущем
+   *  значении, а не в начале списка. У длинных списков это же спасает от
+   *  прыжка прокрутки к первому пункту. */
+  initialFocus?: 'first' | 'last' | 'checked';
   className?: string;
   children: (trigger: DropdownTriggerProps) => ReactNode;
 }
 
 export function Dropdown({
-  open, onToggle, onClose, menu, menuAlign = 'right', closeOnSelect = true, className, children,
+  open, onToggle, onClose, menu, menuAlign = 'right', closeOnSelect = true,
+  initialFocus = 'first', className, children,
 }: DropdownProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   /* Куда вернуть фокус по Escape: триггер, с которого меню открыли. Запоминаем
      элемент в момент нажатия — рефом триггер не обязан быть. */
   const returnFocusRef = useRef<HTMLElement | null>(null);
-  const pendingFocus = useRef<'first' | 'last' | null>(null);
+  const pendingFocus = useRef<'first' | 'last' | 'checked' | null>(null);
 
   const items = (): HTMLElement[] =>
     [...(rootRef.current?.querySelectorAll<HTMLElement>('[role^="menuitem"]') ?? [])];
 
-  /* Открытие стрелками ставит фокус в первый/последний пункт — после того,
+  /* Открытие стрелками ставит фокус в пункт по initialFocus — после того,
      как меню реально отрендерится, поэтому через эффект. */
   useEffect(() => {
     if (!open || !pendingFocus.current) return;
-    const list = items();
-    (pendingFocus.current === 'last' ? list[list.length - 1] : list[0])?.focus();
+    if (pendingFocus.current === 'checked') {
+      const checked = rootRef.current
+        ?.querySelector<HTMLElement>('[role^="menuitem"][aria-checked="true"]');
+      (checked ?? items()[0])?.focus();
+    } else {
+      const list = items();
+      (pendingFocus.current === 'last' ? list[list.length - 1] : list[0])?.focus();
+    }
     pendingFocus.current = null;
   }, [open]);
 
@@ -84,7 +96,9 @@ export function Dropdown({
       e.preventDefault();
       if (!open) {
         returnFocusRef.current = e.currentTarget;
-        pendingFocus.current = e.key === 'ArrowUp' ? 'last' : 'first';
+        pendingFocus.current = initialFocus === 'checked'
+          ? 'checked'
+          : e.key === 'ArrowUp' ? 'last' : 'first';
         onToggle();
         return;
       }

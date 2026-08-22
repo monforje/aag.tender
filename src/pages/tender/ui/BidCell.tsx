@@ -2,6 +2,7 @@ import { type ReactNode } from 'react';
 import { cx } from '@/shared/lib/cx';
 import {
   cellMark, DEV_TOLERANCE, decimal, deviationPct, hasAnomaly, money, shownMetrics,
+  SPREAD_HIGH,
   type CompareView, type Contractor, type RowFacts,
 } from '@/entities/tender';
 import type { CellPopupBind, CellPopupData } from '@/shared/ui/CellPopup';
@@ -40,18 +41,24 @@ import s from './TenderCompare.module.css';
  * @example
  * <BidCell row={row} contractor={bid.contractor} view={view} bind={popup.bind} />
  */
-export function BidCell({ row, contractor, view, bind }: {
+export function BidCell({ row, contractor, view, bind, note, flash }: {
   row: RowFacts;
   contractor: Contractor;
   view: CompareView;
   bind: CellPopupBind;
+  /** Комментарий разбора к этой ячейке («почему важно / что делать»).
+   *  Приходит только ПОСЛЕ запуска анализа; до него попап показывает одни
+   *  числа — словарь пометок живёт в легенде (Р4). */
+  note?: string;
+  /** Обводка от перехода «анализ → таблица»: fade-in и ~5s fade-out (05 §7). */
+  flash?: boolean;
 }) {
   const { position } = row;
 
   /* Снятая строка схлопывается во всех КП: история, а не мусор. */
   if (position.removed) {
     return (
-      <td className={cx(tableCell.numeric, tableCell.roomy)}>
+      <td className={cx(tableCell.numeric, tableCell.roomy, flash && s.cellFlash)}>
         <span className={s.dash}>—</span>
       </td>
     );
@@ -61,10 +68,11 @@ export function BidCell({ row, contractor, view, bind }: {
   const price = contractor.prices[position.id];
 
   /* Отказ — решение подрядчика: нейтральная капсула. Не тревога и не пробел:
-     красить решение в danger — врать о его природе. */
+     красить решение в danger — врать о его природе. ИИ-комментария у отказа
+     не бывает (05 §4.3.4). */
   if (mark.declined) {
     return (
-      <td className={cx(tableCell.numeric, tableCell.roomy)}>
+      <td className={cx(tableCell.numeric, tableCell.roomy, flash && s.cellFlash)}>
         <span className={s.chip}>
           <Icon name="closeCircle" className={s.chipIcon} />
           Отказ
@@ -74,10 +82,10 @@ export function BidCell({ row, contractor, view, bind }: {
   }
 
   /* Пробел данных: пунктирная рамка внутри ячейки («место было, содержимого
-     нет») и тире. Отсутствие ключа — не ноль. */
+     нет») и тире. Отсутствие ключа — не ноль. Комментария не бывает. */
   if (price === undefined) {
     return (
-      <td className={cx(tableCell.numeric, tableCell.roomy, s.cellMissing)}>
+      <td className={cx(tableCell.numeric, tableCell.roomy, s.cellMissing, flash && s.cellFlash)}>
         <span className={s.dash}>—</span>
         <span className={tableCell.sub}>нет цены</span>
       </td>
@@ -127,8 +135,10 @@ export function BidCell({ row, contractor, view, bind }: {
     )),
   ];
 
-  /* Попапы пометок получают payload готовым — ничего не считают сами. */
-  const spreadFraction = row.spread === null ? 0 : Math.min(row.spread / 25, 1);
+  /* Попапы пометок получают payload готовым — ничего не считают сами.
+     Глоссарные фразы («что это вообще») ушли в легенду; note здесь —
+     только персональный комментарий разбора, когда он есть (Р4/слой 6). */
+  const spreadFraction = row.spread === null ? 0 : Math.min(row.spread / SPREAD_HIGH, 1);
   const minData: CellPopupData | null = isMin ? {
     tone: 'success',
     title: 'Минимальное значение',
@@ -150,14 +160,14 @@ export function BidCell({ row, contractor, view, bind }: {
     meter: row.spread === null
       ? undefined
       : { label: 'Разброс строки', value: `${decimal(row.spread)} %`, fraction: spreadFraction },
-    note: 'Лучшая цена среди НЕаномальных предложений строки.',
+    ...(note ? { note } : {}),
   } : null;
 
   const coinData: CellPopupData | null = mark.potential ? {
     tone: 'info',
     title: 'Заявленный запас торга',
     fields: [{ label: 'Запас торга', value: `+${money(mark.potential * qty)}`, tone: true }],
-    note: 'Сумма, которую подрядчик сам обозначил как возможную к скидке: вход в торг, а не вывод.',
+    ...(note ? { note } : {}),
   } : null;
 
   const medShown = mainMetric === 'price'
@@ -174,6 +184,8 @@ export function BidCell({ row, contractor, view, bind }: {
     meter: row.spread === null
       ? undefined
       : { label: 'Разброс строки', value: `${decimal(row.spread)} %`, fraction: spreadFraction },
+    /* Причина обязательна при аномалии и приходит ИЗ ДАННЫХ (контракт
+       CellMark): комментарий разбора её не подменяет. */
     note: mark.anomaly ?? '',
   };
 
@@ -213,7 +225,7 @@ export function BidCell({ row, contractor, view, bind }: {
                     { label: 'Значение', value: money(sum) },
                     { label: 'К медиане строки', value: dev === null ? '—' : pctSigned(dev) },
                   ],
-                  note: 'Цена выше медианы строки больше чем на 5 % — тот же порог, что красит отклонение.',
+                  ...(note ? { note } : {}),
                 })}
               >
                 <MedMark />
@@ -229,11 +241,11 @@ export function BidCell({ row, contractor, view, bind }: {
   if (!anomaly) {
     return (
       /* Штамп «МИН» — ПРЯМОЙ ребёнок td: .price держит position:relative
-         для монеты и перехватил бы абсолют у отметки (она оказалась бы на
-         цене). Контейнер координат — td (.cell--min): угол ячейки, поверх
-         потока. Триггер попапа — сам штамп: «шлёп» и объяснение появляются,
-         только когда курсор на нём. */
-      <td className={cx(tableCell.numeric, tableCell.roomy, isMin && s.cellMin)}>
+          для монеты и перехватил бы абсолют у отметки (она оказалась бы на
+          цене). Контейнер координат — td (.cell--min): угол ячейки, поверх
+          потока. Триггер попапа — сам штамп: «шлёп» и объяснение появляются,
+          только когда курсор на нём. */
+      <td className={cx(tableCell.numeric, tableCell.roomy, isMin && s.cellMin, flash && s.cellFlash)}>
         {body}
         {isMin && minData ? (
           <button
@@ -250,9 +262,11 @@ export function BidCell({ row, contractor, view, bind }: {
   }
 
   /* Аномалия: штриховка и рейка на ЯЧЕЙКЕ, триггер попапа — на содержимом:
-     фокусная цель обязана быть интерактивным элементом, а не ячейкой. */
+     фокусная цель обязана быть интерактивным элементом, а не ячейкой.
+     Обводка перехода ложится ПОВЕРХ штриховки через outline — оба сигнала
+     читаются одновременно (05 §7). */
   return (
-    <td className={cx(tableCell.numeric, tableCell.roomy, s.cellAnomaly)}>
+    <td className={cx(tableCell.numeric, tableCell.roomy, s.cellAnomaly, flash && s.cellFlash)}>
       <button
         type="button"
         className={s.anomalyTrigger}

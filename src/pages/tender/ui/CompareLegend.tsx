@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { IconButton } from '@/shared/ui/IconButton';
 import { Icon } from '@/shared/ui/Icon';
 import { Popover } from '@/shared/ui/Popover';
+import { DEV_TOLERANCE, SPREAD_HIGH, SPREAD_NOTICEABLE } from '@/entities/tender';
 import { AnomalyGlyph, CoinMark, KeyMark, MedMark } from './assets';
 import s from './CompareLegend.module.css';
 
@@ -91,21 +92,12 @@ export function CompareLegend() {
           <Item
             name="Разброс строки"
             text="Расхождение цен внутри позиции по трём ярусам шкалы."
-            sample={(
-              <span className={s.spreadDemo}>
-                {[['none', '< 7 %'], ['noticeable', '7–15 %'], ['high', '≥ 15 %']].map(([tone, cap]) => (
-                  <span key={tone} className={s.spreadRow}>
-                    <span className={s.spreadTrack}><i data-tone={tone} /></span>
-                    <span className={s.spreadCap}>{cap}</span>
-                  </span>
-                ))}
-              </span>
-            )}
+            sample={spreadTiers()}
           />
           <Item
             sample={<MedMark />}
             name="Дороже медианы"
-            text="Выше медианы более чем на 5 % — тот же порог, что красит отклонение."
+            text={`Выше медианы более чем на ${DEV_TOLERANCE} % — тот же порог, что красит отклонение.`}
           />
           <Item
             sample={<span className={s.shareTrack}><i style={{ width: '33%' }} /></span>}
@@ -115,6 +107,25 @@ export function CompareLegend() {
         </div>
       </Popover>
     </div>
+  );
+}
+
+/* Ярусы разброса подписываются ТЕМИ ЖЕ константами, что красят ячейки и
+   фильтр ([R4]): разъехаться подписи и цвету неоткуда. */
+function spreadTiers(): ReactNode {
+  return (
+    <span className={s.spreadDemo}>
+      {([
+        ['none', `< ${SPREAD_NOTICEABLE} %`],
+        ['noticeable', `${SPREAD_NOTICEABLE}–${SPREAD_HIGH} %`],
+        ['high', `≥ ${SPREAD_HIGH} %`],
+      ] as const).map(([tone, cap]) => (
+        <span key={tone} className={s.spreadRow}>
+          <span className={s.spreadTrack}><i data-tone={tone} /></span>
+          <span className={s.spreadCap}>{cap}</span>
+        </span>
+      ))}
+    </span>
   );
 }
 

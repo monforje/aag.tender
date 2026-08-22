@@ -1,0 +1,54 @@
+/* Вкладка «Раунды»: список кругов торгов. Экрана-эталона нет — решения
+   в JSDoc компонента; визуальный язык — капсулы статусов и тихие подписи,
+   те же, что на остальной карточке тендера. */
+
+.root{ display: flex; flex-direction: column; gap: 16px; }
+
+.head{
+  display: flex; align-items: center; gap: 12px;
+}
+.note{
+  flex: 1; min-width: 0;
+  font-size: var(--cu-text-sm); line-height: var(--cu-leading-normal);
+  color: var(--cu-content-secondary);
+}
+
+.list{
+  display: flex; flex-direction: column;
+  border: 1px solid var(--cu-border-default);
+  border-radius: var(--cu-radii-4);
+  background: var(--cu-background-main);
+  overflow: hidden;
+}
+.row{
+  display: flex; align-items: center; gap: 14px;
+  padding: 12px 14px;
+}
+.row + .row{ border-top: 1px solid var(--cu-border-default); }
+
+.roundTitle{
+  min-width: 84px;
+  font-size: var(--cu-text-base); line-height: var(--cu-leading-same);
+  font-weight: var(--cu-font-weight-semibold);
+}
+/* Текущий круг читается до чтения подписи статуса: тот же приём «текущего»,
+   что в истории чата и активной вкладке — заливка + вес. */
+.roundCurrent{
+  padding: 3px 10px;
+  margin-left: -10px;
+  border-radius: var(--cu-radii-round);
+  background: var(--cu-fill-subtle);
+}
+
+.meta{
+  flex: 1; min-width: 0;
+  font-size: var(--cu-text-sm); line-height: var(--cu-leading-normal);
+  color: var(--cu-content-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.act{ flex: none; }
+
+.foot{
+  font-size: var(--cu-text-xs); line-height: var(--cu-leading-normal);
+  color: var(--cu-content-tertiary);
+}

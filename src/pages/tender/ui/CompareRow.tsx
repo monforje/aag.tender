@@ -34,7 +34,7 @@ import s from './TenderCompare.module.css';
  * <CompareRow row={row} view={view} bids={bids} sumWeight={facts.sumWeight}
  *             bind={popup.bind} focused={focusRowId === row.position.id} />
  */
-export function CompareRow({ row, view, bids, sumWeight, bind, focused }: {
+export function CompareRow({ row, view, bids, sumWeight, bind, focused, noteFor, flashCells }: {
   row: RowFacts;
   view: CompareView;
   bids: Bid[];
@@ -42,10 +42,17 @@ export function CompareRow({ row, view, bids, sumWeight, bind, focused }: {
   bind: CellPopupBind;
   /** Подсвечена карточкой «Анализа»; клик по таблице снимает (<TenderCompare>). */
   focused: boolean;
+  /** Комментарии разбора по ячейкам: `${contractorId}:${positionId}` → фраза.
+   *  Пусто до запуска анализа (Р4). */
+  noteFor?: (contractorId: string, positionId: string) => string | undefined;
+  /** Ячейки с обводкой перехода: ключи тех же пар. Живут ~5 секунд. */
+  flashCells?: ReadonlySet<string>;
 }) {
   const { position } = row;
   const removed = position.removed === true;
   const share = sumWeight ? (row.weight / sumWeight) * 100 : 0;
+  const noteOf = (contractorId: string) => noteFor?.(contractorId, position.id);
+  const flashOf = (contractorId: string) => !!flashCells?.has(`${contractorId}:${position.id}`);
 
   return (
     <tr
@@ -58,8 +65,8 @@ export function CompareRow({ row, view, bids, sumWeight, bind, focused }: {
         {removed ? <s>{position.title}</s> : position.title}
 
         {/* Ключ — в ПРАВОЙ части имени: левый край всех строк остаётся единым.
-            Без title: нативная подсказка спорила бы с попапом, который объясняет
-            ту же пометку подробнее; имя для скринридера — aria-label. */}
+            Без title: нативная подсказка спорила бы с попапом; словарь пометки
+            живёт в легенде, комментарий разбора приходит в попап после запуска. */}
         {!removed && position.key ? (
           <button
             type="button"
@@ -69,7 +76,6 @@ export function CompareRow({ row, view, bids, sumWeight, bind, focused }: {
               tone: 'warning',
               title: 'Ключевая позиция',
               fields: [{ label: 'Вес строки', value: money(row.weight) }],
-              note: 'Наибольший вес в смете среза: цена здесь двигает итог сильнее остальных строк.',
             })}
           >
             <KeyMark />
@@ -113,6 +119,8 @@ export function CompareRow({ row, view, bids, sumWeight, bind, focused }: {
           contractor={bid.contractor}
           view={view}
           bind={bind}
+          note={noteOf(bid.contractor.id)}
+          flash={flashOf(bid.contractor.id)}
         />
       ))}
     </tr>

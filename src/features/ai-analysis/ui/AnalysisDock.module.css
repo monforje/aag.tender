@@ -1,0 +1,192 @@
+/* Содержимое панели «Анализ ИИ» (режим разбора). Оболочка — геометрия,
+   спектральная линия, плитка — живёт в AiDock.module.css и переиспользуется
+   импортом того же модуля: два режима одной панели обязаны совпадать
+   пиксельно, а копия правил разъехалась бы при первой правке. */
+
+.body{
+  flex: 1 1 auto; min-height: 0;
+  overflow-y: auto;
+  display: flex; flex-direction: column; gap: var(--cu-size-4);
+  padding: var(--cu-size-4) var(--cu-size-4) var(--cu-size-5);
+}
+
+/* ── до запуска ──────────────────────────────────────────────────────────── */
+/* Не <EmptyState>: панель одна знает про запуск, и её первый экран держит
+   ту же центровку, что у пустого чата, — смена режима не перетряхивает глаз. */
+.idle{
+  margin: auto 0;
+  display: flex; flex-direction: column; align-items: center;
+  text-align: center;
+  padding: var(--cu-size-6) var(--cu-size-2);
+}
+.idleTile{ width: 40px; height: 40px; margin-bottom: 12px; }
+.idleTitle{
+  font-size: var(--cu-text-lg); font-weight: var(--cu-font-weight-medium);
+  line-height: var(--cu-leading-tight);
+}
+.idleSub{
+  margin-top: 6px; margin-bottom: 16px; max-width: 280px;
+  font-size: var(--cu-text-sm); line-height: var(--cu-leading-normal);
+  color: var(--cu-content-secondary);
+}
+
+.loading{
+  display: flex; flex-direction: column; gap: var(--cu-size-3);
+  padding-top: var(--cu-size-2);
+}
+
+/* ── плашка устаревания ──────────────────────────────────────────────────── */
+.stale{
+  display: flex; align-items: center; gap: var(--cu-size-3);
+  padding: 10px 10px 10px 12px;
+  border-radius: var(--cu-radii-3);
+  background: var(--cu-tone-warning-fill);
+}
+.staleText{
+  flex: 1; min-width: 0;
+  font-size: var(--cu-text-sm); line-height: var(--cu-leading-normal);
+  color: var(--cu-content-primary);
+}
+.snapshotNote{
+  font-size: var(--cu-text-xs); line-height: var(--cu-leading-same);
+  text-transform: uppercase; letter-spacing: .06em;
+  color: var(--cu-content-tertiary);
+}
+
+/* ── выбор раунда в шапке (тихий дропдаун вместо сегмента) ────────────────── */
+/* Триггер без поверхности в покое: в шапке рядом с двумя тихими IconButton
+   рамка или заливка читались бы третьим весом. Значение medium — его и читают
+   как состояние контрола; caret tertiary. */
+.roundsTrigger{
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 28px; padding: 0 8px;
+  border-radius: var(--cu-radii-3);
+  font-size: 13px; white-space: nowrap;
+  font-weight: var(--cu-font-weight-medium);
+  transition: background-color var(--cu-animation-duration) var(--cu-animation-timing);
+}
+.roundsTrigger:hover{ background: var(--cu-state-hover-subtle); }
+.roundsTrigger:focus-visible{ outline: var(--cu-focus-ring); outline-offset: 1px; }
+.roundsCaret{
+  --icon-size: 14px;
+  color: var(--cu-content-tertiary);
+}
+/* Потолок списка: раунды — открытый список, у сотого круга меню растёт вниз
+   до бесконечности без него. Дальше прокрутка внутри меню, а не рост шапки. */
+.roundsList{
+  display: flex; flex-direction: column; gap: 2px;
+  max-height: 264px;
+  overflow-y: auto;
+}
+
+/* ── сводка-якоря ────────────────────────────────────────────────────────── */
+.summary{ display: flex; flex-direction: column; gap: 4px; }
+.summaryItem{
+  display: flex; align-items: center; gap: var(--cu-size-2);
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: var(--cu-radii-3);
+  background: var(--cu-fill-subtle);
+  font-size: var(--cu-text-sm); line-height: var(--cu-leading-normal);
+  text-align: left;
+  transition: background-color var(--cu-animation-duration) var(--cu-animation-timing);
+}
+.summaryItem:hover{ background: var(--cu-state-hover); }
+.summaryItem:focus-visible{ outline: var(--cu-focus-ring); outline-offset: -1px; }
+.summaryItem > span{ flex: 1; min-width: 0; }
+.summaryIcon{
+  --icon-size: 12px;
+  flex: none;
+  color: var(--cu-content-tertiary);
+}
+
+/* ── секции: свёрнуты по умолчанию (05 §4) ───────────────────────────────── */
+.sec{
+  border-top: 1px solid var(--cu-border-default);
+  scroll-margin-top: var(--cu-size-4);   /* якорь не прячется под шапку панели */
+}
+.secHead{
+  display: flex; align-items: center; gap: var(--cu-size-2);
+  width: 100%;
+  padding: 10px 2px;
+  cursor: pointer;
+  list-style: none;                        /* маркер свой, поворотный */
+}
+.secHead::-webkit-details-marker{ display: none; }
+.secTitle{
+  flex: 1; min-width: 0;
+  font-size: 13px; line-height: 18px;
+  font-weight: var(--cu-font-weight-semibold);
+}
+.secChevron{
+  --icon-size: 14px;
+  flex: none;
+  color: var(--cu-content-tertiary);
+  transition: transform var(--cu-animation-duration) var(--cu-animation-timing);
+}
+.sec[open] > .secHead .secChevron{ transform: rotate(180deg); }
+.secHead:hover .secTitle{ color: inherit; }   /* заголовок не мигает серым */
+
+.list{
+  display: flex; flex-direction: column; gap: var(--cu-size-4);
+  padding: 2px 2px var(--cu-size-4);
+}
+
+/* ── пункт разбора ───────────────────────────────────────────────────────── */
+.item{ display: flex; flex-direction: column; gap: 4px; }
+.itemTitle{
+  font-size: var(--cu-text-sm); line-height: var(--cu-leading-normal);
+  color: var(--cu-content-primary);
+}
+.itemDetail{
+  font-size: var(--cu-text-xs); line-height: var(--cu-leading-normal);
+  color: var(--cu-content-secondary);
+}
+/* Слот модели: искра отделяет интерпретацию от факта — тот же язык, что у
+   плитки в шапке. Тertiary читается как голос поверх данных, не вместо них. */
+.itemNote{
+  display: flex; align-items: flex-start; gap: 6px;
+  font-size: var(--cu-text-xs); line-height: var(--cu-leading-normal);
+  color: var(--cu-content-secondary);
+}
+.noteSpark{ flex: none; margin-top: 2px; }
+
+/* Кликабельная сущность (05 §6): видна без наведения — пунктир + мягкий
+   красный; числа сами по себе не подчёркиваются. */
+.ref{
+  color: var(--cu-tone-danger-ink);
+  border-bottom: 1px dashed currentColor;
+  cursor: pointer;
+  transition: background-color var(--cu-animation-duration) var(--cu-animation-timing);
+}
+.ref:hover{ background: var(--cu-state-hover-subtle); }
+.ref:focus-visible{
+  outline: var(--cu-focus-ring); outline-offset: 1px;
+  border-radius: var(--cu-radii-1);
+}
+
+/* ── общая картина раунда: фиксированный набор показателей ───────────────── */
+.meta{ display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.metaRow{
+  display: grid; grid-template-columns: 118px minmax(0, 1fr);
+  gap: var(--cu-size-3);
+  align-items: baseline;
+}
+.metaRow dt{
+  font-size: 11px; line-height: 14px;
+  font-weight: var(--cu-font-weight-medium);
+  text-transform: uppercase; letter-spacing: .06em;
+  color: var(--cu-content-tertiary);
+}
+.metaRow dd{
+  font-size: var(--cu-text-sm); line-height: var(--cu-leading-normal);
+  font-variant-numeric: tabular-nums;
+  color: var(--cu-content-primary);
+}
+
+.disclaimer{
+  border-top: 1px solid var(--cu-border-default);
+  padding-top: var(--cu-size-3);
+  font-size: var(--cu-text-xs); line-height: var(--cu-leading-normal);
+  color: var(--cu-content-tertiary);
+}

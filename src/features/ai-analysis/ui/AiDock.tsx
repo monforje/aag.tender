@@ -127,6 +127,7 @@ const withSession = (
  */
 export function AiDock({
   open, onClose, comparison, starred, onFocusRow, onThinkingChange,
+  stub = false, onBackToAnalysis,
 }: {
   open: boolean;
   onClose: () => void;
@@ -138,6 +139,15 @@ export function AiDock({
   onFocusRow: (rowId: string | null) => void;
   /** Генерация началась/закончилась — триггер ускоряет шиммер (thinking). */
   onThinkingChange?: (thinking: boolean) => void;
+
+  /* ── NON-REALIZED ──────────────────────────────────────────────────────────
+     Свободный вопрос вынесен за контур (05 §10, инбокс 21.08.2026 §3): чат
+     остаётся в продукте одной кнопкой панели разбора, но композер заменён
+     заглушкой «скоро будет реализовано». Код ответчика сохранён как есть. */
+  /** Режим витрины: ввода нет, подсказки выключены. */
+  stub?: boolean;
+  /** Возврат в режим разбора — кнопка в шапке рядом со «Скрыть». */
+  onBackToAnalysis?: () => void;
 }) {
   const headingRef = useRef<HTMLHeadingElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -381,6 +391,14 @@ export function AiDock({
           Анализ ИИ
         </h2>
         <div className={s.headActions}>
+          {onBackToAnalysis ? (
+            <IconButton
+              variant="panel"
+              icon="reply"
+              label="К разбору тендера"
+              onClick={onBackToAnalysis}
+            />
+          ) : null}
           <IconButton
             variant="panel"
             icon="clock"
@@ -417,13 +435,20 @@ export function AiDock({
               Отвечаю по данным текущего среза: риски и аномалии, запасы торга,
               пробелы в КП, разница между подрядчиками.
             </p>
-            <div className={s.suggestions}>
-              {SUGGESTIONS.map((question) => (
-                <button key={question} type="button" className={s.chip} onClick={() => send(question)}>
-                  {question}
-                </button>
-              ))}
-            </div>
+            {stub ? (
+              <div className={s.soon} role="note">
+                Свободный вопрос — вне текущего контура. Разбор тендера живёт
+                на соседней вкладке панели.
+              </div>
+            ) : (
+              <div className={s.suggestions}>
+                {SUGGESTIONS.map((question) => (
+                  <button key={question} type="button" className={s.chip} onClick={() => send(question)}>
+                    {question}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         ) : (
           <>
@@ -505,7 +530,15 @@ export function AiDock({
         )}
 
         {/* Композер. form — чтобы Enter в одиночной строке работал нативно;
-            onKeyDown всё равно перехватывает Enter раньше submit. */}
+            onKeyDown всё равно перехватывает Enter раньше submit.
+            NON-REALIZED: в витринном режиме вместо композера — заглушка. */}
+        {stub ? (
+          <div className={s.soonPlate} role="note">
+            <span className={s.soonTitle}>Скоро будет реализовано</span>
+            Свободный вопрос к анализу вынесен за текущий контур. Пользуйтесь
+            разбором — он закрывает базовые вопросы по тендеру.
+          </div>
+        ) : (
         <form
           className={s.composer}
           onSubmit={(e) => { e.preventDefault(); send(); }}
@@ -547,6 +580,7 @@ export function AiDock({
             </button>
           )}
         </form>
+        )}
       </div>
     </aside>
   );

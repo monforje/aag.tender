@@ -65,12 +65,12 @@ assert.ok(anomalyCard, 'карточка аномалии существует')
 assert.equal(anomalyCard.rowId, 'm2');
 assert.match(anomalyCard.text, /доставку|сортамент/);
 
-// Высоких разбросов четыре (m2/m3/w3/g2) — сводная карточка считает их той же
-// константой порога, что и фильтр таблицы.
+// Высоких разбросов две при продуктовых порогах (w3/g2 ≥ 40 %) — сводная
+// карточка считает их той же константой порога, что и фильтр таблицы.
 const spreadCard = anomalies.find((i) => i.title.startsWith('Высокий разброс'));
 assert.ok(spreadCard, 'карточка разброса существует');
-assert.match(spreadCard!.title, /4 позиции/);
-assert.equal(spreadCard!.rowId, 'm2');
+assert.match(spreadCard!.title, /2 позиции/);
+assert.equal(spreadCard!.rowId, 'w3');
 
 /* ── Пара ★: сравнение и выборка ──────────────────────────────────────────── */
 
@@ -83,9 +83,9 @@ const pair = deriveInsights(GROUPS, CONTRACTORS, ['ms', 'ig']);
 const compareCard = pair.find((i) => i.scenario === 'compare')!;
 assert.ok(compareCard, 'карточка пары существует');
 // Знак — направление от первой ★ ко второй: ИнженерГрупп ДОРОЖЕ МетСнаба на
-// 307 600 ₽ (разница итогов из REFERENCE comparison.check), поэтому «+» и
+// 558 410 ₽ (разница итогов из REFERENCE comparison.check), поэтому «+» и
 // «МетСнаб дешевле». Правка расценки без правки здесь уронит тест.
-assert.match(compareCard.title, /\+307.600/);
+assert.match(compareCard.title, /\+558.410/);
 assert.equal(compareCard.tone, 'neutral');
 // Вклад позиции — разница закрытых ОБЕИМЬ сторонами расценок × объём.
 // Крупнейший вклад пары ms/ig — арматура m2: (45 869 − 42 067) × 100 =

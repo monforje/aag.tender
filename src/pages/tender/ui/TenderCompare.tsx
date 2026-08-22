@@ -76,6 +76,8 @@ export function TenderCompare({
   starred, onToggleStar,
   focusRowId, onFocusClear,
   onHeadStuckChange,
+  noteFor, flashCells, flashCols,
+  analysisApplied, onRestoreView,
 }: Comparison & {
   /* Состояние среза ПОДНЯТО на страницу: им делятся таблица и панель «Анализ»
      (сценарий просит пресет, карточка ведёт к строке). Компонент остаётся
@@ -83,7 +85,7 @@ export function TenderCompare({
   view: CompareView;
   onPreset: (preset: PresetId) => void;
   onPatch: (patch: Partial<Omit<CompareView, 'preset'>>) => void;
-  /** Избранные ★ читаются и пишутся наружу по той же причине. */
+  /** Избранные ★ подрядчики читаются и пишутся наружу по той же причине. */
   starred: string[];
   onToggleStar: (contractorId: string) => void;
   /** Строка, подсвеченная по карточке «Анализа»; клик по таблице снимает. */
@@ -93,6 +95,16 @@ export function TenderCompare({
       — наружу бейджу «Анализ ИИ»: в этот момент он висит прямо над шапкой
       таблицы и складывается до иконки. */
   onHeadStuckChange?: (stuck: boolean) => void;
+  /** Комментарии разбора к ячейкам (`${contractorId}:${positionId}`):
+      пусто до запуска анализа — попапы показывают одни числа (Р4). */
+  noteFor?: (contractorId: string, positionId: string) => string | undefined;
+  /** Обводка перехода «анализ → таблица» (05 §7): ключи ячеек тех же пар
+      и id колонок при фокусе только на подрядчике. Живут ~5 секунд. */
+  flashCells?: ReadonlySet<string>;
+  flashCols?: ReadonlySet<string>;
+  /** Вид перестроен разбором: чип «Вернуть мой вид» вместо обычного сброса. */
+  analysisApplied?: boolean;
+  onRestoreView?: () => void;
 }) {
   /* Плоский список позиций и ранжир ВЫВОДЯТСЯ из пришедшего, а не приходят
       полями: два перечня одних и тех же строк разъехались бы на первой правке.
@@ -160,6 +172,8 @@ export function TenderCompare({
           view={view}
           allRows={facts.rows}
           modified={modified}
+          analysisApplied={analysisApplied}
+          onRestoreView={onRestoreView}
           onPreset={onPreset}
           onPatch={onPatch}
         />
@@ -207,21 +221,25 @@ export function TenderCompare({
               <th scope="col" className={tableCell.numeric}>Количество</th>
               <th scope="col">Единица</th>
               <th scope="col" className={tableCell.numeric}>Разброс</th>
-              {bids.map((bid) => (
-                <th scope="col" key={bid.contractor.id} className={tableCell.card}>
-                  <ContractorCard
-                    bid={bid}
-                    total={positions.length}
-                    col={choose(tint, bid)}
-                    starred={starred.includes(bid.contractor.id)}
-                    onStar={() => onToggleStar(bid.contractor.id)}
-                    onPaint={(at) => setPaint({ bid, at })}
-                    onOpen={() => setDossier(bid)}
-                    collapsed={collapsed}
-                    onFold={() => setCollapsed((on) => !on)}
-                  />
-                </th>
-              ))}
+            {bids.map((bid) => (
+              <th
+                scope="col"
+                key={bid.contractor.id}
+                className={cx(tableCell.card, flashCols?.has(bid.contractor.id) && s.colFlash)}
+              >
+                <ContractorCard
+                  bid={bid}
+                  total={positions.length}
+                  col={choose(tint, bid)}
+                  starred={starred.includes(bid.contractor.id)}
+                  onStar={() => onToggleStar(bid.contractor.id)}
+                  onPaint={(at) => setPaint({ bid, at })}
+                  onOpen={() => setDossier(bid)}
+                  collapsed={collapsed}
+                  onFold={() => setCollapsed((on) => !on)}
+                />
+              </th>
+            ))}
             </tr>
           </thead>
 
@@ -284,6 +302,8 @@ export function TenderCompare({
                       sumWeight={facts.sumWeight}
                       bind={popup.bind}
                       focused={focusRowId === row.position.id}
+                      noteFor={noteFor}
+                      flashCells={flashCells}
                     />
                   )) : null}
 
@@ -307,6 +327,8 @@ export function TenderCompare({
                     sumWeight={facts.sumWeight}
                     bind={popup.bind}
                     focused={focusRowId === row.position.id}
+                    noteFor={noteFor}
+                    flashCells={flashCells}
                   />
                 ))}
             </tbody>

@@ -38,6 +38,11 @@ interface ToolbarProps {
    *  пропустит ЭТОТ предикат на всех данных (§4 аудита). */
   allRows: RowFacts[];
   modified: boolean;
+  /** Вид перестроен переходом «анализ → таблица»: чип с ВОЗВРАТОМ полного
+   *  пользовательского вида (05 §7). Старый «Изменён · Сброс» при этом молчит:
+   *  два чипа про один уход от базы — забор. */
+  analysisApplied?: boolean;
+  onRestoreView?: () => void;
   onPreset: (preset: PresetId) => void;
   /** Ручное движение по одной из осей состояния — пресет не сбрасывается,
    *  но поднимает флаг «изменён». */
@@ -62,7 +67,9 @@ interface ToolbarProps {
  *         возвратом фокуса на триггер); мультивыбор сериями —
  *         closeOnSelect={false}.
  */
-export function CompareToolbar({ view, allRows, modified, onPreset, onPatch }: ToolbarProps) {
+export function CompareToolbar({
+  view, allRows, modified, analysisApplied, onRestoreView, onPreset, onPatch,
+}: ToolbarProps) {
   return (
     <DropdownGroup>
       <div className={s.bar}>
@@ -81,8 +88,20 @@ export function CompareToolbar({ view, allRows, modified, onPreset, onPatch }: T
         />
 
         {/* Д.2: любое ручное движение поднимает чип. Единственное его действие —
-            повторное применение текущего пресета, то есть возврат к базе. */}
-        {modified ? (
+            повторное применение текущего пресета, то есть возврат к базе.
+            Чип «Вид изменён анализом» сильнее: он восстанавливает ВЕСЬ вид
+            пользователя до перехода и пока он висит, этот — спрятан. */}
+        {analysisApplied && onRestoreView ? (
+          <button
+            type="button"
+            className={s.modchip}
+            title="Разбор перестроил таблицу — вернуть ваш вид целиком"
+            onClick={onRestoreView}
+          >
+            <Icon name="reply" className={s.modchipIcon} />
+            Вид изменён анализом · Вернуть мой вид
+          </button>
+        ) : modified ? (
           <button
             type="button"
             className={s.modchip}

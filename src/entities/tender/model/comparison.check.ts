@@ -82,10 +82,12 @@ for (const contractor of CONTRACTORS) {
 // любой расценки без правки соседней уронит проверку здесь, а не на экране.
 const REFERENCE: Record<string, number> = {
   'АО «МетСнаб»': 11_840_000,
-  /* Расценки на добавку (m5) сдвинуты к 41 ₽/кг, чтобы в фикстуре жил и
-     ТИХИЙ ярус разброса (<7 %): правка согласована этими же равенствами. */
-  'ООО «ИнженерГрупп»': 12_147_600,
-  'ООО «СтройМонтаж»': 11_975_800,
+  /* Расценки ИнженерГрупп (m1/m2/m3/w1/w3/w5/g1/g2) и СтройМонтажа (w3/g2)
+     сдвинуты так, чтобы при ПРОДУКТОВЫХ порогах ярусов (metrics.md §7:
+     заметный ≥ 15 %, высокий ≥ 40 %) в фикстуре жили все три яруса живьём.
+     Правка согласована этими же равенствами. */
+  'ООО «ИнженерГрупп»': 12_398_410,
+  'ООО «СтройМонтаж»': 12_281_860,
 };
 for (const contractor of CONTRACTORS) {
   assert.equal(sumOf(contractor, POSITIONS), REFERENCE[contractor.name], contractor.name);
@@ -148,8 +150,8 @@ const contractor = (id: string) => CONTRACTORS.find((c) => c.id === id)!;
 assert.equal(medianOf([3, 1, 2]), 2);
 assert.equal(medianOf([10, 20]), 15);
 assert.equal(medianOf([]), null);
-assert.deepEqual(factOf('m1').bids.map((b) => b.price), [4755, 5166, 5182]);
-assert.equal(factOf('m1').median, 5166);
+assert.deepEqual(factOf('m1').bids.map((b) => b.price), [4755, 5250, 5182]);
+assert.equal(factOf('m1').median, 5182);
 
 // ГЛАВНОЕ ПРАВИЛО МИНИМУМА: лучшая НЕаномальная цена. Самая дешёвая расценка
 // арматуры помечена аномалией — «мин» обязан уйти второму по дешевизне, иначе
@@ -161,17 +163,19 @@ assert.equal(m2.bestId, 'ig');
 
 // …и остаётся в разбросе: аномалия не вычищается из процента строки.
 assert.ok(Math.abs(m2.spread! - 17.87) < 0.01, `разброс арматуры ${m2.spread}`);
-assert.equal(m2.spreadTag, 'high');
+assert.equal(m2.spreadTag, 'noticeable');
 
-// Метка выводится из процента порогом, а не приходит полем: ярусы high ≥ 15,
-// noticeable ≥ 7. На фикстуре есть ВСЕ три яруса живьём, включая тихий.
+// Метка выводится из процента порогом, а не приходит полем: ярусы —
+// продуктовые (metrics.md §7): noticeable ≥ 15, high ≥ 40. На фикстуре есть
+// ВСЕ три яруса живьём, включая тихий.
 assert.deepEqual(factOf('w4').spreadTag, null, 'одна расценка — сравнивать не с чем');
 assert.equal(factOf('m4').spreadTag, null, 'у плёнки тоже одна расценка');
-assert.equal(factOf('m1').spreadTag, 'noticeable');
+assert.equal(factOf('m1').spreadTag, 'none', '10 % — тихо');
+assert.equal(factOf('m2').spreadTag, 'noticeable');
 assert.equal(factOf('m5').spreadTag, 'none');
 assert.deepEqual(
   FACTS.rows.filter((r) => r.spreadTag === 'high').map((r) => r.position.id),
-  ['m2', 'm3', 'w3', 'g2'],
+  ['w3', 'g2'],
 );
 
 // Отклонение от медианы: знак имеет значение, допуск симметричный.
@@ -202,13 +206,13 @@ assert.deepEqual(
   filterRows(ALL, ['spread']).filter((r) => predicatePasses('key', r)).map((r) => r.position.id),
 );
 // Счётчики считаются по всем данным до применения фильтра — иначе число на
-// невыбранном пункте бесполезно. Значения согласованы с разметкой фикстуры:
-// ключевых три, высоких разбросов четыре, аномальных строк одна, с потенциалом
-// пять (порог отсекает копеечные запасы), дороже медианы на >5 % — шесть.
+// невыбранном пункте бесполезно. Значения согласованы с разметкой фикстуры
+// под продуктовые ярусы разброса: ключевых три, высоких (≥40 %) две,
+// аномальных строк одна, с потенциалом пять, дороже медианы на >5 % — семь.
 const counted = (['key', 'spread', 'anomaly', 'pot', 'med'] as const).map((id) => [
   id, predicateCount(id, ALL),
 ]);
-assert.deepEqual(Object.fromEntries(counted), { key: 3, spread: 4, anomaly: 1, pot: 5, med: 6 });
+assert.deepEqual(Object.fromEntries(counted), { key: 3, spread: 2, anomaly: 1, pot: 5, med: 7 });
 
 /* ═══════════ пресеты: четыре оси и флаг «изменён» ═══════════ */
 const view: CompareView = {

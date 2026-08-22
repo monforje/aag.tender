@@ -425,6 +425,32 @@
   background: currentColor;
 }
 
+/* ── NON-REALIZED: заглушка свободного вопроса ─────────────────────────────
+   Композер заменён витриной: код ответчика (askAi, стриминг, история) не
+   тронут — режим включается пропом stub. */
+.soon{
+  margin-top: 18px; max-width: 280px;
+  padding: 10px 12px;
+  border-radius: var(--cu-radii-3);
+  background: var(--cu-fill-subtle);
+  font-size: var(--cu-text-sm); line-height: var(--cu-leading-normal);
+  color: var(--cu-content-secondary);
+}
+.soonPlate{
+  padding: 10px 12px;
+  border-radius: var(--cu-radii-4);
+  border: 1px dashed var(--cu-border-default);
+  font-size: var(--cu-text-xs); line-height: var(--cu-leading-normal);
+  color: var(--cu-content-tertiary);
+}
+.soonTitle{
+  display: block; margin-bottom: 2px;
+  font-size: var(--cu-text-sm); line-height: var(--cu-leading-same);
+  font-weight: var(--cu-font-weight-medium);
+  text-transform: uppercase; letter-spacing: .06em;
+  color: var(--cu-content-secondary);
+}
+
 /* Узкий контейнер: панель забирала бы больше половины страницы. Ширина
    остаётся фиксированной, но контент страницы под ней уже не читается —
    это цена MVP, осознанная в ТЗ (§7): раскладку на два столбца заводить рано. */
