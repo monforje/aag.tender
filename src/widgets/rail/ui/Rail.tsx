@@ -36,15 +36,20 @@ export function Rail() {
 
   const activeId = useWorkspaceStore((st) => st.activeId);
   const sidebarOpen = useWorkspaceStore((st) => st.sidebarOpen);
+  const aiPanelOpen = useWorkspaceStore((st) => st.aiPanelOpen);
   const setSidebarOpen = useWorkspaceStore((st) => st.setSidebarOpen);
   const selectSection = useWorkspaceStore((st) => st.selectSection);
 
   const preview = useFlyout({ slotRef, activeId, sidebarOpen });
 
   /** Клик по разделу: раскрыть сайдбар и показать дерево раздела — без
-   *  навигации. У разделов без своей страницы нет адреса, и страница
-   *  остаётся прежней (в оригинале ClickUp рейл тоже менял только панель). */
+    *  навигации. У разделов без своей страницы нет адреса, и страница
+    *  остаётся прежней (в оригинале ClickUp рейл тоже менял только панель).
+    *  Открытый «Анализ ИИ» закрывается: клик по рейлу — единственный жест,
+    *  которым сайдбар возвращается (см. контракт стора), и два потребителя
+    *  ширины заодно не живут. */
   const openSection = (id: SectionId) => {
+    useWorkspaceStore.getState().closeAiPanel();
     selectSection(id);
     setSidebarOpen(true);
     preview.close();
@@ -62,7 +67,10 @@ export function Rail() {
   return (
     <div className={s.railSlot} ref={slotRef}>
       <div className={s.rail}>
-        <RailExpandZone hidden={sidebarOpen} onExpand={() => setSidebarOpen(true)} />
+        {/* Зона раскрытия выключена, пока открыт «Анализ ИИ»: наведение — не
+            явное намерение, панель из-под курсора не закрываем; дерево
+            возвращается кликом по рейлу (openSection) или закрытием панели. */}
+        <RailExpandZone hidden={sidebarOpen || aiPanelOpen} onExpand={() => setSidebarOpen(true)} />
 
         <div className={s.railBody}>
           {NAV_TOP.map((item) => (

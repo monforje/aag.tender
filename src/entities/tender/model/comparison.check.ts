@@ -117,7 +117,7 @@ assert.deepEqual(
 // ── статус КП: незнакомый id с сервера ────────────────────────────────────
 // Словарь статусов живёт на сервере и пополняется без нас. Новый id обязан
 // дать нейтральную капсулу с самим id, а не уронить экран на undefined.label.
-assert.equal(bidStatus('complete').label, 'КП получено');
+assert.equal(bidStatus('complete').label, 'Получено');
 assert.equal(bidStatus('withdrawn').label, 'withdrawn');
 assert.equal(bidStatus('withdrawn').tone, 'neutral');
 

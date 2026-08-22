@@ -72,3 +72,84 @@
   background: var(--cu-global-sidebar-background);   /* ← серый фон всей main */
   overflow: hidden;
 }
+
+/* ---------------------------------------------------------------------------
+   4.11 AI PANEL — колонка «Анализ ИИ», третий сосед ряда каркаса.
+   Механика — ПОЛНАЯ копия .sidebar-final (widgets/sidebar): панель — мебель
+   каркаса, и вести себя обязана как она, а не как оверлей. main забирает
+   ширину сам из механики флекса; ни одно правило здесь не знает, что внутри.
+   Содержимое ставит портал страницы (TenderPage → #ai-panel-slot).
+
+   ХОРЕОГРАФИЯ (по шагам пользователя):
+     клик → сайдбар схлопывается (--cu-animation-duration)
+          → колонка отводит место + контент СКАЛЬЗЫТ из-за правого края
+            (--cu-duration-slow, emphasized — пара прежнего оверлея).
+   Задержки стоят в ОТКРЫТОМ состоянии: CSS-переход читает transition того
+   состояния, В которое идём, — открытие ждёт окончания сайдбара, закрытие
+   уезжает немедленно. Скольжение — transform на внутренней обёртке, прижатой
+   правым краем к краю карточки (margin-left:auto): панель въезжает именно
+   справа, а не проявляется на месте. opacity НЕ участвует — «проявление» и
+   было дефектом. Внутренняя обёртка держит ПОЛНУЮ ширину колонки при любой
+   анимации basis — текст пережимается краем, а не переформатируется. */
+.ai-panel{
+  flex: 0 0 var(--ai-panel-width);
+  width: var(--ai-panel-width);
+  min-height: 0; min-width: 0;
+  overflow: hidden;                 /* слайд режется краями колонки */
+  background: var(--cu-background-main);
+  border-left: 1px solid var(--cu-border-default);
+  display: flex; flex-direction: column;
+  /* КРИВАЯ КЛИПА = КРИВАЯ СЛАЙДА. Ширина колонки и translateX содержимого
+     едут на ОДНОЙ паре длительности/кривой: левый край контента совпадает
+     с клип-краем в каждом кадре, панель движется жёстким телом. Расхождение
+     (клип .2s standard против слайда .28s emphasized) читалось «колбасой» —
+     контент догонял уже остановившийся край и сжимался. */
+  transition: flex-basis var(--cu-duration-slow) var(--cu-ease-emphasized),
+              width var(--cu-duration-slow) var(--cu-ease-emphasized),
+              visibility 0s linear;
+}
+/* Закрыто: схлопывание basis в 0 — тот же механизм, из которого main
+   забирает ширину (§4.10, п.4). Кривая та же, что у слайда контента (см.
+   выше), visibility гасится с задержкой = длительности, чтобы колонка
+   доигрывала уход и не ловила табуляцию после него. Задержек НЕТ: панель
+   уезжает сразу. */
+.ai-panel--closed{
+  flex-basis: 0; width: 0;
+  border-left-color: transparent; pointer-events: none;
+  visibility: hidden;
+  transition: flex-basis var(--cu-duration-slow) var(--cu-ease-emphasized),
+              width var(--cu-duration-slow) var(--cu-ease-emphasized),
+              visibility 0s linear var(--cu-duration-slow);
+}
+.ai-panel__content{
+  width: var(--ai-panel-width); flex: 1 1 auto; min-height: 0;
+  margin-left: auto;                /* правый край — к правому краю карточки */
+  display: flex; flex-direction: column;
+  transform: translateX(0);
+  transition: transform var(--cu-duration-slow) var(--cu-ease-emphasized);
+}
+/* Открытая колонка и её содержимое ждут окончания схлопывания сайдбара;
+   закрывающаяся стартует немедленно. Паузу задаёт --ai-seq-delay: по умолчанию
+   это длительность сайдбара, но Workspace ставит переменную в 0s на прямом
+   открытии (сайдбар уже был закрыт в момент клика) — «такт» оркестра пустым
+   не остаётся. */
+.ai-panel:not(.ai-panel--closed){
+  transition-delay: var(--ai-seq-delay, var(--cu-animation-duration));
+}
+.ai-panel:not(.ai-panel--closed) .ai-panel__content{
+  transition-delay: var(--ai-seq-delay, var(--cu-animation-duration));
+}
+.ai-panel--closed .ai-panel__content{
+  transition-delay: 0s;
+  transform: translateX(100%);
+}
+
+/* prefers-reduced-motion: глобальный кламп гасит только ДЛИТЕЛЬНОСТИ,
+   задержки пережил бы и панель «догоняла» бы мгновенный кадр. Выключаем
+   переход целиком: состояние меняется одним кадром. */
+@media (prefers-reduced-motion: reduce){
+  .ai-panel,
+  .ai-panel--closed,
+  .ai-panel__content,
+  .ai-panel--closed .ai-panel__content{ transition: none; }
+}

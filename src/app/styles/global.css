@@ -160,6 +160,10 @@
   --rail-card-width: 52px;
   --sidebar-collapsed-button-width: 40px;
   --sidebar-final-width: 256px;
+  /* Колонка панели «Анализ ИИ» в ряду каркаса (см. Workspace). На широких
+     экранах — прежние 400px оверлея; на узких подтягивается, чтобы <main>
+     не схлопывался: 30vw даёт таблице и панели предсказуемую пропорцию. */
+  --ai-panel-width: clamp(320px, 30vw, 400px);
   --island-gap: 6px;
 
   --cu-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", roboto, "Helvetica Neue", helvetica, arial, sans-serif;

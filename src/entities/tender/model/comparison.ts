@@ -124,13 +124,30 @@ export interface PositionGroup {
  *  решение», а не «сколько строк заполнено» — заполненность стоит на карточке
  *  отдельно. Пример, ради которого статус вообще нужен полем: КП заполнено
  *  целиком, но к нему есть вопросы, и подписывать его сейчас нельзя. Из
- *  процентов этого не видно. */
+ *  процентов этого не видно.
+ *
+ *  Подписи — ОДНО слово, сказанное о КП: «(КП) получено / уточняется /
+ *  частично». Длинные расшифровки («Заполнено частично») в капсуле шапки
+ *  колонки не помещались и читались как предложение; смысл целиком остаётся
+ *  доступным по наведению на карточку (процент заполнения рядом).
+ *
+ *  Цвет — ОБЩИЙ мягкий тон: тот же вид капсулы, что у статусов реестра
+ *  («Открыт», «Закрыт», «Отменён»). Плотную заливку сняли после трёх проб за
+ *  день (ступень -ink — слишком глухо; полтона к белому — серо; сам цвет тона
+ *  с белым текстом — «не наши» цвета; 23.08.2026) — разбор в Части XII
+ *  DESIGN-NOTES. */
 export type BidStatusId = 'complete' | 'revision' | 'partial';
 
-export const BID_STATUS: Record<BidStatusId, { label: string; tone: Tone; icon: IconName }> = {
-  complete: { label: 'КП получено', tone: 'success', icon: 'checkCircle' },
-  revision: { label: 'На уточнении', tone: 'warning', icon: 'clock' },
-  partial: { label: 'Заполнено частично', tone: 'info', icon: 'activity' },
+export interface BidStatusView {
+  label: string;
+  tone: Tone;
+  icon: IconName;
+}
+
+export const BID_STATUS: Record<BidStatusId, BidStatusView> = {
+  complete: { label: 'Получено', tone: 'success', icon: 'inbox' },
+  revision: { label: 'Уточняется', tone: 'warning', icon: 'questionCircle' },
+  partial: { label: 'Частично', tone: 'info', icon: 'checklistMin' },
 };
 
 /** Статус по id — ФУНКЦИЕЙ, а не обращением к таблице. Граница доверия: id
@@ -138,7 +155,7 @@ export const BID_STATUS: Record<BidStatusId, { label: string; tone: Tone; icon: 
  *  пополняется без нас. Незнакомое значение обязано дать нейтральную капсулу
  *  с самим id — видно, что статус новый, — а не уронить экран на
  *  `undefined.label`. */
-export const bidStatus = (id: string): { label: string; tone: Tone; icon: IconName } =>
+export const bidStatus = (id: string): BidStatusView =>
   BID_STATUS[id as BidStatusId] ?? { label: id, tone: 'neutral', icon: 'flag' };
 
 export interface Contractor {

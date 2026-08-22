@@ -55,7 +55,7 @@ export const modalPart = {
  * <Modal open={!!dossier} onClose={() => setDossier(null)}>
  *   <header className={modalPart.head}>
  *     <h2 className={modalPart.title}>{dossier.name}</h2>
- *     <Badge tone="success">КП получено</Badge>
+ *     <Badge tone="success">Получено</Badge>
  *   </header>
  *   <footer className={modalPart.foot}>
  *     <Button variant="primary" autoFocus onClick={close}>Закрыть</Button>

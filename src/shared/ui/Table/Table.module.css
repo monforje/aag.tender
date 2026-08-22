@@ -16,12 +16,21 @@
    блока и паддинг ячейки — «№» уезжал на 21px, и вертикаль ломалась.
    Складываем обратно: блок выносится за паддинг скролла (margin-inline:-12px,
    то есть на всю ширину <main>), а 12px держит паддинг первой ячейки. */
+/* ЕЩЁ ОДНА ДЫШащая ручка — ПЛОТНОСТЬ. Все сжимаемые величины читаются из
+   переменных с дефолтом «как у shadcn»: потребитель (страница) может ужесточить
+   их на своём корне — таблица сама про причины сжатия не знает ничего.
+   --table-zoom — рекурсивный масштаб ленты: последняя ступень плотности, когда
+   колонки уже стоят на полах, а места всё равно мало. zoom, а не transform:
+   участвует в раскладке (cqw-формулы колонок пересчитываются от новой ширины),
+   а не уменьшает картинку поверх пустого места. Современный baseline:
+   Firefox поддерживает zoom с 126 (2024). */
 .table-wrap{
   /* width НЕ 100%, как у shadcn: 100% меряется от контент-бокса скролла, уже
      сжатого паддингом, и вместе с отрицательным margin дало бы блок,
      сдвинутый влево и всё равно короткий справа. Блочный div и так занимает
      всю доступную ширину — с учётом обоих отрицательных полей. */
   position: relative; overflow-x: auto;
+  zoom: var(--table-zoom, 1);
   /* ЛЕНТА — КОНТЕЙНЕР ЗАПРОСОВ, чтобы 100cqw внутри означал её ширину. Нужно
      это раскладке колонок при layout="fixed": ширину колонки там считают от
      доступного места, а ПРОЦЕНТ для этого не годится — внутри calc()/clamp()
@@ -61,19 +70,20 @@
    покое съела бы разницу с ховером. */
 .table thead{ background: var(--cu-fill-subtle); }
 .table th{
-  height: 40px; padding-inline: 8px;
+  height: 40px;
+  padding-inline: var(--table-pad-x, 8px);
   text-align: left; vertical-align: middle; white-space: nowrap;
   font-weight: var(--cu-font-weight-semibold); color: var(--cu-content-secondary);
 }
-.table td{ padding: 8px; vertical-align: middle; white-space: nowrap; }
-.table th:first-child, .table td:first-child{ padding-left: 12px; }
-.table th:last-child, .table td:last-child{ padding-right: 12px; }
+.table td{ padding: var(--table-pad-y, 8px) var(--table-pad-x, 8px); vertical-align: middle; white-space: nowrap; }
+.table th:first-child, .table td:first-child{ padding-left: var(--table-edge-pad, 12px); }
+.table th:last-child, .table td:last-child{ padding-right: var(--table-edge-pad, 12px); }
 
 /* Подпись таблицы — итог ПОД данными (caption-side:bottom, как у shadcn).
-   Третичным цветом, чтобы не спорить с содержимым, и с тем же левым инсетом
-   12px, что у первой колонки. */
+   Третичным цветом, чтобы не спорить с содержимым, и с тем же левым инсетом,
+   что у первой колонки (edge-pad — та же ручка плотности). */
 .caption{
-  padding: 10px 12px 12px; text-align: left;
+  padding: 10px var(--table-edge-pad, 12px) 12px; text-align: left;
   font-size: 12px; color: var(--cu-content-tertiary);
 }
 
@@ -149,12 +159,13 @@
    Резерв — паддинг всей колонки: он одинаков у всех её строк, поэтому правое
    выравнивание чисел не сдвигается. Число согласовано с геометрией отметки:
    надпись ≈30px с паддингом + отступ от края 3px = 33px, до резерва ещё
-   ≈7px зазора. Селектор с тегом — по той же причине специфичности,
-   что у .cell--numeric; второй селектор снимает ничью с `.table td:last-child`
-   (у обоих (0,2,1), решал бы порядок файлов в сборке): у ПОСЛЕДНЕЙ колонки
-   резерв нужнее её 12px от края ленты. */
+   ≈7px зазора. Резерв считается ОТ edge-pad: плотность сжимает и его —
+   отметка следует за краем. Селектор с тегом — по той же причине
+   специфичности, что у .cell--numeric; второй селектор снимает ничью с
+   `.table td:last-child` (у обоих (0,2,1), решал бы порядок файлов в сборке):
+   у ПОСЛЕДНЕЙ колонки резерв нужнее её edge-pad от края ленты. */
 .table td.cell--roomy,
-.table td.cell--roomy:last-child{ padding-right: 40px; }
+.table td.cell--roomy:last-child{ padding-right: calc(var(--table-edge-pad, 12px) + 28px); }
 /* Колонка одинаковых по форме кодов читается столбиком только при одинаковой
    ширине знака. */
 .cell--mono{

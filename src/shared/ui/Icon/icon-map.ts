@@ -26,6 +26,7 @@ import { ChatRoundIcon } from '@solar-icons/react/linear/chat-round';
 import { ChatSquareArrowIcon } from '@solar-icons/react/linear/chat-square-arrow';
 import { CheckCircleIcon } from '@solar-icons/react/linear/check-circle';
 import { ChecklistIcon } from '@solar-icons/react/linear/checklist';
+import { ChecklistMinimalisticIcon } from '@solar-icons/react/linear/checklist-minimalistic';
 import { ClipboardListIcon } from '@solar-icons/react/linear/clipboard-list';
 import { ClockCircleIcon } from '@solar-icons/react/linear/clock-circle';
 import { CloseCircleIcon } from '@solar-icons/react/linear/close-circle';
@@ -46,6 +47,7 @@ import { MedalStarIcon } from '@solar-icons/react/linear/medal-star';
 import { MenuDotsIcon } from '@solar-icons/react/linear/menu-dots';
 import { PipetteIcon } from '@solar-icons/react/linear/pipette';
 import { PulseIcon } from '@solar-icons/react/linear/pulse';
+import { QuestionCircleIcon } from '@solar-icons/react/linear/question-circle';
 import { ReplyIcon } from '@solar-icons/react/linear/reply';
 import { ScaleIcon } from '@solar-icons/react/linear/scale';
 import { ScannerIcon } from '@solar-icons/react/linear/scanner';
@@ -100,6 +102,13 @@ export const ICONS = {
   sliders: SliderHorizontalIcon,
   clock: ClockCircleIcon,
   activity: PulseIcon,
+  /* Статусы КП на сравнении (BID_STATUS): подобраны по смыслу, а не по
+     красоте — экран вне эталона берёт Solar напрямую. inbox — «прибыло»,
+     тот же знак, что у «Входящих КП» в дереве; questionCircle — вопросы
+     заданы, ждём ответов; checklistMin — чек-лист позиций, закрыты не все.
+     Суффикс Min — по прецеденту calendarSm: minimalistic-вариант Solar. */
+  questionCircle: QuestionCircleIcon,
+  checklistMin: ChecklistMinimalisticIcon,
   share: ShareIcon,   // не используется сегодня, оставлен для паритета со спрайтом
   person: UserIcon,
   panelLeft: SidebarIcon,   // не используется сегодня, оставлен для паритета со спрайтом

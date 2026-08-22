@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Navigate, useParams } from 'react-router-dom';
 import { Breadcrumbs } from '@/shared/ui/Breadcrumbs';
 import { ScrollArea } from '@/shared/ui/ScrollArea';
@@ -10,6 +11,7 @@ import {
   PRESETS, tenderById,
   type AnalysisResult, type AnalysisTransition, type CompareView, type PresetId,
 } from '@/entities/tender';
+import { useWorkspaceStore } from '@/entities/workspace';
 import { AI_DOCK_ID, AiTrigger, AnalysisDock } from '@/features/ai-analysis';
 import { RoundsPanel } from './RoundsPanel';
 import { TenderCompare } from './TenderCompare';
@@ -83,9 +85,10 @@ const CHANGE_NOTE: Record<DatasetId, string> = {
  *         карточку: адрес с чужим id — это опечатка или мёртвая ссылка.
  *         Чат «Анализ ИИ» живёт на каркасе, а не в потоке страницы: бирка-
  *         триггер приклеена под нижней линией .main-header (полосы крошек),
- *         панель выезжает справа ровно по этой полосе — линия её шапки и
- *         шапки страницы одна; пока чат открыт, бирка спрятана, а закрыть
- *         его можно крестиком «Скрыть» в шапке панели.
+ *         панель выезжает из-под неё справа ровно по этой полосе — линия её
+ *         шапки и шапки страницы одна; после раскрытия бирка морфируется в
+ *         вертикальный язычок на краю панели (он же закрывает), а внутри
+ *         панели остаётся и крестик «Скрыть».
  *
  *         СОСТОЯНИЕ СРАВНЕНИЯ И ЧАТА «АНАЛИЗ ИИ» ЖИВЁТ ЗДЕСЬ, на странице:
  *         им делятся два потребителя — таблица (пресеты, ★) и док (ответы
@@ -114,7 +117,20 @@ export function TenderPage() {
   const [view, setView] = useState<CompareView>({ preset: 'overview', ...PRESETS.overview });
   const [starred, setStarred] = useState<string[]>([]);
   const [focusRowId, setFocusRowId] = useState<string | null>(null);
-  const [aiOpen, setAiOpen] = useState(false);
+  /* Открытость панели — состояние КАРКАСА (колонка рядом с main), не страницы:
+     колонку рисует Workspace, а связку с сайдбаром держит сам стор
+     (openAiPanel закрывает его навсегда). Уход со страницы гасит флаг
+     cleanup'ом ниже, иначе реестр получил бы пустую раскрытую колонку. */
+  const aiOpen = useWorkspaceStore((st) => st.aiPanelOpen);
+  useEffect(() => () => useWorkspaceStore.getState().closeAiPanel(), []);
+
+  /* Узел слота каркаса для портала: aside монтируется вместе с приложением,
+     но на первом кадре страницы его ещё можно не найти в document — ждём
+     эффектом и рендерим содержимое, как только слот появился. */
+  const [slotNode, setSlotNode] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    setSlotNode(document.getElementById('ai-panel-slot'));
+  }, []);
   /* Липкая шапка сравнения стоит на верхней линии (прочитано из
      <TenderCompare>) — в этот момент она делит полосу с биркой «Анализ ИИ»,
      и та складывается до иконки. */
@@ -197,9 +213,10 @@ export function TenderPage() {
         ? list.filter((x) => x !== contractorId)
         : [...list, contractorId]
     ));
-  /* Закрытие только гасит панель: фокус на бейдж возвращает САМ триггер
-     (preventScroll), поэтому закрытие не прокручивает страницу. */
-  const closeAi = () => setAiOpen(false);
+  /* Закрытие только гасит панель: сайдбар стор не возвращает (контракт
+     «открыл анализ — сайдбар закрылся»). Фокус на бейдж возвращает САМ
+     триггер (preventScroll), поэтому закрытие не прокручивает страницу. */
+  const closeAi = () => useWorkspaceStore.getState().closeAiPanel();
 
   return (
     <Screen>
@@ -249,29 +266,38 @@ export function TenderPage() {
         )}
       </ScrollArea>
 
-      {/* Триггер и док — вне <ScrollArea>: оба fixed, отсчёт ведут от каркаса,
-          прокрутка страницы на них не влияют. Бирка «Анализ ИИ» приклеена под
-          нижней линией .main-header (координаты — .aiTrigger в .module.css):
-          пока панель открыта — спрятана, а когда липкая шапка таблицы встаёт
-          на ту же линию — складывается до иконки (compact). Панель смонтирована
-          всегда: сохранённые разборы по раундам живут, пока живёт страница. */}
+      {/* Триггер — вне портала и вне ScrollArea: fixed-бирка на каркасе.
+          Координаты и оба состояния якоря (у правого края карточки / на стыке
+          с панелью) компонент держит сам — см. AiTrigger.module.css; страница
+          больше не знает, где он висит. Панель выезжает из-под неё; после
+          полной остановки колонки бирка морфирует в вертикальный язычок, а
+          когда липкая шапка таблицы встаёт на её линию — складывается до
+          иконки (compact, только в закрытом состоянии). */}
       <AiTrigger
         open={aiOpen}
         compact={headStuck && !aiOpen}
         controlsId={AI_DOCK_ID}
-        onToggle={() => setAiOpen((v) => !v)}
-        className={s.aiTrigger}
+        onToggle={() => (aiOpen
+          ? useWorkspaceStore.getState().closeAiPanel()
+          : useWorkspaceStore.getState().openAiPanel())}
       />
-      <AnalysisDock
-        open={aiOpen}
-        onClose={closeAi}
-        comparison={dataset}
-        prevComparison={prevDataset}
-        rev={datasetId}
-        revNote={CHANGE_NOTE[datasetId]}
-        onTransition={handleTransition}
-        onResultChange={setAnalysisResult}
-      />
+      {/* Панель живёт в слоте каркаса (Workspace → #ai-panel-slot) третьей
+          колонкой ряда: main сжимается флексом сам, история чата и сохранённые
+          разборы раундов переживают открытие/закрытие — панель не
+          размонтируется, открытость гасят классы слота. */}
+      {slotNode ? createPortal(
+        <AnalysisDock
+          open={aiOpen}
+          onClose={closeAi}
+          comparison={dataset}
+          prevComparison={prevDataset}
+          rev={datasetId}
+          revNote={CHANGE_NOTE[datasetId]}
+          onTransition={handleTransition}
+          onResultChange={setAnalysisResult}
+        />,
+        slotNode,
+      ) : null}
     </Screen>
   );
 }

@@ -282,7 +282,7 @@ export function AnalysisDock({
       id={AI_DOCK_ID}
       role="complementary"
       aria-labelledby={`${AI_DOCK_ID}-title`}
-      className={cx(base.dock, open && base.dockOpen)}
+      className={base.dock}
       onKeyDown={onKeyDown}
     >
       <header className={base.head}>
@@ -300,17 +300,13 @@ export function AnalysisDock({
           />
         ) : null}
         <div className={base.headActions}>
+          {/* Крестика «Скрыть» здесь больше нет: панель закрывает язычок на
+              её левом краю (морф бирки «Анализ ИИ», см. AiTrigger) и Escape. */}
           <IconButton
             variant="panel"
             icon="sparkleChat"
             label="Чат со свободным вопросом — скоро будет реализован"
             onClick={() => setChatMode(true)}
-          />
-          <IconButton
-            variant="panel"
-            icon="closeCircle"
-            label="Скрыть анализ"
-            onClick={onClose}
           />
         </div>
       </header>
