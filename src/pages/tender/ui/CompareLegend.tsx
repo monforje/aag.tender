@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { IconButton } from '@/shared/ui/IconButton';
 import { Icon } from '@/shared/ui/Icon';
 import { Popover } from '@/shared/ui/Popover';
-import { AnomalyGlyph, CoinMark, KeyMark, MedMark, TagMark } from './assets';
+import { AnomalyGlyph, CoinMark, KeyMark, MedMark } from './assets';
 import s from './CompareLegend.module.css';
 
 /**
@@ -44,7 +44,12 @@ export function CompareLegend() {
       <Popover anchor={at} onClose={() => setAt(null)} label="Легенда пометок">
         <div className={s.body}>
           <Item
-            sample={<span className={s.sampleTag}><TagMark /></span>}
+            sample={<Icon name="skill" className={s.sampleLeader} />}
+            name="Текущий лидер"
+            text="Медаль перед именем в шапке колонки: минимальный итог среди поданных КП. Не зависит от ручной перекраски."
+          />
+          <Item
+            sample={<span className={s.sampleTag}>МИН</span>}
             name="Минимальная цена"
             text="Лучшая цена без аномалий. Видна при показателе «Цена»."
           />

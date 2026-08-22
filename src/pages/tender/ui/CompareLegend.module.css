@@ -2,7 +2,7 @@
    сам <Popover> (мост через границу модулей, как --col у колонок); паддинг и
    поверхность остаются его. Образцы собираются из ТЕХ ЖЕ компонентов глифов
    ./assets, что красят ячейки таблицы, поэтому размеры ниже повторяют
-   табличные (бирка 38×28 — ровно как .tag в TenderCompare.module.css). */
+   табличные; штамп «МИН» повторяет типографику .tag из TenderCompare. */
 .root{ --pop-width: 380px; }
 
 .body{
@@ -38,9 +38,22 @@
 }
 .sample > svg{ display: block; height: 16px; width: auto; overflow: visible; }
 
-/* Бирка «мин» — в натуральную величину таблицы: меньше она нечитаема. */
-.sample--tag{ width: 38px; height: 28px; }
-.sample--tag svg{ width: 100%; height: 100%; }
+/* Лидер тендера: та же медаль, что перед именем в шапке карточки
+   (TenderCompare, .leader) — размер и цвет совпадают с табличными, дрейф
+   исключён сверкой. Иконка <Icon> размеряется своей --icon-size (см. заметку
+   у .sample выше): общее правило svg до неё дотягиваться не должно. */
+.sample--leader{ color: var(--cu-tone-success-ink); --icon-size: 14px; }
+
+/* Штамп «МИН»: значения совпадают с .tag ячейки сравнения — дрейф исключён
+   сверкой при правке, отдельного класса-моста ради одного слова нет. */
+.sample--tag{  font-size: 11px; line-height: 1;
+  font-weight: var(--cu-font-weight-bold);
+  letter-spacing: .02em;
+  color: var(--cu-tone-success-ink);
+  text-shadow:
+    0 1px 1px rgba(0,77,46,.38),
+    0 2px 3px rgba(0,0,0,.12);
+}
 
 /* Пробел данных: пунктирная рамка и тире — тот же приём, что в ячейке. */
 .sample--missing{

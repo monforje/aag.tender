@@ -16,4 +16,3 @@ export { CoinMark } from './CoinMark';
 export { KeyMark } from './KeyMark';
 export { MedMark } from './MedMark';
 export { SpreadMark } from './SpreadMark';
-export { TagMark } from './TagMark';

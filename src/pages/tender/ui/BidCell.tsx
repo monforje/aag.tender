@@ -8,7 +8,7 @@ import type { CellPopupBind, CellPopupData } from '@/shared/ui/CellPopup';
 import { tableCell } from '@/shared/ui/Table';
 import { Icon } from '@/shared/ui/Icon';
 import { pctSigned } from '../model/compareFormat';
-import { CoinMark, MedMark, TagMark } from './assets';
+import { CoinMark, MedMark } from './assets';
 import s from './TenderCompare.module.css';
 
 /**
@@ -20,9 +20,10 @@ import s from './TenderCompare.module.css';
  *
  * UX:     ГЛАВНОЕ ЧИСЛО ячейки живёт одной строкой, под ним удельная цена
  *         и дополнительные показатели пресета (максимум три). ПОМЕТКИ ТИХИЕ
- *         В ПОКОЕ: мазок под лучшей ценой, монета запаса торга, леденец
- *         «дороже медианы», штриховка аномалии отвечают на вопрос «куда
- *         смотреть»; «почему так» объясняет общий попап таблицы.
+ *         В ПОКОЕ: зелёный штамп «МИН» в правом верхнем углу ячейки,
+ *         монета запаса торга, леденец «дороже медианы», штриховка аномалии
+ *         отвечают на вопрос «куда смотреть»; «почему так» объясняет общий
+ *         попап таблицы.
  *         Минимум живёт ТОЛЬКО в режиме «Цена» и только у лучшей неаномальной
  *         цены при живой конкуренции (§2, §4.6 аудита). Леденец — только когда
  *         смысл не занят ценником или штриховкой: второй глиф про то же был бы
@@ -183,21 +184,10 @@ export function BidCell({ row, contractor, view, bind }: {
       <span className={s.priceLine}>
         {mainMetric === 'price' ? (
           <>
-            <span className={cx(s.price, isMin && s.priceMin)}>
+            <span className={s.price}>
               {head}
-              {/* Триггер попапа — САМА бирка, а не ячейка: раскачка и
-                  объяснение появляются, только когда курсор на ценнике. */}
-              {isMin && minData ? (
-                <button
-                  type="button"
-                  className={s.tag}
-                  aria-label="Минимальное значение"
-                  {...bind(minData)}
-                >
-                  <TagMark />
-                </button>
-              ) : null}
-              {/* Монета — у ОСНОВАНИЯ цены слева: справа-снизу уже висит «МИН». */}
+              {/* Монета — у ОСНОВАНИЯ цены слева: правый верхний угол ячейки
+                  занят штампом «МИН». */}
               {coinData ? (
                 <button
                   type="button"
@@ -237,7 +227,26 @@ export function BidCell({ row, contractor, view, bind }: {
   );
 
   if (!anomaly) {
-    return <td className={cx(tableCell.numeric, tableCell.roomy)}>{body}</td>;
+    return (
+      /* Штамп «МИН» — ПРЯМОЙ ребёнок td: .price держит position:relative
+         для монеты и перехватил бы абсолют у отметки (она оказалась бы на
+         цене). Контейнер координат — td (.cell--min): угол ячейки, поверх
+         потока. Триггер попапа — сам штамп: «шлёп» и объяснение появляются,
+         только когда курсор на нём. */
+      <td className={cx(tableCell.numeric, tableCell.roomy, isMin && s.cellMin)}>
+        {body}
+        {isMin && minData ? (
+          <button
+            type="button"
+            className={s.tag}
+            aria-label="Минимальное значение"
+            {...bind(minData)}
+          >
+            МИН
+          </button>
+        ) : null}
+      </td>
+    );
   }
 
   /* Аномалия: штриховка и рейка на ЯЧЕЙКЕ, триггер попапа — на содержимом:
