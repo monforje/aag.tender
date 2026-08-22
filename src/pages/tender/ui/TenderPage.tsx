@@ -113,7 +113,10 @@ export function TenderPage() {
           current={tender.id}
         />
       </PageHeader>
-      <ScrollArea variant="page">
+      {/* Горизонталь страницы и нулевой паддинг сверху: липкой шапке
+          сравнения нужен скроллблок СТРАНИЦЫ без прокручиваемых посредников
+          и без своей полосы над линией (см. .module.css). */}
+      <ScrollArea variant="page" className={s.scroll}>
         <TenderSummary
           tender={tender}
           aside={
