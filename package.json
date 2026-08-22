@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build && cp dist/index.html dist/404.html",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:ds": "vite build --config vite.lib.config.ts"
   },
   "dependencies": {
     "@solar-icons/react": "^2.0.0",
@@ -23,5 +24,6 @@
     "@vitejs/plugin-react": "^6.0.5",
     "typescript": "^7.0.2",
     "vite": "^8.2.1"
-  }
+  },
+  "types": "./src/ds-entry.ts"
 }

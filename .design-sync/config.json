@@ -1,0 +1,137 @@
+{
+  "projectId": "723b6058-af12-4bd8-873b-12c2c1c14389",
+  "shape": "package",
+  "pkg": "clickup-shell",
+  "globalName": "AagTender",
+  "buildCmd": "bun run build:ds",
+  "srcDir": "src",
+  "tsconfig": "tsconfig.json",
+  "cssEntry": "ds-dist/style.css",
+  "tokensGlob": "src/app/styles/global.css",
+  "readmeHeader": ".design-sync/conventions.md",
+  "provider": {
+    "component": "SolarProvider",
+    "props": {
+      "strokeWidth": 1.5
+    },
+    "inner": {
+      "component": "ToastProvider",
+      "inner": {
+        "component": "MemoryRouter"
+      }
+    }
+  },
+  "componentSrcMap": {
+    "MemoryRouter": null,
+    "SolarProvider": null,
+    "AvatarGroup": "src/shared/ui/Micro/Data.tsx",
+    "CalendarMonth": "src/shared/ui/Calendar/Calendar.tsx",
+    "CloseButton": "src/shared/ui/Micro/Controls.tsx",
+    "CopyButton": "src/shared/ui/Micro/Controls.tsx",
+    "Delta": "src/shared/ui/Micro/Data.tsx",
+    "Dot": "src/shared/ui/Micro/Text.tsx",
+    "GroupTitle": "src/shared/ui/TreeRow/TreeRow.tsx",
+    "Heading": "src/shared/ui/Typography/Typography.tsx",
+    "Kbd": "src/shared/ui/Micro/Text.tsx",
+    "MoreButton": "src/shared/ui/Micro/Controls.tsx",
+    "NumericText": "src/shared/ui/Micro/Data.tsx",
+    "RadioGroup": "src/shared/ui/Radio/Radio.tsx",
+    "RequiredMark": "src/shared/ui/Micro/Text.tsx",
+    "StatusDot": "src/shared/ui/Micro/Data.tsx",
+    "Text": "src/shared/ui/Typography/Typography.tsx",
+    "ToastProvider": "src/shared/ui/Toast/Toast.tsx",
+    "TreeBranch": "src/shared/ui/TreeRow/TreeRow.tsx",
+    "TreeToggle": "src/shared/ui/TreeRow/TreeRow.tsx",
+    "TruncatedText": "src/shared/ui/Micro/Text.tsx",
+    "Route": null,
+    "Routes": null
+  },
+  "overrides": {
+    "Table": {
+      "cardMode": "column"
+    },
+    "Textarea": {
+      "cardMode": "column"
+    },
+    "Divider": {
+      "cardMode": "column"
+    },
+    "Grid": {
+      "cardMode": "column"
+    },
+    "RequiredMark": {
+      "cardMode": "column"
+    },
+    "SecondaryHeader": {
+      "cardMode": "column"
+    },
+    "DatePicker": {
+      "cardMode": "column"
+    },
+    "Dropdown": {
+      "cardMode": "column"
+    },
+    "Field": {
+      "cardMode": "column"
+    },
+    "InlineInput": {
+      "cardMode": "column"
+    },
+    "Input": {
+      "cardMode": "column"
+    },
+    "ScrollArea": {
+      "cardMode": "column"
+    },
+    "SearchInput": {
+      "cardMode": "column"
+    },
+    "Segmented": {
+      "cardMode": "column"
+    },
+    "Skeleton": {
+      "cardMode": "column"
+    },
+    "TenderRegistryPage": {
+      "cardMode": "column"
+    },
+    "Topbar": {
+      "cardMode": "column"
+    },
+    "Workspace": {
+      "cardMode": "column"
+    },
+    "AiDock": {
+      "cardMode": "single",
+      "primaryStory": "Empty"
+    },
+    "Flyout": {
+      "cardMode": "single",
+      "primaryStory": "Tenders"
+    },
+    "ConfirmDialog": {
+      "cardMode": "single",
+      "primaryStory": "Danger"
+    },
+    "Drawer": {
+      "cardMode": "single",
+      "primaryStory": "Details"
+    },
+    "Modal": {
+      "cardMode": "single",
+      "primaryStory": "Dossier"
+    },
+    "Popover": {
+      "cardMode": "single",
+      "primaryStory": "Legend"
+    },
+    "Tooltip": {
+      "cardMode": "single",
+      "primaryStory": "OnIconButton"
+    },
+    "TenderPage": {
+      "cardMode": "single",
+      "primaryStory": "Card"
+    }
+  }
+}

@@ -37,7 +37,7 @@
   box-shadow: var(--cu-elevation-1);
   transition: translate var(--cu-duration-fast) var(--cu-ease-standard);
 }
-.is_checked .thumb {
+.is-checked .thumb {
   /* translate, а не transform: свойство композитится само и не спорит с
      будущими трансформациями бегунка. */
   translate: 14px 0;

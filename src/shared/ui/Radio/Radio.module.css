@@ -1,6 +1,18 @@
 /* РАДИО. Точка отмеченного — тот же content-primary, что у чекбокса: пара
    «квадрат = независимые, круг = взаимоисключающие» читается формой
    контура, и красить её в смысловые тона незачем. */
+/* Нативный инпут лежит ПОД кружком: он остаётся настоящим — клавиатура,
+   отправка формой, indeterminate, — но не рисуется. Убрать его из DOM
+   нельзя: все состояния читаются именно с него соседним селектором
+   (.input:checked + .dot), а кольцо фокуса получает кружком. */
+.input {
+  position: absolute;
+  width: var(--cu-size-4);
+  height: var(--cu-size-4);
+  margin: 0;
+  opacity: 0;
+}
+
 .dot {
   display: inline-block;
   flex: 0 0 auto;
@@ -44,6 +56,7 @@
 }
 
 .label {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: var(--cu-size-2);
