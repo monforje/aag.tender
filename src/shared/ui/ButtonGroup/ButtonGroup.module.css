@@ -1,0 +1,30 @@
+.group {
+  display: inline-flex;
+  align-items: stretch;
+  /* Слепленная группа переменную НЕ получает и остаётся плотной (0). */
+  gap: var(--inline-gap, 0px);
+}
+
+/* Слепленная группа: соседние рамки схлопываются в одну линию за счёт
+   нахлёста в 1px, а скругление остаётся только на крайних кнопках. */
+.joined > * + * {
+  margin-left: -1px;
+}
+.joined > *:first-child {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.joined > *:last-child {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+.joined > *:not(:first-child):not(:last-child) {
+  border-radius: 0;
+}
+/* Поднявшаяся под курсором или фокусом кнопка обязана показать СВОЮ рамку
+   и свою заливку целиком, а не быть обрезанной нахлёстом соседа. */
+.joined > *:hover,
+.joined > *:focus-visible {
+  position: relative;
+  z-index: 1;
+}

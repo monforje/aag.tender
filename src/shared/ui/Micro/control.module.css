@@ -1,0 +1,66 @@
+/* КНОПОЧКИ-ДЕТАЛИ: копирование, крестик, «ещё». Общая геометрия — круг
+   20px вокруг глифа 14px; цвет и реакция зависят от поверхности, на которой
+   кнопка лежит, поэтому задаются вариантом, а не числом по месту. */
+
+.copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--cu-size-5);
+  height: var(--cu-size-5);
+  border-radius: var(--cu-radii-round);
+  color: var(--cu-content-quaternary);
+  --icon-size: var(--cu-text-md);
+  transition: color var(--cu-duration-base) var(--cu-ease-standard),
+              background-color var(--cu-duration-base) var(--cu-ease-standard);
+}
+.copy:hover {
+  background: var(--cu-state-hover);
+  color: var(--cu-content-primary);
+}
+.copy:focus-visible {
+  outline: var(--cu-focus-ring);
+  outline-offset: 1px;
+}
+/* Состояние «скопировано» живёт ровно полторы секунды и читается сменой
+   глифа на галочку тона success: подтверждение без тоста ради копии. */
+.is-copied {
+  color: var(--cu-tone-success-ink);
+}
+
+.close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: var(--cu-size-5);
+  height: var(--cu-size-5);
+  border-radius: var(--cu-radii-round);
+  --icon-size: var(--cu-text-sm);
+  transition: opacity var(--cu-duration-base) var(--cu-ease-standard),
+              color var(--cu-duration-base) var(--cu-ease-standard),
+              background-color var(--cu-duration-base) var(--cu-ease-standard);
+}
+.close:focus-visible {
+  outline: var(--cu-focus-ring);
+  outline-offset: 1px;
+}
+.close:hover {
+  background: var(--cu-state-hover);
+}
+/* На цветной подложке (алерт) кнопка наследует тон сообщения и молчит в
+   покое (opacity .7), оживая под курсором. */
+.close--inherit {
+  color: inherit;
+  opacity: .7;
+}
+.close--inherit:hover {
+  opacity: 1;
+}
+/* На белой панели (тост, дровер) кнопка тише текста и темнеет к ховеру. */
+.close--quiet {
+  color: var(--cu-content-quaternary);
+}
+.close--quiet:hover {
+  color: var(--cu-content-primary);
+}

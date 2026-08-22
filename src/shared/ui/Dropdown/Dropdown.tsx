@@ -1,4 +1,7 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import {
+  useCallback, useEffect, useRef, useState,
+  type KeyboardEvent as ReactKeyboardEvent, type ReactNode,
+} from 'react';
 import { cx } from '@/shared/lib/cx';
 import s from './Dropdown.module.css';
 
@@ -9,6 +12,8 @@ export interface DropdownTriggerProps {
   onClick: () => void;
   'aria-haspopup': true;
   'aria-expanded': boolean;
+  /** Стрелки открывают меню с фокусом в списке — паттерн ARIA APG ([R2]). */
+  onKeyDown: (e: ReactKeyboardEvent<HTMLButtonElement>) => void;
 }
 
 interface DropdownProps {
@@ -32,17 +37,89 @@ interface DropdownProps {
 export function Dropdown({
   open, onToggle, onClose, menu, menuAlign = 'right', closeOnSelect = true, className, children,
 }: DropdownProps) {
+  const rootRef = useRef<HTMLDivElement>(null);
+  /* Куда вернуть фокус по Escape: триггер, с которого меню открыли. Запоминаем
+     элемент в момент нажатия — рефом триггер не обязан быть. */
+  const returnFocusRef = useRef<HTMLElement | null>(null);
+  const pendingFocus = useRef<'first' | 'last' | null>(null);
+
+  const items = (): HTMLElement[] =>
+    [...(rootRef.current?.querySelectorAll<HTMLElement>('[role^="menuitem"]') ?? [])];
+
+  /* Открытие стрелками ставит фокус в первый/последний пункт — после того,
+     как меню реально отрендерится, поэтому через эффект. */
+  useEffect(() => {
+    if (!open || !pendingFocus.current) return;
+    const list = items();
+    (pendingFocus.current === 'last' ? list[list.length - 1] : list[0])?.focus();
+    pendingFocus.current = null;
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e: globalThis.KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      /* Закрытие делает слушатель группы; здесь — возврат фокуса на триггер,
+         если он был внутри этого дропдауна ([R2]). */
+      if (rootRef.current?.contains(document.activeElement)) {
+        returnFocusRef.current?.focus();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [open]);
+
+  const trigger: DropdownTriggerProps = {
+    type: 'button',
+    onClick: () => {
+      returnFocusRef.current = document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+      onToggle();
+    },
+    'aria-haspopup': true,
+    'aria-expanded': open,
+    onKeyDown: (e) => {
+      if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+      e.preventDefault();
+      if (!open) {
+        returnFocusRef.current = e.currentTarget;
+        pendingFocus.current = e.key === 'ArrowUp' ? 'last' : 'first';
+        onToggle();
+        return;
+      }
+      const list = items();
+      (e.key === 'ArrowUp' ? list[list.length - 1] : list[0])?.focus();
+    },
+  };
+
+  /* Пункты выведены из табуляции и ходят стрелками/Home/End по кругу ([R2]). */
+  const onMenuKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return;
+    const list = items();
+    if (!list.length) return;
+    const i = list.indexOf(document.activeElement as HTMLElement);
+    e.preventDefault();
+    const next = e.key === 'ArrowDown' ? list[(i + 1) % list.length]
+      : e.key === 'ArrowUp' ? list[(i - 1 + list.length) % list.length]
+        : e.key === 'Home' ? list[0]
+          : list[list.length - 1];
+    next?.focus();
+  };
+
   return (
     <div
+      ref={rootRef}
       className={cx(s.dd, className, open && s.isOpen)}
       // Клик внутри не должен доходить до document-обработчика группы,
       // иначе меню закрывалось бы сразу после открытия (§JS: root.stopPropagation).
       onClick={(e) => e.stopPropagation()}
     >
-      {children({ type: 'button', onClick: onToggle, 'aria-haspopup': true, 'aria-expanded': open })}
+      {children(trigger)}
       <div
         className={cx(s.ddMenu, menuAlign === 'left' && s.ddMenuLeft)}
         role="menu"
+        onKeyDown={onMenuKeyDown}
         onClick={closeOnSelect ? onClose : undefined}
       >
         {menu}

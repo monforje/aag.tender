@@ -373,10 +373,8 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Незакрытая позиция. Прочерк, а не пустая ячейка: пустота читается как сбой
-   загрузки, прочерк — как «сознательно нет». cursor:help + title, тот же
-   третий язык «здесь есть пояснение», что у даты срока в <TenderSummary>. */
-.blank{ color: var(--cu-content-placeholder); cursor: help; }
+/* Незакрытая позиция и её устройства переехали в блок ПОМЕТКИ ЯЧЕЕК ниже:
+   пробел данных теперь пунктирная рамка с подписью, а отказ — капсула. */
 
 /* --- ДОСЬЕ: СОДЕРЖИМОЕ ОКНА ----------------------------------------------
    Само окно — <Modal> из shared/ui: оболочка, подложка, тело и части
@@ -420,3 +418,225 @@
 }
 .pop__reset:hover{ background: var(--cu-state-hover-subtle); color: var(--cu-content-primary); }
 .pop__reset:focus-visible{ outline: var(--cu-focus-ring); outline-offset: 1px; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ПОЛОСА УПРАВЛЕНИЯ И СЧЁТЧИКИ. Сама полоса живёт в CompareToolbar.module.css;
+   здесь — отступ от табов и всё, что внутри ячеек.
+
+   Правила канала пометок (Часть I спеки badges.md): цвет только из тонов;
+   ни одна пометка не живёт одним цветом (цвет + форма/глиф/текст); цена —
+   главный текст ячейки, устройство ложится под или вокруг числа; тихие в
+   покое, объясняются попапом по наведению; одно устройство — один смысл.
+   Сводка «показано / отказов / без цены / аномалий» убрана с экрана: те же
+   числа видны счётчиками в поповере фильтров и продублированы в caption.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.head-gap{ margin-top: 20px; }
+
+/* ── СТЕК ЗНАЧЕНИЯ ЯЧЕЙКИ КП ─────────────────────────────────────────────── */
+/* Резерв справа — под нависающую бирку «МИН» (свес ~40px, [R6]); он общий
+   ВСЕМ ячейкам колонки, поэтому правое выравнивание чисел не едет. */
+.stack{ display: inline-block; text-align: right; }
+.price-line{ display: block; white-space: nowrap; }
+
+/* Цена — главный текст ячейки: кегль не меняется, ничего не двигается. */
+.price{ position: relative; display: inline-block; white-space: nowrap; }
+/* Минимум — мазок маркера: прозрачный верх, заливка success под нижней
+   половиной текста. Читается как проведённый рукой мазок, а не подсветка. */
+.price--min{
+  background: linear-gradient(180deg, transparent 55%, var(--cu-tone-success-fill) 55%);
+  border-radius: 2px;
+}
+
+/* Ценник-бирка «мин»: наклон 12° вокруг центра ПРОКОЛА зашит в геометрию
+   глифа, точка подвеса = начало нити у угла цены. Триггер попапа — сама
+   бирка: раскачка появляется, только когда курсор на ценнике.
+
+   СЛОЙ: z-index выше монеты (z 2) и выше соседних колонок — бирка висит НАД
+   таблицей; лёгкая тень продаёт этот подъём. Резерв под свес держит
+   tableCell.roomy (паддинг всей колонки): свес статикой = ширина − прокол
+   (38 − 5 = 33px), максимальный замах добавляет ≈ H·sin 16° ≈ 28 × 0,28 ≈ 8px
+   → 41px < 42px резерва, клиппинга на границе ячейки нет. */
+.tag{
+  position: absolute; top: 46%; left: calc(100% - 5px); z-index: 3;
+  width: 38px; height: 28px;
+  transform-origin: 3% 2%;
+  cursor: help;
+}
+.tag svg{
+  display: block; width: 100%; height: 100%; overflow: visible;
+  filter: drop-shadow(0 1px 1.5px rgba(0,0,0,.22));
+}
+@keyframes tag-swing{
+  0%{ rotate: 0deg } 22%{ rotate: 16deg } 48%{ rotate: -11deg }
+  72%{ rotate: 6deg } 88%{ rotate: -2deg } 100%{ rotate: 0deg }
+}
+.tag:hover{ animation: tag-swing .9s cubic-bezier(.36,.07,.19,.97); }
+.tag:focus-visible,
+.coin:focus-visible,
+.key-mark:focus-visible,
+.med-mark:focus-visible,
+.spread-mark:focus-visible{
+  outline: var(--cu-focus-ring); outline-offset: 2px; border-radius: 6px;
+}
+
+/* Запас торга — монета у ОСНОВАНИЯ цены слева (справа-снизу уже висит «МИН»).
+   Прислонена под наклоном; hover — перекатывание НА РЕБРЕ, физика другой
+   породы, чем взмах на нитке. */
+.coin{
+  position: absolute; left: -25px; z-index: 2;
+  top: calc(50% - 12px);
+  width: 21px; height: 21px;
+  rotate: -14deg;
+  transform-origin: 78% 82%;
+  cursor: help; color: var(--cu-tone-info);
+  border-radius: 50%;
+}
+.coin svg{ display: block; width: 100%; height: 100%; overflow: visible; }
+@keyframes coin-rock{
+  0%{ transform: rotate(0deg) } 25%{ transform: rotate(11deg) }
+  55%{ transform: rotate(-8deg) } 80%{ transform: rotate(4deg) } 100%{ transform: rotate(0deg) }
+}
+.coin:hover{ animation: coin-rock .7s cubic-bezier(.36,.07,.19,.97); }
+
+/* Ключевая позиция — ключ ПРАВЕЕ названия, «воткнут наискосок», как ключ,
+   оставленный в замке. Наклон — независимое свойство rotate, поэтому
+   key-turn (transform) его не затирает. */
+.key-mark{
+  position: relative; display: inline-block;
+  width: 28px; height: 18px; margin-left: 6px; vertical-align: -2px;
+  rotate: -18deg; transform-origin: 50% 60%;
+  cursor: help; color: var(--cu-tone-warning);
+}
+.key-mark svg{ display: block; width: 100%; height: 100%; overflow: visible; }
+@keyframes key-turn{
+  from{ transform: perspective(90px) rotateY(0deg) }
+  to{ transform: perspective(90px) rotateY(360deg) }
+}
+.key-mark:hover{ animation: key-turn .7s cubic-bezier(.36,.07,.19,.97); }
+
+/* Дороже медианы — «леденец» по середине высоты цены. Тон neutral-ink — самый
+   тихий маркер: отсчёт, а не тревога и не возможность.
+
+   ВЫСОТА — вычисленная, не на глаз ([инвариант]): цифры 14px занимают
+   полосу ≈ от базовой линии до +10px (капс-высота ~0.7em), их оптическая
+   середина — +5px над базовой. Глиф высотой 19px обязан занять −4,5…+14,5px,
+   то есть его нижний край — на 5px НИЖЕ базовой линии; у svg-кнопки базовая
+   линия = нижний край бокса → vertical-align: −5px (middle ставил центр
+   глифа по x-height строки и уводил его вниз). */
+.med-mark{
+  position: relative; display: inline-block;
+  width: 22px; height: 19px; margin-left: 4px; vertical-align: -5px;
+  cursor: help; color: var(--cu-tone-neutral-ink);
+}
+.med-mark svg{ display: block; width: 100%; height: 100%; overflow: visible; }
+@keyframes med-rise{
+  0%{ transform: translateY(0) } 45%{ transform: translateY(-1.4px) } 100%{ transform: translateY(0) }
+}
+.med-mark:hover [data-mk='rise']{ animation: med-rise .55s cubic-bezier(.34,1.4,.64,1); }
+
+/* Высокий разброс — линейка размаха в колонке разброса; hover: засечки
+   разъезжаются на ±1.15px, диапазон «дышит» шириной. */
+.spread-mark{
+  position: relative; display: inline-block;
+  width: 24px; height: 16px; margin-left: 4px; vertical-align: -3px;
+  cursor: help; color: var(--cu-tone-danger);
+}
+.spread-mark svg{ display: block; width: 100%; height: 100%; overflow: visible; }
+@keyframes spread-open{
+  0%{ transform: translateX(0) } 45%{ transform: translateX(-1.15px) } 100%{ transform: translateX(0) }
+}
+@keyframes spread-open-r{
+  0%{ transform: translateX(0) } 45%{ transform: translateX(1.15px) } 100%{ transform: translateX(0) }
+}
+.spread-mark:hover [data-mk='cap-l']{ animation: spread-open .55s cubic-bezier(.34,1.4,.64,1); }
+.spread-mark:hover [data-mk='cap-r']{ animation: spread-open-r .55s cubic-bezier(.34,1.4,.64,1); }
+
+/* Единая зона reduced-motion: все hover-анимации брелоков гасятся одним
+   блоком. */
+@media (prefers-reduced-motion: reduce){
+  .tag:hover, .coin:hover, .key-mark:hover{ animation: none; }
+  .med-mark:hover [data-mk='rise'],
+  .spread-mark:hover [data-mk='cap-l'],
+  .spread-mark:hover [data-mk='cap-r']{ animation: none; }
+}
+
+/* ── АНОМАЛИЯ: штриховка «внимание» + рейка слева ──────────────────────────
+   Единственное устройство таблицы с текстурой — потому и читается как «здесь
+   надо остановиться». Заливкой ячейку красить нельзя: цена обязана остаться
+   читаемой, ховер строки обязан проходить под штриховкой. */
+.cell--anomaly{
+  box-shadow: inset 3px 0 0 var(--cu-tone-warning);
+  background-image: repeating-linear-gradient(-45deg,
+    var(--cu-tone-warning-fill) 0 5px, transparent 5px 10px);
+}
+.anomaly-trigger{ display: block; width: 100%; text-align: right; }
+.anomaly-trigger:focus-visible{
+  outline: var(--cu-focus-ring); outline-offset: -3px;
+  border-radius: var(--cu-radii-2);
+}
+
+/* ── ПРОБЕЛ ДАННЫХ против ОТКАЗА ─────────────────────────────────────────── */
+/* Нет цены — пустота, оформленная честно: пунктирная рамка говорит «место
+   было, содержимого нет». Отказ ниже — решение, и выглядит иначе сознательно:
+   два состояния противоположны по природе (§4 слой 3). */
+.cell--missing{ outline: 1px dashed var(--cu-border-default); outline-offset: -4px; }
+.dash{ color: var(--cu-content-secondary); }
+
+.chip{
+  display: inline-flex; align-items: center; gap: 4px;
+  height: 18px; padding: 0 8px;
+  border-radius: var(--cu-radii-round);
+  font-size: 11px; line-height: 18px;
+  font-weight: var(--cu-font-weight-medium);
+  white-space: nowrap;
+  background: var(--cu-tone-neutral-fill); color: var(--cu-tone-neutral-ink);
+}
+.chip-icon{ --icon-size: 11px; }
+
+/* Отклонение сверх допуска ±5 % — симметрично в обе стороны (Д.3):
+   «дешевле на 8 %» такой же повод спросить, как «дороже». */
+.dev-hot{ color: var(--cu-tone-danger-ink); font-weight: var(--cu-font-weight-medium); }
+
+/* ── МИКРОШКАЛЫ ──────────────────────────────────────────────────────────── */
+/* Разброс: шкала ОБЩАЯ для всех строк (25 % = вся длина) — сравнивать бары
+   между строками можно только на одной шкале. Цвет заливки = тон яруса. */
+.spread-bar{
+  display: block; width: 24px; height: 3px;
+  margin-top: 3px; margin-left: auto;
+  border-radius: var(--cu-radii-round);
+  background: var(--cu-state-hover); overflow: hidden;
+}
+.spread-bar i{ display: block; height: 100%; border-radius: inherit; }
+.spread-none .spread-bar i{ background: var(--cu-tone-neutral); }
+.spread-noticeable .spread-bar i{ background: var(--cu-tone-warning); }
+.spread-high .spread-bar i{ background: var(--cu-tone-danger); }
+
+/* Доля веса (вид «По весу»): та же микрошкала, но шкала — 100 % среза. */
+.share{
+  display: inline-block; width: 34px; height: 3px;
+  vertical-align: middle; margin-right: 6px;
+  border-radius: var(--cu-radii-round);
+  background: var(--cu-state-hover); overflow: hidden;
+}
+.share i{ display: block; height: 100%; background: var(--cu-tone-info); border-radius: inherit; }
+
+/* Снятая строка притушена целиком и остаётся в DOM — часть истории сметы. */
+.row--removed{ opacity: .55; }
+
+/* Строка, подсвеченная из «Анализа»: рецепт 2 каталога состояний — фон
+   ступени .06 без второго языка (цвет текста и жирность молчат). Заливка на
+   td, а не tr: колонки красит <col> ПОД ячейками, и фон строки поверх него
+   читается ровно так же, как hover таблицы реестра.
+   Правило стоит ПОСЛЕ .group-row: у группы своя тихая заливка, но её строки
+   обычные, конфликта нет; с .row--removed не спорит — приглушение живёт
+   в opacity и складывается с фоном, а не отменяет его. */
+.row--focused > td{ background-color: var(--cu-state-hover); }
+
+/* Цена за единицу во втором поле попапа минимума — второй строкой ПОД ценой:
+   пара не влезает в колонку значения, а переносить цену нельзя. */
+.popup-unit{
+  display: block; margin-top: 1px;
+  font-size: 11px; line-height: 13px; font-weight: 400;
+  color: var(--cu-content-tertiary);
+}

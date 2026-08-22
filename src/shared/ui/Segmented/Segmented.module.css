@@ -1,0 +1,67 @@
+/* Сегмент-контрол режимов. Трек — «тихая» заливка (.035): он группирует
+   взаимоисключающие опции, поэтому обязан быть тише любой из них.
+
+   ОТМЕЧЕННОСТЬ — ОДНИМ КАНАЛОМ: заливка тона режима (решение после отклонённой
+   пилюли). Вес шрифта и вторая рамка состояние не кодируют — иначе канал
+   задвоен. Hover отмеченной — осветление собственной заливки (рецепт чипа
+   .modchip с той же полосы сравнения): поверх своего фона ступени каталога не
+   читаются. Кнопки наследуют reset из global.css. */
+.segmented{
+  display: inline-flex; gap: 2px; padding: 2px;
+  border-radius: var(--cu-radii-4);
+  background: var(--cu-fill-subtle);
+}
+
+.option{
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 26px; padding: 0 10px;
+  border-radius: var(--cu-radii-3);   /* концентрика: 8 − 2 = 6 */
+  font-size: 13px; line-height: 26px; white-space: nowrap;
+  color: var(--cu-content-secondary);
+  transition:
+    background-color var(--cu-animation-duration) var(--cu-animation-timing),
+    color var(--cu-animation-duration) var(--cu-animation-timing),
+    filter var(--cu-animation-duration) var(--cu-animation-timing);
+}
+/* Рецепт 1: крупная поверхность — слабая ступень. */
+.option:hover{ background: var(--cu-state-hover-subtle); color: var(--cu-content-primary); }
+/* Отмеченная — заливка СВОЕГО тона; hover гасит её на ступень вместо второй
+   заливки. Правило стоит ПОСЛЕ :hover — при равной специфичности решает
+   порядок. */
+.option.is-on{
+  background: var(--seg-fill, var(--cu-background-main));
+  color: var(--seg-ink, var(--cu-content-primary));
+}
+.option.is-on:hover{ filter: brightness(.96); }
+/* Отклик на нажатие — микросжатие под пальцем: жест подтверждён. */
+.option:active{ transform: scale(.96); }
+.option:focus-visible{ outline: var(--cu-focus-ring); outline-offset: 1px; }
+
+/* Иконка — декор: называет режим до чтения подписи, у отмеченной наследует
+   цвет текста (ink тона). */
+.option__icon{ --icon-size: 14px; color: var(--cu-content-tertiary); }
+.option.is-on .option__icon{ color: inherit; }
+
+/* Тон приходит атрибутом от опции: пять тонов проекта, никаких локальных
+   цветов. Нейтральный режим честно нейтрален: его «заливка» — белая капсула
+   с хэйрлайном, единственный случай поверхности вместо тона. */
+.option[data-tone='info']{
+  --seg-fill: var(--cu-tone-info-fill);
+  --seg-ink: var(--cu-tone-info-ink);
+}
+.option[data-tone='success']{
+  --seg-fill: var(--cu-tone-success-fill);
+  --seg-ink: var(--cu-tone-success-ink);
+}
+.option[data-tone='warning']{
+  --seg-fill: var(--cu-tone-warning-fill);
+  --seg-ink: var(--cu-tone-warning-ink);
+}
+.option[data-tone='danger']{
+  --seg-fill: var(--cu-tone-danger-fill);
+  --seg-ink: var(--cu-tone-danger-ink);
+}
+
+@media (prefers-reduced-motion: reduce){
+  .option{ transition: none; }
+}

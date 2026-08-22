@@ -1,0 +1,40 @@
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--stack-gap);
+}
+
+.inline {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--inline-gap);
+}
+.inline--wrap {
+  flex-wrap: wrap;
+}
+
+.grid {
+  display: grid;
+  gap: var(--grid-gap);
+}
+.grid--rows {
+  row-gap: var(--grid-row-gap);
+}
+
+.divider {
+  border: 0;
+  background: var(--cu-border-default);
+  flex: 0 0 auto;
+}
+.divider--h {
+  width: 100%;
+  height: 1px;
+}
+.divider--v {
+  /* Вертикальный разделитель живёт только внутри флекс-ряда: высоту ему
+     даёт растяжение по поперечной оси. Вне флекса у div нет причин быть
+     выше нуля — это не баг, а честная зависимость от контекста. */
+  width: 1px;
+  align-self: stretch;
+}

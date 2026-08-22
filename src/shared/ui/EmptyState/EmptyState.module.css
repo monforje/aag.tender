@@ -1,0 +1,46 @@
+/* ПУСТОЕ СОСТОЯНИЕ. Иконка сидит в круге тихой заливки --cu-fill: это
+   «место без содержимого», а не событие, и кричать о нём цветом тона
+   незачем. danger-вариант единственный красит круг тоном — ошибка это
+   событие, требующее реакции. */
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--cu-size-3);
+  padding: var(--cu-size-7) var(--cu-size-4);
+  text-align: center;
+}
+/* Размер и цвет глифа задаются переменными НА КРУГЕ и наследуются внутрь
+   <Icon>: селектор модуля не может дотянуться до чужого хэшированного
+   класса, а переменные хэшей не имеют (мост из §0.2(c)). */
+.emptyIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--cu-size-8);
+  height: var(--cu-size-8);
+  border-radius: var(--cu-radii-round);
+  background: var(--cu-fill-subtle);
+  --icon-size: var(--cu-text-md);
+  color: var(--cu-content-secondary);
+}
+.is-danger .emptyIcon {
+  background: var(--cu-tone-danger-fill);
+  color: var(--cu-tone-danger-ink);
+}
+
+.emptyTitle {
+  font-size: var(--cu-text-base);
+  font-weight: var(--cu-font-weight-medium);
+  line-height: var(--cu-leading-same);
+  color: var(--cu-content-primary);
+}
+.emptyDescription {
+  max-width: 40ch;
+  font-size: var(--cu-text-sm);
+  line-height: var(--cu-leading-normal);
+  color: var(--cu-content-secondary);
+}
+.emptyAction {
+  margin-top: var(--cu-size-1);
+}

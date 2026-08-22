@@ -1,0 +1,53 @@
+/* ВКЛАДКИ ПОВЕРХНОСТЕЙ — визуальная грамматика SecondaryHeader, ужатая до
+   примитива: активная вкладка = цвет текста + нижняя полоска (::after на
+   хит-зоне), ховер-таблетка только у неактивной. Второго индикатора нет:
+   одно состояние кодируется одним набором каналов. */
+.tablist {
+  display: flex;
+  align-items: center;
+  gap: var(--cu-size-1);
+}
+
+.tab {
+  position: relative;
+  height: var(--cu-size-7);
+  padding-inline: var(--cu-size-1);
+}
+/* Хит-зона шире подписи: попасть легче, а полоска рисуется по ней же. */
+.tab::after {
+  content: '';
+  position: absolute;
+  left: var(--cu-size-1);
+  right: var(--cu-size-1);
+  bottom: -2px;
+  height: 2px;
+  border-radius: var(--cu-radii-round);
+  background: transparent;
+}
+.tab-content {
+  display: inline-flex;
+  align-items: center;
+  height: var(--cu-size-6);
+  padding-inline: var(--cu-size-2);
+  border-radius: var(--cu-radii-round);
+  font-size: var(--cu-text-base);
+  line-height: var(--cu-leading-same);
+  color: var(--cu-content-secondary);
+  transition: background-color var(--cu-duration-base) var(--cu-ease-standard),
+              color var(--cu-duration-base) var(--cu-ease-standard);
+}
+.tab:not(.is-active) .tab-content:hover {
+  background: var(--cu-state-hover);
+}
+.is-active .tab-content {
+  color: var(--cu-content-primary);
+}
+.is-active::after {
+  background: var(--cu-content-primary);
+}
+
+.tab:focus-visible {
+  outline: var(--cu-focus-ring);
+  outline-offset: 1px;
+  border-radius: var(--cu-radii-round);
+}

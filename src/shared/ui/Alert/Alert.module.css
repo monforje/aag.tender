@@ -1,0 +1,41 @@
+/* АЛЕРТ. Тихая подложка тона (.1) и текст ink'ом того же тона — та же пара,
+   что у <Badge>, поэтому семейство читается как одно: бейдж в таблице и
+   алерт над ней говорят одинаково. Иконка по умолчанию своя у каждого тона;
+   цвет можно переопределить пропом, смысловой тон — нет. */
+.alert {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--cu-size-2);
+  padding: var(--cu-size-3);
+  border-radius: var(--cu-radii-3);
+  background: var(--tone-fill);
+  color: var(--tone-ink);
+  font-size: var(--cu-text-base);
+  line-height: var(--cu-leading-normal);
+}
+.alert--info    { --tone-fill: var(--cu-tone-info-fill);    --tone-ink: var(--cu-tone-info-ink); }
+.alert--success { --tone-fill: var(--cu-tone-success-fill); --tone-ink: var(--cu-tone-success-ink); }
+.alert--warning { --tone-fill: var(--cu-tone-warning-fill); --tone-ink: var(--cu-tone-warning-ink); }
+.alert--danger  { --tone-fill: var(--cu-tone-danger-fill);  --tone-ink: var(--cu-tone-danger-ink); }
+.alert--neutral { --tone-fill: var(--cu-fill-subtle);       --tone-ink: var(--cu-content-secondary); }
+
+.alertIcon {
+  flex: 0 0 auto;
+  margin-top: 1px; /* оптическое выравнивание с первой строки текста */
+  --icon-size: var(--cu-text-md);
+}
+
+.alertBody {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Заголовок держит весом, а не размером: алерт уже окрашен тоном, и вторая
+   крупная строка внутри превратила бы сообщение в плакат. */
+.alertTitle {
+  font-weight: var(--cu-font-weight-medium);
+}
+
+/* Крестик закрытия — микро-компонент <CloseButton variant="inherit">:
+   он наследует тон алерта и молчит в покое. Раньше геометрия и реакции
+   жили здесь; теперь то же самое рисует один компонент для всех поверхностей. */

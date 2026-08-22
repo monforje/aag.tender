@@ -1,0 +1,33 @@
+/* ПОВЕРХНОСТЬ КАРТОЧКИ. Край — хэйрлайн внутри тени (рецепт §0.2(b)-2),
+   радиус — карточный --cu-radii-6 из эталона. Поля держит переменная:
+   ступень задаётся пропом, и модуль не плодит шесть классов-размеров. */
+.card {
+  padding: var(--card-pad, var(--cu-size-4));
+  border-radius: var(--cu-radii-6);
+  background: var(--cu-background-main);
+  box-shadow: var(--cu-elevation-border-1);
+}
+
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--cu-size-2);
+}
+/* Заголовок прижат к своему блоку, а не плавает между полями карточки. */
+.card-title {
+  font-size: var(--cu-text-md);
+  font-weight: var(--cu-font-weight-semibold);
+  line-height: var(--cu-leading-same);
+  color: var(--cu-content-primary);
+}
+.card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--cu-size-2);
+  margin-top: var(--cu-size-4);
+  padding-top: var(--cu-size-3);
+  /* Линия подвала — токен границы: изменится шкала, изменится и она. */
+  border-top: 1px solid var(--cu-border-default);
+}

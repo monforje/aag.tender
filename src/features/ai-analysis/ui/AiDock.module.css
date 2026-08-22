@@ -1,0 +1,184 @@
+/* Панель «Анализ»: немодальный оверлей у правого края рабочей области.
+   ГЕОМЕТРИЯ — от каркаса: топбар (--cu-global-actions-bar-height, 40px),
+   боковой и нижний зазор карточки воркспейса (--island-gap). Панель ложится
+   ровно на карточку рабочей области и не перекрывает каркас: слой
+   --z-dock ниже рейла и топбара.
+   СОДЕРЖИМОЕ НЕ СЖИМАЕТСЯ: панель оверлей, а не колонка сетки — таблица
+   сравнения в layout="fixed" любое сжатие конвертирует в горизонтальный
+   скролл. */
+.dock{
+  position: fixed;
+  top: var(--cu-global-actions-bar-height);
+  right: var(--island-gap);
+  bottom: var(--island-gap);
+  width: var(--ai-dock-width, 400px);
+  z-index: var(--z-dock);
+
+  display: flex; flex-direction: column;
+  background: var(--cu-background-main);
+  border-radius: var(--cu-radii-4);
+  /* Белое на белом: хэйрлайн внутри тени (вариант 2 лестницы), как у меню. */
+  box-shadow: var(--cu-elevation-border-4);
+  overflow: hidden;
+
+  /* Выезд вправо из-под своей кнопки: --cu-duration-slow документирован как
+     время панелей, которые едут целиком; характер — emphasized (резкий старт,
+     мягкая посадка). visibility с задержкой = длительности, чтобы закрытая
+     панель не ловила фокус; переменная гасится глобальным клампом вместе с
+     длительностью при prefers-reduced-motion. */
+  transform: translateX(calc(100% + var(--island-gap)));
+  visibility: hidden;
+  transition:
+    transform var(--cu-duration-slow) var(--cu-ease-emphasized),
+    visibility 0s linear var(--cu-duration-slow);
+}
+.dockOpen{
+  transform: none;
+  visibility: visible;
+  transition: transform var(--cu-duration-slow) var(--cu-ease-emphasized);
+}
+/* Глобальный кламп гасит только ДЛИТЕЛЬНОСТИ; задержка видимости осталась бы
+   0.28s и панель догорала бы на экране после мгновенного перехода. Здесь
+   движение выключается целиком: состояние меняется одним кадром. */
+@media (prefers-reduced-motion: reduce){
+  .dock, .dockOpen{ transition: none; }
+}
+
+/* ── Шапка: заголовок, подпись, крестик. Липкая не нужна — шапка вне скролла. */
+.head{
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 14px 12px 12px 16px;
+}
+.headTitle{
+  font-size: var(--cu-text-base); line-height: var(--cu-leading-same);
+  font-weight: var(--cu-font-weight-semibold);
+}
+.headSub{
+  margin-top: 4px;
+  font-size: var(--cu-text-sm); line-height: 1.3;
+  color: var(--cu-content-secondary);
+}
+.closeBtn{ margin-left: auto; }
+
+/* ── Тело: сценарии + карточки. Скроллится только оно. */
+.body{
+  flex: 1 1 auto; min-height: 0;
+  overflow-y: auto;
+  padding: 0 16px 16px;
+}
+
+/* Сценарии — обёртка чипсов. Их пять, сегменту рано: список растущий. */
+.scenarios{
+  display: flex; flex-wrap: wrap; gap: 6px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--cu-border-default);
+  margin-bottom: 12px;
+}
+.chip{
+  padding: 5px 12px;
+  border-radius: var(--cu-radii-round);
+  font-size: var(--cu-text-sm); font-weight: var(--cu-font-weight-medium);
+  color: var(--cu-content-secondary);
+  white-space: nowrap;
+  transition: background-color var(--cu-animation-duration) var(--cu-animation-timing);
+}
+.chip:hover{ background: var(--cu-state-hover-subtle); }
+/* Активный — рецепт 2: тот же фон ступенью выше, без второго языка
+   (жирность и цвет текста молчат). */
+.isActive{ background: var(--cu-state-hover); color: var(--cu-content-primary); }
+.isActive:hover{ background: var(--cu-state-hover-strong); }
+
+/* ── Карточка правила: тег + заголовок + текст + мета. Кнопка только тогда,
+   когда есть куда вести (rowId); сводные карточки честно просто текст. */
+.card{
+  display: block; width: 100%; text-align: left;
+  padding: 10px 12px; margin-bottom: 8px;
+  background: var(--cu-background-main);
+  border: 1px solid var(--cu-border-default);
+  border-radius: var(--cu-radii-3);
+  transition: background-color var(--cu-animation-duration) var(--cu-animation-timing);
+}
+button.card:hover{ background: var(--cu-state-hover-subtle); }
+button.card:focus-visible{
+  outline: var(--cu-focus-ring);
+  outline-offset: 2px;
+}
+.cardHead{ display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.cardTitle{
+  font-size: var(--cu-text-sm); font-weight: var(--cu-font-weight-semibold);
+  line-height: var(--cu-leading-normal);
+}
+.cardText{
+  font-size: var(--cu-text-sm); line-height: var(--cu-leading-normal);
+  color: var(--cu-content-secondary);
+}
+.cardMeta{
+  margin-top: 6px;
+  font-size: var(--cu-text-xs); line-height: 1;
+  color: var(--cu-content-quaternary);
+}
+
+/* Приглашение вместо карточек: назван объект и первое действие
+   (правило пустого состояния), но кнопкой оно НЕ является — действие живёт
+   в таблице, дублировать цель нельзя. */
+.invite{
+  padding: 12px; margin-bottom: 8px;
+  background: var(--cu-global-sidebar-background);
+  border-radius: var(--cu-radii-3);
+  font-size: var(--cu-text-sm); line-height: var(--cu-leading-normal);
+  color: var(--cu-content-secondary);
+}
+
+/* ── «Спросить ИИ»: всегда внизу, скролла не теряет. */
+.ask{
+  flex: none;
+  padding: 12px 16px 16px;
+  border-top: 1px solid var(--cu-border-default);
+}
+.askLabel{
+  display: block; margin-bottom: 8px;
+  font-size: var(--cu-text-sm); font-weight: var(--cu-font-weight-semibold);
+}
+.textarea{
+  width: 100%;
+  min-height: 60px;
+  resize: vertical;
+  padding: 8px 10px;
+  border: 1px solid var(--cu-border-default);
+  border-radius: var(--cu-radii-3);
+  background: var(--cu-background-main);
+  font-size: var(--cu-text-sm); line-height: var(--cu-leading-normal);
+  color: inherit;
+}
+.textarea::placeholder{ color: var(--cu-content-placeholder); }
+/* Фокус — кольцо состояния, а не родной outline: тот же язык, что у поля
+   поиска (рецепт 4). */
+.textarea:focus-visible{
+  outline: none;
+  box-shadow: var(--cu-state-ring);
+}
+.askSubmit{ width: 100%; justify-content: center; margin-top: 8px; }
+
+.answerBlock{
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: var(--cu-global-sidebar-background);
+  border-radius: var(--cu-radii-3);
+}
+.answerEyebrow{
+  display: block; margin-bottom: 5px;
+  font-size: var(--cu-text-xs); line-height: 1;
+  text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--cu-content-quaternary);
+}
+.answerText{
+  font-size: var(--cu-text-sm); line-height: var(--cu-leading-normal);
+  color: var(--cu-content-secondary);
+}
+
+/* Узкий контейнер: панель забирала бы больше половины страницы. Ширина
+   остаётся фиксированной, но контент страницы под ней уже не читается —
+   это цена MVP, осознанная в ТЗ (§7): раскладку на два столбца заводить рано. */
+@media (max-width: 900px){
+  .dock{ width: min(400px, calc(100vw - 24px)); }
+}

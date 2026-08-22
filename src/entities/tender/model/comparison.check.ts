@@ -6,8 +6,10 @@
  *  Фреймворка нет намеренно — то же соглашение, что у registry.check.ts. */
 import { strict as assert } from 'node:assert';
 import {
-  bidStatus, decimal, flatten, groupSum, money, rankBids, spread, sumOf,
-  type ComparePosition, type Contractor,
+  analyzeComparison, bidStatus, cellMark, decimal, deviationPct, filterRows,
+  flatten, groupSum, isModifiedView, medianOf, money, predicateCount,
+  predicatePasses, rankBids, shownMetrics, spread, sumOf,
+  type ComparePosition, type CompareView, type Contractor,
 } from './comparison';
 import { MOCK_COMPARISON } from './comparison.mock';
 
@@ -65,7 +67,7 @@ assert.equal(spread(P[0], [who('x', { b: 100 }), who('y', { b: 1 })]), null);
 // две строки сметы в одну расценку.
 assert.equal(POSITIONS.length, GROUPS.reduce((n, g) => n + g.positions.length, 0));
 assert.equal(new Set(POSITIONS.map((p) => p.id)).size, POSITIONS.length, 'id позиций уникальны');
-assert.deepEqual(GROUPS.map((g) => g.positions.length), [5, 5, 3]);
+assert.deepEqual(GROUPS.map((g) => g.positions.length), [5, 5, 4]);
 
 // Итоги разделов складываются в итог по КП — иначе строка «Итого · Материалы»
 // и сумма на карточке говорили бы разное, а проверить это глазами нельзя.
@@ -80,8 +82,10 @@ for (const contractor of CONTRACTORS) {
 // любой расценки без правки соседней уронит проверку здесь, а не на экране.
 const REFERENCE: Record<string, number> = {
   'АО «МетСнаб»': 11_840_000,
-  'ООО «ИнженерГрупп»': 12_156_000,
-  'ООО «СтройМонтаж»': 11_980_000,
+  /* Расценки на добавку (m5) сдвинуты к 41 ₽/кг, чтобы в фикстуре жил и
+     ТИХИЙ ярус разброса (<7 %): правка согласована этими же равенствами. */
+  'ООО «ИнженерГрупп»': 12_147_600,
+  'ООО «СтройМонтаж»': 11_975_800,
 };
 for (const contractor of CONTRACTORS) {
   assert.equal(sumOf(contractor, POSITIONS), REFERENCE[contractor.name], contractor.name);
@@ -127,5 +131,95 @@ assert.equal(flatten([]).length, 0);
 assert.match(money(11840000), /^11.840.000\s?₽$/u);
 assert.equal(decimal(86.5), '86,5');
 assert.equal(decimal(7.857), '7,9');
+
+/* ═══════════ производные числа строки (анализ) ═══════════
+   Четвёртое тихое место: минимум, метка разброса и медиана не падают — они
+   молча советуют брать подозрительную цифру. Проверяются на живой фикстуре,
+   где каждый ярус присутствует нарочно (норма R7). */
+const FACTS = analyzeComparison(GROUPS, CONTRACTORS);
+const factOf = (id: string) => {
+  const f = FACTS.byId.get(id);
+  assert.ok(f, `нет анализа у ${id}`);
+  return f;
+};
+const contractor = (id: string) => CONTRACTORS.find((c) => c.id === id)!;
+
+// Медиана по всем закрытым расценкам, включая аномальные.
+assert.equal(medianOf([3, 1, 2]), 2);
+assert.equal(medianOf([10, 20]), 15);
+assert.equal(medianOf([]), null);
+assert.deepEqual(factOf('m1').bids.map((b) => b.price), [4755, 5166, 5182]);
+assert.equal(factOf('m1').median, 5166);
+
+// ГЛАВНОЕ ПРАВИЛО МИНИМУМА: лучшая НЕаномальная цена. Самая дешёвая расценка
+// арматуры помечена аномалией — «мин» обязан уйти второму по дешевизне, иначе
+// экран советует брать подозрительную цифру.
+const m2 = factOf('m2');
+assert.ok(m2.anomaly, 'аномалия арматуры размечена в фикстуре');
+assert.notEqual(m2.bestId, 'ms', 'аномально дешёвая цена выбывает из соревнования за минимум');
+assert.equal(m2.bestId, 'ig');
+
+// …и остаётся в разбросе: аномалия не вычищается из процента строки.
+assert.ok(Math.abs(m2.spread! - 17.87) < 0.01, `разброс арматуры ${m2.spread}`);
+assert.equal(m2.spreadTag, 'high');
+
+// Метка выводится из процента порогом, а не приходит полем: ярусы high ≥ 15,
+// noticeable ≥ 7. На фикстуре есть ВСЕ три яруса живьём, включая тихий.
+assert.deepEqual(factOf('w4').spreadTag, null, 'одна расценка — сравнивать не с чем');
+assert.equal(factOf('m4').spreadTag, null, 'у плёнки тоже одна расценка');
+assert.equal(factOf('m1').spreadTag, 'noticeable');
+assert.equal(factOf('m5').spreadTag, 'none');
+assert.deepEqual(
+  FACTS.rows.filter((r) => r.spreadTag === 'high').map((r) => r.position.id),
+  ['m2', 'm3', 'w3', 'g2'],
+);
+
+// Отклонение от медианы: знак имеет значение, допуск симметричный.
+assert.ok(Math.abs(deviationPct(49585, 45869) - 8.1) < 0.05);
+assert.ok(deviationPct(42067, 45869) < -7, 'аномально дешёвая цена уходит вниз с минусом');
+
+// Вес строки = максимум × объём; снятая строка веса не имеет вовсе.
+assert.ok(factOf('m2').weight > factOf('m1').weight, 'арматура — самый тяжёлый ряд фикстуры');
+assert.deepEqual(FACTS.rows.filter((r) => r.weight === 0).map((r) => r.position.id), ['g4']);
+assert.ok(FACTS.sumWeight > 0);
+
+// Отказ и пробел — разные состояния и разные счётчики.
+assert.equal(factOf('g1').declined, true, 'СтройМонтаж отказался от гидроизоляции');
+assert.equal(factOf('g1').missing, false, 'отказ — не пробел данных');
+assert.deepEqual(FACTS.rows.filter((r) => r.missing).map((r) => r.position.id), ['m4', 'w4']);
+assert.deepEqual(FACTS.rows.filter((r) => r.declined).map((r) => r.position.id), ['g1']);
+
+// Потенциал хранится за единицу, в строку выходит умножением на общий объём.
+assert.equal(cellMark(contractor('ms'), 'm1').potential, 150);
+assert.equal(factOf('m1').maxPot, 150 * 420);
+
+/* ═══════════ предикаты фильтров ═══════════ */
+const ALL = FACTS.rows;
+// Комбинируются по И; пустой набор показывает всё.
+assert.deepEqual(filterRows(ALL, []).length, ALL.length);
+assert.deepEqual(
+  filterRows(ALL, ['key', 'spread']).map((r) => r.position.id),
+  filterRows(ALL, ['spread']).filter((r) => predicatePasses('key', r)).map((r) => r.position.id),
+);
+// Счётчики считаются по всем данным до применения фильтра — иначе число на
+// невыбранном пункте бесполезно. Значения согласованы с разметкой фикстуры:
+// ключевых три, высоких разбросов четыре, аномальных строк одна, с потенциалом
+// пять (порог отсекает копеечные запасы), дороже медианы на >5 % — шесть.
+const counted = (['key', 'spread', 'anomaly', 'pot', 'med'] as const).map((id) => [
+  id, predicateCount(id, ALL),
+]);
+assert.deepEqual(Object.fromEntries(counted), { key: 3, spread: 4, anomaly: 1, pot: 5, med: 6 });
+
+/* ═══════════ пресеты: четыре оси и флаг «изменён» ═══════════ */
+const view: CompareView = {
+  preset: 'overview', mainMetric: 'price', extraMetrics: [], rowView: 'sections', filters: [],
+};
+assert.deepEqual(shownMetrics(view), ['price']);
+assert.equal(isModifiedView(view), false, 'база пресета не считается изменённой');
+// Любое ручное движение по любой из четырёх осей поднимает флаг…
+assert.equal(isModifiedView({ ...view, filters: ['pot'] }), true);
+assert.equal(isModifiedView({ ...view, mainMetric: 'deviation' }), true);
+assert.equal(isModifiedView({ ...view, rowView: 'weight' }), true);
+assert.equal(isModifiedView({ ...view, extraMetrics: ['price'] }), true);
 
 console.log('comparison: ok');

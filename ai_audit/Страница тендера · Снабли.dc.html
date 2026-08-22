@@ -1,0 +1,1007 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/ds-6e248e25-e035-4be1-a303-a2748810d11e/styles.css" />
+<script src="_ds/ds-6e248e25-e035-4be1-a303-a2748810d11e/_ds_bundle.js"></script>
+<style>
+  html, body { margin: 0; padding: 0; }
+  body { background: var(--bg); }
+  a { color: var(--action-text); text-decoration: none; }
+  a:hover { color: var(--amber-800); }
+</style>
+</helmet>
+
+<div style="min-height:100vh;background:var(--bg);display:flex;flex-direction:column;">
+
+  <header style="position:sticky;top:0;z-index:50;height:56px;flex:none;display:flex;align-items:center;gap:14px;padding:0 20px;background:var(--surface);border-bottom:1px solid var(--border);">
+    <img src="brand/logo-lockup.svg" alt="Снабли" style="height:26px;flex:none;" />
+    <span style="width:1px;height:22px;background:var(--border);flex:none;"></span>
+    <div style="min-width:0;overflow:hidden;white-space:nowrap;">
+      <x-import component-from-global-scope="DesignSystem_6e248e.Breadcrumbs" items="{{ crumbs }}" hint-size="300px,24px"></x-import>
+    </div>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:8px;">
+      <x-import component-from-global-scope="DesignSystem_6e248e.Button" variant="{{ analysisVariant }}" size="sm" onClick="{{ toggleDock }}" hint-size="92px,36px">Анализ</x-import>
+      <x-import component-from-global-scope="DesignSystem_6e248e.Menu" trigger="Экспорт" items="{{ exportItems }}" align="end" hint-size="112px,36px"></x-import>
+      <x-import component-from-global-scope="DesignSystem_6e248e.Button" variant="{{ decisionVariant }}" size="sm" onClick="{{ toggleDecision }}" hint-size="132px,36px">{{ decisionLabel }}</x-import>
+    </div>
+  </header>
+
+  <div style="flex:1;width:100%;max-width:1560px;margin:0 auto;padding:18px 20px 40px;display:flex;flex-direction:column;gap:14px;">
+
+    <x-import component-from-global-scope="DesignSystem_6e248e.EntityHeader"
+      id="T-2026-014" copy-text="Ссылка на тендер скопирована"
+      title="{{ hTitle }}" onTitleChange="{{ onTitle }}"
+      status="{{ status }}" fields="{{ fields }}" stats="{{ stats }}"
+      hint-size="100%,300px"></x-import>
+
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow-card);padding:14px 18px;display:flex;align-items:center;gap:20px;flex-wrap:wrap;">
+      <div style="display:flex;flex-direction:column;gap:7px;flex:none;">
+        <span class="eyebrow">Бюджетная позиция</span>
+        <x-import component-from-global-scope="DesignSystem_6e248e.Menu" trigger="{{ bpLabel }}" items="{{ bpItems }}" align="start" hint-size="280px,40px"></x-import>
+      </div>
+      <div style="flex:1 1 320px;min-width:260px;display:flex;flex-direction:column;gap:7px;">
+        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;">
+          <span class="eyebrow">Расход лимита</span>
+          <span style="{{ bpShareStyle }}">{{ bpShareText }}</span>
+        </div>
+        <div style="position:relative;height:8px;border-radius:var(--radius-full);background:var(--surface-sunken);">
+          <span style="{{ barCommittedStyle }}"></span>
+          <span style="{{ barTenderStyle }}"></span>
+          <span style="{{ limitMarkStyle }}"></span>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px 16px;font-size:11.5px;color:var(--text-muted);">
+          <span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:8px;height:8px;border-radius:2px;background:var(--neutral-300);"></span>Уже размещено <span class="mono" style="color:var(--text);">{{ bpCommittedText }}</span></span>
+          <span style="display:inline-flex;align-items:center;gap:5px;"><span style="{{ tenderLegendDotStyle }}"></span>Этот тендер <span class="mono" style="color:var(--text);">{{ bpTenderText }}</span></span>
+          <span style="display:inline-flex;align-items:center;gap:5px;">Лимит <span class="mono" style="color:var(--text);">{{ bpBudgetText }}</span></span>
+        </div>
+      </div>
+      <span style="{{ bpFreeStyle }}">{{ bpFreeText }}</span>
+    </div>
+
+    <sc-if value="{{ over }}" hint-placeholder-val="{{ false }}">
+      <x-import component-from-global-scope="DesignSystem_6e248e.Alert" tone="bad" title="{{ overTitle }}" action="Изменить лимит позиции →" hint-size="100%,76px">{{ overText }}</x-import>
+    </sc-if>
+
+    <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px 20px;flex-wrap:wrap;margin-top:6px;">
+      <x-import component-from-global-scope="DesignSystem_6e248e.Tabs" tabs="{{ tabs }}" value="{{ view }}" onChange="{{ setView }}" hint-size="340px,46px"></x-import>
+      <span class="eyebrow" style="padding-bottom:12px;">Раунд 1 · срез от 14.07.2026</span>
+    </div>
+
+    <sc-if value="{{ isCompare }}" hint-placeholder-val="{{ true }}">
+      <div style="{{ layoutStyle }}">
+        <div style="min-width:0;display:flex;flex-direction:column;gap:14px;">
+
+          <sc-if value="{{ hasPair }}" hint-placeholder-val="{{ true }}">
+            <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow-card);padding:14px 18px;">
+              <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:10px;">
+                <span class="eyebrow">Разница КП</span>
+                <span style="font-size:14px;font-weight:700;">{{ pairTitle }}</span>
+                <span style="{{ pairTotalStyle }}">{{ pairTotal }}</span>
+              </div>
+              <sc-for list="{{ pairRows }}" as="r" hint-placeholder-count="4">
+                <button type="button" onClick="{{ r.onClick }}" style="{{ r.rowStyle }}" style-hover="background:var(--neutral-tint);">
+                  <span style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ r.name }}</span>
+                  <span class="mono" style="{{ r.deltaStyle }}">{{ r.delta }}</span>
+                  <span style="height:6px;border-radius:var(--radius-full);background:var(--surface-sunken);position:relative;overflow:hidden;"><span style="{{ r.barStyle }}"></span></span>
+                  <span class="mono" style="font-size:11px;color:var(--text-subtle);text-align:right;">{{ r.share }}</span>
+                </button>
+              </sc-for>
+            </div>
+          </sc-if>
+
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow-float);overflow:hidden;">
+
+            <div style="display:flex;flex-wrap:wrap;align-items:center;gap:12px 18px;padding:11px 16px;border-bottom:1px solid var(--border);background:var(--surface-sunken);">
+              <div style="display:flex;align-items:center;gap:9px;">
+                <span class="eyebrow">Пресет</span>
+                <x-import component-from-global-scope="DesignSystem_6e248e.Segmented" value="{{ preset }}" onChange="{{ setPreset }}" options="{{ presetOptions }}" hint-size="240px,44px"></x-import>
+                <sc-if value="{{ modified }}" hint-placeholder-val="{{ false }}">
+                  <button type="button" onClick="{{ resetPreset }}" class="mono" style="font-size:10px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;color:var(--action-text);background:var(--action-soft);border:1px solid var(--action-border);border-radius:var(--radius-full);padding:3px 9px;cursor:pointer;" style-hover="background:var(--action-soft-hover);">изменён · сброс</button>
+                </sc-if>
+              </div>
+              <div style="display:flex;align-items:center;gap:9px;">
+                <span class="eyebrow">Показатель</span>
+                <x-import component-from-global-scope="DesignSystem_6e248e.Segmented" value="{{ metric }}" onChange="{{ setMetric }}" options="{{ metricOptions }}" hint-size="250px,44px"></x-import>
+              </div>
+              <div style="display:flex;align-items:center;gap:9px;">
+                <span class="eyebrow">Строки</span>
+                <x-import component-from-global-scope="DesignSystem_6e248e.Segmented" value="{{ rowView }}" onChange="{{ setRowView }}" options="{{ rowViewOptions }}" hint-size="250px,44px"></x-import>
+              </div>
+              <button type="button" onClick="{{ toggleStrip }}" style="{{ stripBtnStyle }}">Полоска разброса</button>
+            </div>
+
+            <div style="display:flex;flex-wrap:wrap;align-items:center;gap:7px 10px;padding:9px 16px;border-bottom:1px solid var(--border);">
+              <span class="eyebrow">Фильтры</span>
+              <sc-for list="{{ filterChips }}" as="f" hint-placeholder-count="4">
+                <button type="button" onClick="{{ f.onClick }}" style="{{ f.style }}">{{ f.label }}</button>
+              </sc-for>
+              <div style="margin-left:auto;display:flex;align-items:center;gap:12px;">
+                <span class="mono" style="font-size:11.5px;color:var(--text-muted);">{{ summaryShown }}</span>
+                <span class="mono" style="font-size:11.5px;color:var(--text-muted);">{{ summaryDeclined }}</span>
+                <span class="mono" style="font-size:11.5px;color:var(--text-muted);">{{ summaryMissing }}</span>
+                <x-import component-from-global-scope="DesignSystem_6e248e.Badge" tone="danger" hint-size="96px,24px">{{ summaryAnomalies }}</x-import>
+              </div>
+            </div>
+
+            <sc-if value="{{ toast }}" hint-placeholder-val="{{ false }}">
+              <div style="margin:10px 16px 0;padding:9px 12px;background:var(--success-soft);border:1px solid var(--success-border);border-radius:var(--radius-sm);font-size:12.5px;font-weight:600;color:var(--success-strong);">{{ toast }}</div>
+            </sc-if>
+
+            <div style="overflow:auto;max-height:min(68vh,860px);min-height:320px;">
+              <div style="min-width:1140px;">
+
+                <div style="display:flex;position:sticky;top:0;z-index:6;background:var(--surface-sunken);border-bottom:1px solid var(--border);">
+                  <div style="width:300px;flex:none;position:sticky;left:0;z-index:2;background:var(--surface-sunken);padding:10px 14px;box-shadow:1px 0 0 var(--border);display:flex;align-items:flex-end;">
+                    <span class="eyebrow">{{ labelColHead }}</span>
+                  </div>
+                  <div style="width:88px;flex:none;padding:10px 10px;display:flex;align-items:flex-end;justify-content:flex-end;"><span class="eyebrow">Кол-во</span></div>
+                  <div style="width:56px;flex:none;padding:10px 8px;display:flex;align-items:flex-end;"><span class="eyebrow">Ед.</span></div>
+                  <div style="width:152px;flex:none;padding:10px 12px;border-left:1px solid var(--border);display:flex;align-items:flex-end;"><span class="eyebrow">Разброс</span></div>
+                  <sc-for list="{{ supplierHeads }}" as="s" hint-placeholder-count="3">
+                    <div style="{{ s.headStyle }}">
+                      <div style="display:flex;align-items:center;gap:7px;justify-content:flex-end;">
+                        <button type="button" onClick="{{ s.onStar }}" style="{{ s.starStyle }}">{{ s.star }}</button>
+                        <span style="{{ s.dotStyle }}"></span>
+                        <span style="{{ s.nameStyle }}">{{ s.name }}</span>
+                      </div>
+                      <div style="display:flex;justify-content:flex-end;align-items:baseline;gap:9px;margin-top:4px;">
+                        <span class="mono" style="{{ s.totalStyle }}">{{ s.total }}</span>
+                        <span class="mono" style="font-size:11px;color:var(--text-subtle);">{{ s.coverage }}</span>
+                      </div>
+                      <div style="display:flex;justify-content:flex-end;margin-top:4px;">
+                        <span class="mono" style="font-size:10px;color:var(--text-muted);border:1px solid var(--border);border-radius:var(--radius-sm);padding:1px 7px;background:var(--surface);white-space:nowrap;">{{ s.version }}</span>
+                      </div>
+                    </div>
+                  </sc-for>
+                </div>
+
+                <sc-for list="{{ blocks }}" as="b" hint-placeholder-count="12">
+                  <sc-if value="{{ b.isSection }}" hint-placeholder-val="{{ false }}">
+                    <button type="button" onClick="{{ b.onClick }}" style="display:flex;width:100%;align-items:center;gap:10px;background:var(--surface-sunken);border:none;border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:7px 14px;cursor:pointer;text-align:left;position:sticky;left:0;font-family:var(--font-sans);" style-hover="background:var(--neutral-tint-strong);">
+                      <span class="mono" style="font-size:10px;color:var(--text-subtle);width:10px;">{{ b.chevron }}</span>
+                      <span style="font-size:12px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:var(--text);">{{ b.label }}</span>
+                      <span class="mono" style="font-size:11px;color:var(--text-subtle);">{{ b.count }}</span>
+                    </button>
+                  </sc-if>
+
+                  <sc-if value="{{ b.isRow }}" hint-placeholder-val="{{ true }}">
+                    <div style="{{ b.rowStyle }}" onMouseEnter="{{ b.onEnter }}" onMouseLeave="{{ b.onLeave }}" onClick="{{ b.onClick }}">
+                      <div style="{{ b.labelStyle }}">
+                        <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;">
+                          <span style="{{ b.nameStyle }}">{{ b.name }}</span>
+                          <sc-for list="{{ b.badges }}" as="g" hint-placeholder-count="0">
+                            <span style="{{ g.style }}">{{ g.text }}</span>
+                          </sc-for>
+                        </div>
+                      </div>
+                      <div style="{{ b.qtyStyle }}">
+                        <span class="mono" style="font-size:12.5px;">{{ b.qty }}</span>
+                        <sc-if value="{{ b.qtyOrig }}" hint-placeholder-val="{{ false }}">
+                          <span class="mono" style="display:block;font-size:10px;color:var(--text-subtle);text-decoration:line-through;">{{ b.qtyOrig }}</span>
+                        </sc-if>
+                      </div>
+                      <div style="{{ b.unitStyle }}">{{ b.unit }}</div>
+                      <div style="{{ b.spreadStyle }}">
+                        <div style="display:flex;align-items:baseline;gap:7px;">
+                          <span class="mono" style="font-size:12px;color:var(--text);">{{ b.spreadPct }}</span>
+                          <span style="{{ b.spreadTagStyle }}">{{ b.spreadTag }}</span>
+                        </div>
+                        <sc-if value="{{ strip }}" hint-placeholder-val="{{ true }}">
+                          <div style="position:relative;height:5px;margin-top:7px;background:var(--surface-sunken);border-radius:var(--radius-full);">
+                            <sc-for list="{{ b.dots }}" as="d" hint-placeholder-count="3">
+                              <span style="{{ d.style }}"></span>
+                            </sc-for>
+                          </div>
+                        </sc-if>
+                        <sc-if value="{{ b.spreadRangeVisible }}" hint-placeholder-val="{{ false }}">
+                          <div class="mono" style="font-size:10px;color:var(--text-subtle);margin-top:5px;">{{ b.spreadRange }}</div>
+                        </sc-if>
+                      </div>
+                      <sc-for list="{{ b.cells }}" as="c" hint-placeholder-count="3">
+                        <div style="{{ c.style }}">
+                          <span style="{{ c.mainStyle }}">{{ c.main }}</span>
+                          <sc-if value="{{ c.sub }}" hint-placeholder-val="{{ false }}">
+                            <span class="mono" style="display:block;text-align:right;font-size:10.5px;color:var(--text-subtle);margin-top:3px;">{{ c.sub }}</span>
+                          </sc-if>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </sc-if>
+
+                  <sc-if value="{{ b.isSub }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex;background:var(--neutral-tint);border-bottom:1px solid var(--border);">
+                      <div style="width:300px;flex:none;position:sticky;left:0;background:var(--neutral-tint);padding:7px 14px;box-shadow:1px 0 0 var(--border);font-size:11.5px;font-weight:600;color:var(--text-muted);">{{ b.label }}</div>
+                      <div style="width:296px;flex:none;"></div>
+                      <sc-for list="{{ b.totals }}" as="t" hint-placeholder-count="3">
+                        <div class="mono" style="flex:1;min-width:176px;padding:7px 14px;text-align:right;font-size:12px;font-weight:600;border-left:1px solid var(--neutral-100);">{{ t.value }}</div>
+                      </sc-for>
+                    </div>
+                  </sc-if>
+                </sc-for>
+
+                <div style="display:flex;position:sticky;bottom:0;z-index:5;background:var(--surface-sunken);border-top:1.5px solid var(--border);">
+                  <div style="width:300px;flex:none;position:sticky;left:0;z-index:2;background:var(--surface-sunken);padding:11px 14px;box-shadow:1px 0 0 var(--border);font-size:13px;font-weight:800;letter-spacing:0.07em;text-transform:uppercase;">Итого</div>
+                  <div style="width:296px;flex:none;"></div>
+                  <sc-for list="{{ grandTotals }}" as="t" hint-placeholder-count="3">
+                    <div style="{{ t.style }}">
+                      <span class="mono" style="{{ t.valueStyle }}">{{ t.value }}</span>
+                      <span style="{{ t.deltaStyle }}">{{ t.delta }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <sc-if value="{{ dockOpen }}" hint-placeholder-val="{{ true }}">
+          <aside style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow-card);max-height:calc(100vh - 96px);overflow:auto;min-width:0;">
+            <div style="display:flex;align-items:flex-start;gap:10px;padding:14px 16px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface);z-index:2;">
+              <div>
+                <div style="font-family:var(--font-heading);font-size:var(--text-md);font-weight:800;letter-spacing:var(--tracking-heading);">Анализ</div>
+                <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">правила + ИИ по КП раунда 1</div>
+              </div>
+              <button type="button" onClick="{{ toggleDock }}" aria-label="Закрыть панель" style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--text-subtle);font-size:15px;line-height:1;padding:3px 5px;border-radius:var(--radius-sm);" style-hover="color:var(--text);background:var(--neutral-tint);">✕</button>
+            </div>
+            <div style="padding:14px 16px 20px;">
+              <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;">
+                <sc-for list="{{ scenarios }}" as="s" hint-placeholder-count="5">
+                  <button type="button" onClick="{{ s.onClick }}" style="{{ s.style }}">{{ s.label }}</button>
+                </sc-for>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:8px;">
+                <sc-for list="{{ insights }}" as="i" hint-placeholder-count="2">
+                  <button type="button" onClick="{{ i.onClick }}" style="{{ i.style }}" style-hover="background:var(--neutral-tint);border-color:var(--border-strong);">
+                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                      <x-import component-from-global-scope="DesignSystem_6e248e.Badge" tone="{{ i.tone }}" uppercase="{{ true }}" hint-size="56px,22px">{{ i.tag }}</x-import>
+                      <span style="font-size:13px;font-weight:700;">{{ i.title }}</span>
+                    </div>
+                    <div style="font-size:12.5px;line-height:1.55;color:var(--text-muted);text-wrap:pretty;">{{ i.text }}</div>
+                  </button>
+                </sc-for>
+              </div>
+              <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:9px;">
+                <span class="eyebrow">Спросить ИИ</span>
+                <x-import component-from-global-scope="DesignSystem_6e248e.Textarea" value="{{ ask }}" onChange="{{ onAsk }}" placeholder="Вопрос по отмеченным ★ или сценарию…" rows="3" hint-size="100%,76px"></x-import>
+                <x-import component-from-global-scope="DesignSystem_6e248e.Button" variant="primary" size="sm" full="{{ true }}" onClick="{{ runAsk }}" hint-size="100%,38px">Спросить</x-import>
+                <sc-if value="{{ askResult }}" hint-placeholder-val="{{ false }}">
+                  <div style="padding:11px 13px;background:var(--surface-sunken);border-radius:var(--radius-sm);font-size:12.5px;line-height:1.55;color:var(--text-muted);">
+                    <span class="eyebrow" style="display:block;margin-bottom:5px;">Ответ · демо</span>
+                    {{ askResult }}
+                  </div>
+                </sc-if>
+              </div>
+            </div>
+          </aside>
+        </sc-if>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isParties }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;flex-direction:column;gap:14px;">
+
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow-card);padding:12px 18px;display:flex;align-items:center;gap:12px 20px;flex-wrap:wrap;">
+          <div style="display:flex;flex-direction:column;gap:3px;">
+            <span class="eyebrow">Участники раунда 1</span>
+            <span style="font-size:13px;color:var(--text-muted);">Приглашено 3 · КП получено <span class="mono" style="color:var(--text);font-weight:700;">3</span> · версий КП <span class="mono" style="color:var(--text);font-weight:700;">{{ offersCount }}</span></span>
+          </div>
+          <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;">
+            <x-import component-from-global-scope="DesignSystem_6e248e.Button" variant="ghost" size="sm" onClick="{{ inviteMore }}" hint-size="176px,36px">Пригласить подрядчика</x-import>
+            <x-import component-from-global-scope="DesignSystem_6e248e.Button" variant="soft" size="sm" onClick="{{ askRound2 }}" hint-size="150px,36px">Запросить раунд 2</x-import>
+          </div>
+        </div>
+
+        <sc-if value="{{ toast }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:9px 14px;background:var(--success-soft);border:1px solid var(--success-border);border-radius:var(--radius-sm);font-size:12.5px;font-weight:600;color:var(--success-strong);">{{ toast }}</div>
+        </sc-if>
+
+        <sc-for list="{{ parties }}" as="p" hint-placeholder-count="3">
+          <div style="{{ p.cardStyle }}">
+
+            <div style="display:flex;align-items:flex-start;gap:12px 16px;flex-wrap:wrap;padding:15px 18px;">
+              <span style="{{ p.dotStyle }}"></span>
+              <div style="min-width:0;flex:1 1 260px;">
+                <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                  <span style="font-family:var(--font-heading);font-size:var(--text-md);font-weight:800;letter-spacing:var(--tracking-heading);">{{ p.name }}</span>
+                  <x-import component-from-global-scope="DesignSystem_6e248e.Badge" tone="{{ p.statusTone }}" hint-size="126px,24px">{{ p.status }}</x-import>
+                  <sc-if value="{{ p.starred }}" hint-placeholder-val="{{ false }}">
+                    <span class="mono" style="font-size:10px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;color:var(--action-text);background:var(--action-soft);border:1px solid var(--action-border);border-radius:var(--radius-full);padding:2px 8px;">★ в паре</span>
+                  </sc-if>
+                </div>
+                <div style="display:flex;gap:4px 16px;flex-wrap:wrap;margin-top:7px;font-size:12.5px;color:var(--text-muted);">
+                  <span class="mono">ИНН {{ p.inn }}</span>
+                  <span>{{ p.contact }}</span>
+                  <span class="mono">{{ p.phone }}</span>
+                </div>
+              </div>
+              <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex:none;">
+                <span class="mono" style="{{ p.totalStyle }}">{{ p.total }}</span>
+                <span style="{{ p.deltaStyle }}">{{ p.delta }}</span>
+              </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:12px 20px;padding:0 18px 15px;">
+              <sc-for list="{{ p.metrics }}" as="m" hint-placeholder-count="5">
+                <div style="display:flex;flex-direction:column;gap:3px;min-width:0;">
+                  <span style="font-size:11.5px;font-weight:600;color:var(--text-muted);">{{ m.label }}</span>
+                  <span class="mono" style="{{ m.style }}">{{ m.value }}</span>
+                </div>
+              </sc-for>
+            </div>
+
+            <div style="display:flex;align-items:center;gap:10px;padding:8px 18px;background:var(--surface-sunken);border-top:1px solid var(--border);border-bottom:1px solid var(--border);">
+              <span class="eyebrow">Коммерческие предложения</span>
+              <span class="mono" style="font-size:11px;color:var(--text-subtle);">{{ p.offersNote }}</span>
+            </div>
+
+            <sc-for list="{{ p.offers }}" as="o" hint-placeholder-count="2">
+              <div style="{{ o.rowStyle }}">
+                <div style="display:flex;flex-direction:column;gap:2px;min-width:0;">
+                  <span style="{{ o.titleStyle }}">{{ o.title }}</span>
+                  <span style="font-size:11.5px;color:var(--text-subtle);">{{ o.date }}</span>
+                </div>
+                <span class="mono" style="{{ o.sumStyle }}">{{ o.sum }}</span>
+                <span class="mono" style="font-size:11.5px;color:var(--text-muted);">{{ o.positions }}</span>
+                <span style="font-size:12.5px;color:var(--text-muted);line-height:1.45;text-wrap:pretty;">{{ o.note }}</span>
+                <div style="display:flex;align-items:center;gap:8px;justify-content:flex-end;">
+                  <span style="{{ o.tagStyle }}">{{ o.tag }}</span>
+                  <x-import component-from-global-scope="DesignSystem_6e248e.Button" variant="ghost" size="sm" onClick="{{ o.onOpen }}" hint-size="88px,34px">Открыть</x-import>
+                </div>
+              </div>
+            </sc-for>
+
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:12px 18px;border-top:1px solid var(--border);">
+              <span style="font-size:12.5px;color:var(--text-muted);flex:1 1 200px;text-wrap:pretty;">{{ p.risk }}</span>
+              <button type="button" onClick="{{ p.onStar }}" style="{{ p.starBtnStyle }}">{{ p.starLabel }}</button>
+              <x-import component-from-global-scope="DesignSystem_6e248e.Button" variant="ghost" size="sm" onClick="{{ p.onAskClarify }}" hint-size="168px,36px">Запросить уточнение</x-import>
+              <x-import component-from-global-scope="DesignSystem_6e248e.Button" variant="soft" size="sm" onClick="{{ p.onCompare }}" hint-size="164px,36px">Открыть в сравнении</x-import>
+            </div>
+
+          </div>
+        </sc-for>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isDecision }}" hint-placeholder-val="{{ false }}">
+      <div style="display:grid;grid-template-columns:minmax(0,1fr) 400px;gap:16px;align-items:start;">
+        <div style="display:flex;flex-direction:column;gap:12px;">
+          <sc-for list="{{ decisionCards }}" as="d" hint-placeholder-count="3">
+            <button type="button" onClick="{{ d.onClick }}" style="{{ d.style }}" style-hover="border-color:var(--border-strong);">
+              <div style="display:flex;align-items:flex-start;gap:14px;">
+                <span style="{{ d.radioStyle }}"></span>
+                <div style="min-width:0;flex:1;">
+                  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                    <span style="font-family:var(--font-heading);font-size:var(--text-md);font-weight:800;letter-spacing:var(--tracking-heading);">{{ d.name }}</span>
+                    <x-import component-from-global-scope="DesignSystem_6e248e.Badge" tone="{{ d.rankTone }}" hint-size="110px,24px">{{ d.rank }}</x-import>
+                    <span class="mono" style="{{ d.totalStyle }}">{{ d.total }}</span>
+                  </div>
+                  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px 20px;margin-top:14px;">
+                    <sc-for list="{{ d.metrics }}" as="m" hint-placeholder-count="5">
+                      <div style="display:flex;flex-direction:column;gap:3px;min-width:0;">
+                        <span style="font-size:11.5px;font-weight:600;color:var(--text-muted);">{{ m.label }}</span>
+                        <span class="mono" style="{{ m.style }}">{{ m.value }}</span>
+                      </div>
+                    </sc-for>
+                  </div>
+                  <div style="font-size:13px;color:var(--text-muted);line-height:1.55;margin-top:14px;padding-top:12px;border-top:1px solid var(--border);text-wrap:pretty;">{{ d.note }}</div>
+                </div>
+              </div>
+            </button>
+          </sc-for>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow-card);padding:18px;position:sticky;top:74px;display:flex;flex-direction:column;gap:12px;">
+          <div>
+            <div style="font-family:var(--font-heading);font-size:var(--text-md);font-weight:800;letter-spacing:var(--tracking-heading);">Протокол выбора</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">черновик · раунд 1</div>
+          </div>
+          <div style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:13px;background:var(--surface-sunken);font-size:13px;line-height:1.6;color:var(--text);text-wrap:pretty;">{{ protocolText }}</div>
+          <div style="display:flex;flex-direction:column;gap:9px;">
+            <sc-for list="{{ protocolSteps }}" as="s" hint-placeholder-count="3">
+              <div style="display:flex;gap:10px;align-items:baseline;font-size:12.5px;color:var(--text-muted);">
+                <span class="mono" style="font-size:11px;color:var(--text-subtle);flex:none;">{{ s.num }}</span>
+                <span style="text-wrap:pretty;">{{ s.text }}</span>
+              </div>
+            </sc-for>
+          </div>
+          <x-import component-from-global-scope="DesignSystem_6e248e.Button" variant="primary" full="{{ true }}" hint-size="100%,44px">Сформировать протокол</x-import>
+          <x-import component-from-global-scope="DesignSystem_6e248e.Button" variant="ghost" full="{{ true }}" onClick="{{ goCompare }}" hint-size="100%,44px">Вернуться к сравнению</x-import>
+        </div>
+      </div>
+    </sc-if>
+
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;density&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;compact&quot;,&quot;comfortable&quot;],&quot;default&quot;:&quot;compact&quot;,&quot;tsType&quot;:&quot;'compact' | 'comfortable'&quot;,&quot;section&quot;:&quot;Таблица&quot;},&quot;minHighlight&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;chip&quot;,&quot;text&quot;],&quot;default&quot;:&quot;chip&quot;,&quot;tsType&quot;:&quot;'chip' | 'text'&quot;,&quot;section&quot;:&quot;Таблица&quot;},&quot;dockDefaultOpen&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Панели&quot;}}">
+class Component extends DCLogic {
+  SUP = [
+    { id: 1, name: "АО «МетСнаб»", coverage: 100, version: "КП v2 · 12.07", total: 11840000, color: "var(--supplier-blue)",
+      inn: "7712345678", contact: "Игорь Селезнёв, руководитель проектов", phone: "+7 916 240-11-08",
+      lead: "45 дней", pay: "30 / 70 по факту",
+      status: "КП актуально", statusTone: "success",
+      risk: "Нет цены на прогрев бетона — закрыть до подписания договора.",
+      offers: [
+        { v: 2, date: "12.07.2026", total: 11840000, positions: "20 / 20", current: true, note: "Снижение по фундаменту после уточнения объёмов бетона" },
+        { v: 1, date: "08.07.2026", total: 12210000, positions: "19 / 20", note: "Первая подача, прогрев бетона не оценён" },
+      ] },
+    { id: 2, name: "ООО «ИнженерГрупп»", coverage: 95, version: "КП v1 · 11.07", total: 12156000, color: "var(--supplier-purple)",
+      inn: "7728004411", contact: "Ольга Панина, отдел продаж", phone: "+7 903 118-72-40",
+      lead: "38 дней", pay: "50 / 50",
+      status: "КП актуально", statusTone: "success",
+      risk: "Отказ по обратной засыпке пазух — потребуется отдельный подряд.",
+      offers: [
+        { v: 1, date: "11.07.2026", total: 12156000, positions: "19 / 20", current: true, note: "Полная подача с отказом по одной позиции СМР" },
+      ] },
+    { id: 3, name: "ООО «СтройМонтаж»", coverage: 88, version: "КП v1 · 10.07", total: 11980000, color: "var(--supplier-amber)",
+      inn: "5024117830", contact: "Роман Бельский, коммерческий директор", phone: "+7 925 604-33-19",
+      lead: "52 дня", pay: "20 аванс / 80 по этапам",
+      status: "Запрошено уточнение", statusTone: "amber",
+      risk: "Три аномалии в ценах — ждём обоснование по арматуре и швам.",
+      offers: [
+        { v: 1, date: "10.07.2026", total: 11980000, positions: "18 / 20", current: true, note: "Аномальные цены по арматуре (−6,4%) и деформационным швам (+9,8%)" },
+        { v: 2, date: "ожидаем к 19.07", total: null, positions: "—", pending: true, note: "Уточнение запрошено 14.07 — обоснование по 3 позициям" },
+      ] },
+  ];
+  SECTIONS = [
+    { id: "mat", label: "Материалы" },
+    { id: "smr-f", label: "СМР / Фундамент" },
+    { id: "smr-k", label: "СМР / Каркас" },
+    { id: "other", label: "Прочее" },
+  ];
+  ITEMS = [
+    { id: 1, section: "mat", name: "Бетон B25 W8 F150", unit: "м³", qty: 420, isKey: true, spreadTag: "high",
+      cells: { 1: { price: 2184000, deviation: -3.2, potential: 84000, isMin: true }, 2: { price: 2310000, deviation: 2.4, potential: 0 }, 3: { price: 2268000, deviation: 0.5, potential: 42000 } } },
+    { id: 2, section: "mat", name: "Арматура А500С Ø12", unit: "т", qty: 86, spreadTag: "noticeable",
+      cells: { 1: { price: 4472000, deviation: 1.9, potential: 0 }, 2: { price: 4386000, deviation: -0.3, potential: 0, isMin: true }, 3: { price: 4120000, deviation: -6.4, potential: 172000, anomaly: true } } },
+    { id: 3, section: "mat", name: "Щебень фр. 20-40", unit: "м³", qty: 180, spreadTag: "none",
+      cells: { 1: { price: 324000, deviation: 0, potential: 0, isMin: true }, 2: { price: 342000, deviation: 5.6, potential: 18000 }, 3: { price: 331200, deviation: 2.2, potential: 9000 } } },
+    { id: 4, section: "mat", name: "Плёнка полиэтиленовая 200 мкм", unit: "м²", qty: 840, spreadTag: "none", removed: true,
+      cells: { 1: { price: 58800 }, 2: { price: 63000 }, 3: { price: 60480 } } },
+    { id: 5, section: "mat", name: "Добавка пластифицирующая", unit: "кг", qty: 1260, qtyOrig: 1200, corrected: true, spreadTag: "none",
+      cells: { 1: { price: 88200, deviation: -1.1, potential: 0, isMin: true }, 2: { price: 94500, deviation: 5.9, potential: 6300 }, 3: { price: 90720, deviation: 1.7, potential: 2520 } } },
+    { id: 6, section: "smr-f", name: "Устройство подбетонки", unit: "м²", qty: 380, spreadTag: "none",
+      cells: { 1: { price: 456000, deviation: -2.0, potential: 9500, isMin: true }, 2: { price: 475000, deviation: 2.1, potential: 0 }, 3: { price: 468600, deviation: 0.7, potential: 3800 } } },
+    { id: 7, section: "smr-f", name: "Устройство монолитного фундамента", unit: "м³", qty: 420, isKey: true, spreadTag: "noticeable",
+      cells: { 1: { price: 5184000, deviation: -5.1, potential: 273000, isMin: true }, 2: { price: 5460000, deviation: 0.0, potential: 0 }, 3: { price: 5292000, deviation: -3.1, potential: 126000 } } },
+    { id: 8, section: "smr-f", name: "Гидроизоляция фундамента", unit: "м²", qty: 1240, spreadTag: "none",
+      cells: { 1: { price: 682000, deviation: 1.2, potential: 0 }, 2: { price: 669600, deviation: -0.7, potential: 12400, isMin: true }, 3: { price: 682000, deviation: 1.2, potential: 0 } } },
+    { id: 9, section: "smr-f", name: "Обратная засыпка пазух", unit: "м³", qty: 290, spreadTag: "none", declined: { 2: true },
+      cells: { 1: { price: 203000, deviation: 0, potential: 0, isMin: true }, 2: null, 3: { price: 217500, deviation: 7.1, potential: 14500 } } },
+    { id: 10, section: "smr-f", name: "Устройство деформационных швов", unit: "п.м", qty: 86, spreadTag: "high",
+      cells: { 1: { price: 172000, deviation: -8.5, potential: 16000, isMin: true }, 2: { price: 189200, deviation: 0.6, potential: 0 }, 3: { price: 206400, deviation: 9.8, potential: 0, anomaly: true } } },
+    { id: 11, section: "smr-f", name: "Анкеровка закладных деталей", unit: "шт", qty: 48, spreadTag: "noticeable",
+      cells: { 1: { price: 115200, deviation: 4.2, potential: 4800 }, 2: { price: 105600, deviation: -4.5, potential: 9600, isMin: true }, 3: { price: 124800, deviation: 12.8, potential: 0, anomaly: true } } },
+    { id: 12, section: "smr-k", name: "Монтаж опалубки", unit: "м²", qty: 1860, spreadTag: "none",
+      cells: { 1: { price: 1488000, deviation: 0.8, potential: 0 }, 2: { price: 1450800, deviation: -1.7, potential: 37200, isMin: true }, 3: { price: 1497600, deviation: 1.4, potential: 0 } } },
+    { id: 13, section: "smr-k", name: "Укладка арматурных каркасов", unit: "т", qty: 86, isKey: true, spreadTag: "high",
+      cells: { 1: { price: 1032000, deviation: -4.0, potential: 43000, isMin: true }, 2: { price: 1118000, deviation: 4.0, potential: 0 }, 3: { price: 1075000, deviation: 0.0, potential: 17200 } } },
+    { id: 14, section: "smr-k", name: "Бетонирование колонн", unit: "м³", qty: 96, spreadTag: "none",
+      cells: { 1: { price: 768000, deviation: -1.5, potential: 11500, isMin: true }, 2: { price: 787200, deviation: 1.0, potential: 0 }, 3: { price: 796800, deviation: 2.2, potential: 0 } } },
+    { id: 15, section: "smr-k", name: "Демонтаж опалубки", unit: "м²", qty: 1860, spreadTag: "none",
+      cells: { 1: { price: 558000, deviation: 0, potential: 0 }, 2: { price: 539400, deviation: -3.3, potential: 18600, isMin: true }, 3: { price: 558000, deviation: 0, potential: 0 } } },
+    { id: 16, section: "smr-k", name: "Контроль качества бетона", unit: "компл", qty: 1, spreadTag: "none",
+      cells: { 1: { price: 85000, deviation: 0, potential: 0 }, 2: { price: 78000, deviation: -8.2, potential: 7000, isMin: true }, 3: { price: 85000, deviation: 0, potential: 0 } } },
+    { id: 17, section: "other", name: "Вывоз строительного мусора", unit: "м³", qty: 120, spreadTag: "none",
+      cells: { 1: { price: 144000, deviation: 2.5, potential: 0 }, 2: { price: 138000, deviation: -1.8, potential: 6000, isMin: true }, 3: { price: 150000, deviation: 6.7, potential: 0 } } },
+    { id: 18, section: "other", name: "Прогрев бетона (зимнее устройство)", unit: "м³", qty: 420, spreadTag: "high",
+      cells: { 1: { price: 0, deviation: null, potential: 420000, missing: true }, 2: { price: 504000, deviation: 12.0, potential: 0 }, 3: { price: 462000, deviation: 2.7, potential: 42000, isMin: true } } },
+    { id: 19, section: "other", name: "Охрана объекта", unit: "мес", qty: 2, spreadTag: "none",
+      cells: { 1: { price: 120000, deviation: 0, potential: 0 }, 2: { price: 114000, deviation: -5.0, potential: 6000, isMin: true }, 3: { price: 120000, deviation: 0, potential: 0 } } },
+    { id: 20, section: "other", name: "Генподрядные услуги", unit: "%", qty: 1, isKey: true, spreadTag: "high",
+      cells: { 1: { price: 592000, deviation: -4.8, potential: 29600, isMin: true }, 2: { price: 638000, deviation: 2.5, potential: 0 }, 3: { price: 621000, deviation: -0.2, potential: 15500 } } },
+  ];
+  PRESETS = {
+    overview: { label: "Обзор", mainMetric: "price", extraMetrics: [], rowView: "sections", filters: [] },
+    bidding: { label: "Торги", mainMetric: "potential", extraMetrics: ["price"], rowView: "potential", filters: ["has_potential"] },
+    anomalies: { label: "Аномалии", mainMetric: "deviation", extraMetrics: ["price"], rowView: "weight", filters: ["anomalies"] },
+  };
+  FILTERS = { key: "Ключевые", high_spread: "Высокий разброс", anomalies: "Аномалии", has_potential: "Есть потенциал" };
+  SCENARIOS = [
+    { id: "important", label: "Что важно" },
+    { id: "bidding", label: "Точки торгов" },
+    { id: "compare", label: "Сравнить подрядчиков" },
+    { id: "anomalies", label: "Риски и аномалии" },
+    { id: "selection", label: "Выбранное ★" },
+  ];
+  INSIGHTS = {
+    important: [
+      { title: "Фундамент и бетон — 62% суммы", text: "Устройство фундамента и материалы бетона формируют основной объём. Торги здесь дадут максимальный эффект.", tag: "факт", tone: "neutral", row: 7 },
+      { title: "Прогрев не закрыт у МетСнаб", text: "По позиции «Прогрев бетона» у АО «МетСнаб» нет цены — уточнить до финального выбора.", tag: "риск", tone: "danger", row: 18 },
+    ],
+    bidding: [
+      { title: "Потенциал ~273 тыс. на фундаменте", text: "МетСнаб ниже медианы на устройстве фундамента; по арматуре −6% у СтройМонтажа — проверить спецификацию.", tag: "торг", tone: "amber", row: 7 },
+      { title: "Генподряд — точка торга", text: "Разброс 7,8% по генподрядным услугам; запросить детализацию накладных.", tag: "торг", tone: "amber", row: 20 },
+    ],
+    compare: [
+      { title: "МетСнаб против ИнженерГрупп: −316 тыс.", text: "Итоговая разница в пользу МетСнаб. Основной вклад — фундамент (−276 тыс.) и бетон (−126 тыс.).", tag: "факт", tone: "neutral", row: 7 },
+    ],
+    anomalies: [
+      { title: "3 аномалии в срезе", text: "Арматура у СтройМонтажа (−6,4%), деформационные швы (+9,8%), анкеровка (+12,8%). Запросить обоснование.", tag: "риск", tone: "danger", row: 2 },
+      { title: "Высокий разброс: 4 позиции", text: "Бетон, деформационные швы, укладка каркасов, прогрев — приоритет для уточняющих вопросов.", tag: "риск", tone: "danger", row: 10 },
+    ],
+    selection: [
+      { title: "Пара ★: МетСнаб + ИнженерГрупп", text: "Блок «Разница КП» над таблицей: вклад позиций отсортирован по абсолютному эффекту.", tag: "факт", tone: "neutral", row: 7 },
+    ],
+  };
+  PAIR = [
+    { itemId: 7, name: "Устройство монолитного фундамента", delta: -276000, share: 0.41 },
+    { itemId: 1, name: "Бетон B25 W8 F150", delta: -126000, share: 0.19 },
+    { itemId: 2, name: "Арматура А500С Ø12", delta: 86000, share: 0.13 },
+    { itemId: 13, name: "Укладка арматурных каркасов", delta: -86000, share: 0.13 },
+    { itemId: 20, name: "Генподрядные услуги", delta: -46000, share: 0.07 },
+  ];
+  BP = [
+    { id: "1.02", code: "01.02", name: "СМР · Фундаменты и монолит", budget: 14000000, committed: 2800000 },
+    { id: "1.03", code: "01.03", name: "Материалы · Бетон и арматура", budget: 21000000, committed: 4200000 },
+    { id: "2.01", code: "02.01", name: "СМР · Каркас и перекрытия", budget: 9600000, committed: 1100000 },
+  ];
+  STATUSES = ["Сбор КП", "Сравнение", "На согласовании", "Закрыт"];
+
+  state = {
+    title: "Устройство монолитного фундамента", object: "ЖК «Северный» · Корпус 1",
+    owner: "Марк Тертишний", status: "Сравнение", deadline: "20.07.2026",
+    tenderBudget: 12400000, bpId: "1.02",
+    view: "compare", preset: "overview", mainMetric: "price", extraMetrics: [], rowView: "sections",
+    filters: [], strip: true, favorites: [1, 2], collapsed: [], focusRow: null, hoverRow: null,
+    scenario: "important", dockOpen: null, ask: "", askResult: "", toast: "", winner: 1,
+  };
+
+  icon(paths, size) {
+    return React.createElement(
+      "svg",
+      { width: size || 17, height: size || 17, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.9, strokeLinecap: "round", strokeLinejoin: "round" },
+      paths.map((d, i) => React.createElement("path", { key: i, d: d }))
+    );
+  }
+  money(n) { return (n == null ? 0 : Math.round(n)).toLocaleString("ru-RU"); }
+  pct(n) { return n == null ? "—" : (n > 0 ? "+" : "") + n.toFixed(1) + "%"; }
+  prices(item) { return this.SUP.map((s) => item.cells[s.id] && item.cells[s.id].price).filter((v) => v > 0); }
+  weight(item) { const p = this.prices(item); return p.length ? Math.max(...p) : 0; }
+  maxPot(item) { return Math.max(0, ...this.SUP.map((s) => (item.cells[s.id] && item.cells[s.id].potential) || 0)); }
+  hasAnomaly(item) { return this.SUP.some((s) => item.cells[s.id] && item.cells[s.id].anomaly); }
+  hasPotential(item) { return this.SUP.some((s) => ((item.cells[s.id] && item.cells[s.id].potential) || 0) > 0); }
+  matches(item) {
+    return this.state.filters.every((f) => {
+      if (f === "key") return !!item.isKey;
+      if (f === "high_spread") return item.spreadTag === "high";
+      if (f === "anomalies") return this.hasAnomaly(item);
+      if (f === "has_potential") return this.hasPotential(item);
+      return true;
+    });
+  }
+  shownMetrics() { return [...new Set([this.state.mainMetric, ...this.state.extraMetrics])].slice(0, 3); }
+  metricLabel(m) { return { price: "Цена", deviation: "Откл.", potential: "Потенциал" }[m]; }
+  metricValue(m, cell) {
+    if (!cell || cell.missing) return "—";
+    if (m === "deviation") return this.pct(cell.deviation);
+    if (m === "potential") return cell.potential ? this.money(cell.potential) : "—";
+    return this.money(cell.price);
+  }
+  get modified() {
+    const b = this.PRESETS[this.state.preset], s = this.state;
+    return s.mainMetric !== b.mainMetric || s.rowView !== b.rowView ||
+      JSON.stringify([...s.filters].sort()) !== JSON.stringify([...b.filters].sort());
+  }
+  showToast(msg) {
+    this.setState({ toast: msg });
+    clearTimeout(this._t);
+    this._t = setTimeout(() => this.setState({ toast: "" }), 3200);
+  }
+  chip(active) {
+    return "font-family:var(--font-sans);font-size:12px;font-weight:" + (active ? "700" : "600") +
+      ";padding:5px 12px;border-radius:var(--radius-full);cursor:pointer;white-space:nowrap;transition:background var(--d-fast),color var(--d-fast);border:1px solid " +
+      (active ? "var(--action-border)" : "var(--border)") + ";background:" + (active ? "var(--action-soft)" : "var(--surface)") +
+      ";color:" + (active ? "var(--action-text)" : "var(--text-muted)") + ";";
+  }
+  tag(text, bg, fg) {
+    return { text: text, style: "font-family:var(--font-sans);font-size:10px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;border-radius:var(--radius-full);padding:2px 7px;white-space:nowrap;background:" + bg + ";color:" + fg + ";" };
+  }
+
+  renderVals() {
+    const s = this.state;
+    const dockOpen = s.dockOpen === null ? (this.props.dockDefaultOpen !== false) : s.dockOpen;
+    const padY = (this.props.density || "compact") === "comfortable" ? "13px" : "8px";
+    const minAsChip = (this.props.minHighlight || "chip") === "chip";
+    const favs = s.favorites;
+
+    const setPreset = (id) => {
+      const p = this.PRESETS[id];
+      this.setState({ preset: id, mainMetric: p.mainMetric, extraMetrics: [...p.extraMetrics], rowView: p.rowView, filters: [...p.filters] });
+    };
+    const focus = (id) => this.setState({ focusRow: id });
+
+    let list = this.ITEMS.filter((i) => this.matches(i));
+    if (s.rowView === "weight") list = [...list].sort((a, b) => this.weight(b) - this.weight(a));
+    if (s.rowView === "potential") list = [...list].sort((a, b) => this.maxPot(b) - this.maxPot(a));
+
+    const rowBgOf = (item) => s.focusRow === item.id ? "var(--neutral-tint-strong)" : s.hoverRow === item.id ? "var(--neutral-tint)" : "var(--surface)";
+
+    const makeRow = (item) => {
+      const vals = this.prices(item);
+      const min = vals.length ? Math.min(...vals) : 0;
+      const max = vals.length ? Math.max(...vals) : 0;
+      const range = max - min || 1;
+      const spreadPct = min && vals.length > 1 ? ((max - min) / min * 100).toFixed(1) + "%" : "—";
+      const tagText = item.spreadTag === "high" ? "высокий" : item.spreadTag === "noticeable" ? "заметный" : "";
+      const tagColor = item.spreadTag === "high" ? "var(--danger)" : "var(--action-text)";
+      const badges = [];
+      if (item.removed) badges.push(this.tag("снята", "var(--surface-sunken)", "var(--text-muted)"));
+      if (item.corrected) badges.push(this.tag("корр.", "var(--action-soft)", "var(--action-text)"));
+      if (item.isKey) badges.push(this.tag("ключ", "var(--neutral-100)", "var(--text)"));
+      if (this.hasAnomaly(item)) badges.push(this.tag("аномалия", "var(--danger-soft)", "var(--danger)"));
+
+      const rowBg = rowBgOf(item);
+      const cells = this.SUP.map((sup) => {
+        const cell = item.cells[sup.id];
+        const declined = item.declined && item.declined[sup.id];
+        const base = "flex:1;min-width:176px;padding:" + padY + " 14px;border-left:1px solid var(--neutral-100);text-align:right;background:" + rowBg + ";";
+        if (declined) return { style: base, main: "отказ", mainStyle: "font-size:12px;font-weight:600;color:var(--text-subtle);", sub: "" };
+        if (item.removed) return { style: base, main: "—", mainStyle: "font-family:var(--font-mono);font-size:12.5px;color:var(--text-subtle);", sub: "" };
+        if (!cell || cell.missing) return { style: base, main: "нет цены", mainStyle: "font-size:12px;font-weight:700;color:var(--danger);", sub: "" };
+        const isMin = cell.isMin && s.mainMetric === "price";
+        const rail = cell.anomaly ? "box-shadow:inset 3px 0 0 var(--danger);" : "";
+        const sub = this.shownMetrics().filter((m) => m !== s.mainMetric)
+          .map((m) => this.metricLabel(m) + " " + this.metricValue(m, cell)).join("   ·   ");
+        const highColor = s.mainMetric === "deviation" && cell.deviation > 5 ? "var(--danger)" : isMin ? "var(--action-text)" : "var(--text)";
+        const mainStyle = isMin && minAsChip
+          ? "display:inline-block;font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:13px;font-weight:700;color:var(--action-text);background:var(--action-soft);box-shadow:inset 0 0 0 1px var(--action-border);border-radius:var(--radius-sm);padding:3px 9px;white-space:nowrap;"
+          : "font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:13px;font-weight:" + (isMin ? "700" : "500") + ";color:" + highColor + ";white-space:nowrap;";
+        return { style: base + rail, main: this.metricValue(s.mainMetric, cell), mainStyle: mainStyle, sub: sub };
+      });
+
+      const dots = this.SUP.map((sup) => {
+        const v = item.cells[sup.id] && item.cells[sup.id].price;
+        if (!v) return { style: "display:none;" };
+        const left = ((v - min) / range * 100).toFixed(1);
+        return { style: "position:absolute;top:-3px;left:" + left + "%;width:10px;height:10px;border-radius:50%;transform:translateX(-50%);border:2px solid var(--surface);background:" + sup.color + ";" };
+      });
+
+      return {
+        isRow: true, isSection: false, isSub: false,
+        name: item.name,
+        nameStyle: "font-size:13.5px;font-weight:600;line-height:1.35;" + (item.removed ? "text-decoration:line-through;color:var(--text-subtle);" : "color:var(--text);"),
+        badges: badges,
+        unit: item.unit,
+        qty: this.money(item.qty),
+        qtyOrig: item.qtyOrig ? this.money(item.qtyOrig) : "",
+        spreadPct: spreadPct,
+        spreadTag: tagText,
+        spreadTagStyle: tagText ? "font-size:11px;font-weight:700;color:" + tagColor + ";" : "display:none;",
+        spreadRange: this.money(min) + " – " + this.money(max),
+        spreadRangeVisible: !s.strip,
+        dots: dots,
+        cells: cells,
+        rowStyle: "display:flex;border-bottom:1px solid var(--neutral-100);cursor:pointer;background:" + rowBg + ";",
+        labelStyle: "width:300px;flex:none;position:sticky;left:0;z-index:1;padding:" + padY + " 14px;box-shadow:1px 0 0 var(--neutral-100);background:" + rowBg + ";",
+        qtyStyle: "width:88px;flex:none;padding:" + padY + " 10px;text-align:right;",
+        unitStyle: "width:56px;flex:none;padding:" + padY + " 8px;font-size:12px;color:var(--text-muted);",
+        spreadStyle: "width:152px;flex:none;padding:" + padY + " 12px;border-left:1px solid var(--neutral-100);",
+        onEnter: () => this.setState({ hoverRow: item.id }),
+        onLeave: () => this.setState({ hoverRow: null }),
+        onClick: () => focus(item.id),
+      };
+    };
+
+    const blocks = [];
+    if (s.rowView === "sections") {
+      for (const sec of this.SECTIONS) {
+        const items = list.filter((i) => i.section === sec.id);
+        if (!items.length) continue;
+        const collapsed = s.collapsed.includes(sec.id);
+        blocks.push({
+          isSection: true, isRow: false, isSub: false, label: sec.label,
+          count: items.length + " поз.", chevron: collapsed ? "▶" : "▼",
+          onClick: () => this.setState({ collapsed: collapsed ? s.collapsed.filter((x) => x !== sec.id) : [...s.collapsed, sec.id] }),
+        });
+        if (collapsed) continue;
+        items.forEach((i) => blocks.push(makeRow(i)));
+        blocks.push({
+          isSub: true, isRow: false, isSection: false, label: "Итого · " + sec.label,
+          totals: this.SUP.map((sup) => ({ value: this.money(items.reduce((a, i) => a + ((i.cells[sup.id] && i.cells[sup.id].price) || 0), 0)) })),
+        });
+      }
+    } else {
+      list.forEach((i) => blocks.push(makeRow(i)));
+    }
+
+    const best = Math.min(...this.SUP.map((x) => x.total));
+    const grandTotals = this.SUP.map((sup) => {
+      const win = sup.total === best;
+      return {
+        value: this.money(sup.total) + " ₽",
+        valueStyle: "display:block;text-align:right;font-size:14.5px;font-weight:" + (win ? "800" : "500") + ";color:" + (win ? "var(--action-text)" : "var(--text)") + ";",
+        delta: win ? "выгоднее всего" : "+" + this.money(sup.total - best) + " ₽ к лучшему",
+        deltaStyle: "display:block;text-align:right;margin-top:3px;font-size:10.5px;font-weight:" + (win ? "700" : "500") + ";color:" + (win ? "var(--action-text)" : "var(--text-subtle)") + ";" + (win ? "" : "font-family:var(--font-mono);"),
+        style: "flex:1;min-width:176px;padding:11px 14px;border-left:1px solid var(--border);" + (win ? "background:var(--action-tint);" : ""),
+      };
+    });
+
+    const supplierHeads = this.SUP.map((sup) => {
+      const on = favs.includes(sup.id);
+      return {
+        name: sup.name, coverage: sup.coverage + "%", total: this.money(sup.total) + " ₽", version: sup.version,
+        star: on ? "★" : "☆",
+        starStyle: "background:none;border:none;cursor:pointer;padding:0;font-size:14px;line-height:1;color:" + (on ? "var(--action-text)" : "var(--text-subtle)") + ";",
+        dotStyle: "width:8px;height:8px;border-radius:50%;flex:none;background:" + sup.color + ";",
+        nameStyle: "font-size:13px;font-weight:" + (on ? "800" : "700") + ";color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;",
+        totalStyle: "font-size:12.5px;font-weight:600;color:" + (sup.total === best ? "var(--action-text)" : "var(--text-muted)") + ";",
+        headStyle: "flex:1;min-width:176px;padding:10px 14px;border-left:1px solid var(--border);" + (on ? "background:var(--neutral-tint);" : ""),
+        onStar: () => {
+          if (on) this.setState({ favorites: favs.filter((x) => x !== sup.id) });
+          else if (favs.length >= 2) this.showToast("Для разницы КП нужно ровно две ★ — снимите одну звёздочку");
+          else this.setState({ favorites: [...favs, sup.id] });
+        },
+      };
+    });
+
+    const pairSup = favs.map((id) => this.SUP.find((x) => x.id === id)).filter(Boolean);
+    const hasPair = pairSup.length === 2;
+    const pairDelta = hasPair ? pairSup[1].total - pairSup[0].total : 0;
+    const maxShare = Math.max(...this.PAIR.map((r) => r.share));
+    const pairRows = this.PAIR.map((r) => ({
+      name: r.name,
+      delta: (r.delta > 0 ? "+" : "−") + this.money(Math.abs(r.delta)) + " ₽",
+      deltaStyle: "font-size:12.5px;font-weight:600;text-align:right;color:" + (r.delta < 0 ? "var(--success-strong)" : "var(--danger)") + ";",
+      share: (r.share * 100).toFixed(0) + "%",
+      barStyle: "position:absolute;left:0;top:0;height:100%;border-radius:var(--radius-full);width:" + (r.share / maxShare * 100).toFixed(0) + "%;background:" + (r.delta < 0 ? "var(--success)" : "var(--danger)") + ";",
+      rowStyle: "width:100%;display:grid;grid-template-columns:minmax(0,1fr) 132px 120px 44px;gap:12px;align-items:center;text-align:left;background:transparent;border:none;border-top:1px solid var(--neutral-100);padding:8px 0;cursor:pointer;font-family:var(--font-sans);color:var(--text);transition:background var(--d-fast);",
+      onClick: () => focus(r.itemId),
+    }));
+
+    const insights = (this.INSIGHTS[s.scenario] || this.INSIGHTS.important).map((i) => ({
+      title: i.title, text: i.text, tag: i.tag, tone: i.tone,
+      style: "display:block;width:100%;text-align:left;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 13px;cursor:pointer;font-family:var(--font-sans);transition:background var(--d-fast),border-color var(--d-fast);",
+      onClick: () => { focus(i.row); this.showToast("Строка подсвечена по карточке анализа"); },
+    }));
+
+    const totalPot = this.ITEMS.reduce((a, i) => a + this.maxPot(i), 0);
+    const decisionCards = this.SUP.map((sup) => {
+      const rank = [...this.SUP].sort((a, b) => a.total - b.total).findIndex((x) => x.id === sup.id) + 1;
+      const mins = this.ITEMS.filter((i) => i.cells[sup.id] && i.cells[sup.id].isMin).length;
+      const risks = this.ITEMS.filter((i) => (i.cells[sup.id] && (i.cells[sup.id].anomaly || i.cells[sup.id].missing)) || (i.declined && i.declined[sup.id])).length;
+      const pot = this.ITEMS.reduce((a, i) => a + ((i.cells[sup.id] && i.cells[sup.id].potential) || 0), 0);
+      const sel = s.winner === sup.id;
+      const num = "font-size:14px;font-weight:600;color:var(--text);";
+      return {
+        name: sup.name,
+        total: this.money(sup.total) + " ₽",
+        totalStyle: "margin-left:auto;font-size:18px;font-weight:800;color:" + (sup.total === best ? "var(--action-text)" : "var(--text)") + ";",
+        rank: rank === 1 ? "1-е по цене" : rank + "-е по цене",
+        rankTone: rank === 1 ? "amber" : "muted",
+        metrics: [
+          { label: "Покрытие", value: sup.coverage + "%", style: num },
+          { label: "К бюджету", value: (sup.total <= s.tenderBudget ? "−" : "+") + this.money(Math.abs(s.tenderBudget - sup.total)) + " ₽", style: num },
+          { label: "Позиций min", value: mins + " / " + this.ITEMS.length, style: num },
+          { label: "Потенциал торга", value: this.money(pot) + " ₽", style: num },
+          { label: "Риски", value: risks ? risks + " поз." : "нет", style: "font-size:14px;font-weight:700;color:" + (risks ? "var(--danger)" : "var(--success-strong)") + ";" },
+        ],
+        note: sup.id === 1 ? "Лучшая цена и полное покрытие, но нет цены на прогрев бетона — риск дополнительного соглашения зимой."
+          : sup.id === 2 ? "Дороже на 316 тыс. ₽, отказ по обратной засыпке; стабильные цены без аномалий — предсказуемый подрядчик."
+          : "Три аномалии в ценах и покрытие 88% — требуется обоснование по арматуре и деформационным швам.",
+        style: "display:block;width:100%;text-align:left;background:var(--surface);border:1px solid " + (sel ? "var(--action-ring)" : "var(--border)") +
+          ";border-radius:var(--radius-lg);padding:18px;cursor:pointer;font-family:var(--font-sans);color:var(--text);box-shadow:var(--shadow-card);transition:border-color var(--d-fast);",
+        radioStyle: "width:17px;height:17px;border-radius:50%;flex:none;margin-top:5px;border:" + (sel ? "5.5px solid var(--action-ring)" : "1.5px solid var(--control-border)") + ";",
+        onClick: () => this.setState({ winner: sup.id }),
+      };
+    });
+    const win = this.SUP.find((x) => x.id === s.winner);
+
+    const toggleStar = (sup, on) => () => {
+      if (on) this.setState({ favorites: favs.filter((x) => x !== sup.id) });
+      else if (favs.length >= 2) this.showToast("Для разницы КП нужно ровно две ★ — снимите одну звёздочку");
+      else this.setState({ favorites: [...favs, sup.id] });
+    };
+    const parties = this.SUP.map((sup) => {
+      const on = favs.includes(sup.id);
+      const mins = this.ITEMS.filter((i) => i.cells[sup.id] && i.cells[sup.id].isMin).length;
+      const anom = this.ITEMS.filter((i) => i.cells[sup.id] && i.cells[sup.id].anomaly).length;
+      const gaps = this.ITEMS.filter((i) => !i.removed && ((i.cells[sup.id] && i.cells[sup.id].missing) || (i.declined && i.declined[sup.id]))).length;
+      const num = "font-size:14px;font-weight:600;color:var(--text);";
+      return {
+        name: sup.name, inn: sup.inn, contact: sup.contact, phone: sup.phone,
+        status: sup.status, statusTone: sup.statusTone, starred: on, risk: sup.risk,
+        cardStyle: "background:var(--surface);border:1px solid " + (on ? "var(--action-border)" : "var(--border)") +
+          ";border-radius:var(--radius-lg);box-shadow:var(--shadow-card);overflow:hidden;",
+        dotStyle: "width:10px;height:10px;border-radius:50%;flex:none;margin-top:8px;background:" + sup.color + ";",
+        total: this.money(sup.total) + " ₽",
+        totalStyle: "font-size:17px;font-weight:800;white-space:nowrap;color:" + (sup.total === best ? "var(--action-text)" : "var(--text)") + ";",
+        delta: sup.total === best ? "лучшая цена раунда" : "+" + this.money(sup.total - best) + " ₽ к лучшему",
+        deltaStyle: "font-size:11.5px;font-weight:" + (sup.total === best ? "700" : "500") + ";white-space:nowrap;color:" +
+          (sup.total === best ? "var(--action-text)" : "var(--text-subtle)") + ";" + (sup.total === best ? "" : "font-family:var(--font-mono);"),
+        metrics: [
+          { label: "Покрытие", value: sup.coverage + "%", style: num },
+          { label: "Позиций min", value: mins + " / " + this.ITEMS.length, style: num },
+          { label: "Срок", value: sup.lead, style: num },
+          { label: "Оплата", value: sup.pay, style: "font-family:var(--font-sans);font-size:13.5px;font-weight:600;color:var(--text);" },
+          { label: "Пробелы и аномалии", value: anom + gaps ? (anom + gaps) + " поз." : "нет",
+            style: "font-size:14px;font-weight:700;color:" + (anom + gaps ? "var(--danger)" : "var(--success-strong)") + ";" },
+        ],
+        offersNote: sup.offers.length + (sup.offers.length === 1 ? " версия" : " версии"),
+        offers: sup.offers.map((o) => ({
+          title: "КП v" + o.v,
+          titleStyle: "font-size:13.5px;font-weight:" + (o.current ? "700" : "600") + ";color:" + (o.pending ? "var(--text-subtle)" : "var(--text)") + ";",
+          date: o.date,
+          sum: o.total == null ? "—" : this.money(o.total) + " ₽",
+          sumStyle: "text-align:right;font-size:13px;font-weight:" + (o.current && !o.pending ? "700" : "500") + ";white-space:nowrap;color:" +
+            (o.pending ? "var(--text-subtle)" : "var(--text)") + ";",
+          positions: o.positions,
+          note: o.note,
+          tag: o.pending ? "ожидаем" : o.current ? "актуальная" : "архив",
+          tagStyle: "font-family:var(--font-sans);font-size:10px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;border-radius:var(--radius-full);padding:2px 8px;white-space:nowrap;" +
+            (o.pending ? "background:var(--danger-soft);color:var(--danger);"
+              : o.current ? "background:var(--action-soft);color:var(--action-text);"
+              : "background:var(--surface-sunken);color:var(--text-muted);"),
+          rowStyle: "display:grid;grid-template-columns:108px 140px 74px minmax(0,1fr) auto;gap:12px 14px;align-items:center;padding:10px 18px;border-top:1px solid var(--neutral-100);" +
+            (o.pending ? "background:var(--surface-sunken);" : ""),
+          onOpen: () => this.showToast(o.pending ? "Уточнение по " + sup.name + " ещё не получено" : "КП v" + o.v + " · " + sup.name + " — открыт просмотр (демо)"),
+        })),
+        starLabel: on ? "★ Снять из пары" : "☆ Отметить для пары",
+        starBtnStyle: this.chip(on),
+        onStar: toggleStar(sup, on),
+        onAskClarify: () => this.showToast("Запрос уточнения отправлен · " + sup.name),
+        onCompare: () => { this.setState({ view: "compare", focusRow: null }); this.showToast(sup.name + " выделен в таблице сравнения"); },
+      };
+    });
+
+    const bp = this.BP.find((x) => x.id === s.bpId) || this.BP[0];
+    const tender = s.tenderBudget;
+    const free = bp.budget - bp.committed;
+    const shortfall = Math.max(0, bp.committed + tender - bp.budget);
+    const over = shortfall > 0;
+    const denom = Math.max(bp.budget, bp.committed + tender) || 1;
+    const tenderFill = over ? "var(--danger)" : "var(--success)";
+
+    const iconBuilding = this.icon(["M4 21V5a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v16", "M15 10h4a1 1 0 0 1 1 1v10", "M8 8h3M8 12h3M8 16h3M4 21h16"]);
+    const iconUser = this.icon(["M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2", "M12 3a4 4 0 1 1 0 8 4 4 0 0 1 0-8"]);
+    const iconCal = this.icon(["M3 6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z", "M8 3v4M16 3v4M3 10h18"]);
+    const iconCoins = this.icon(["M12 3c4.4 0 8 1.3 8 3s-3.6 3-8 3-8-1.3-8-3 3.6-3 8-3", "M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6"]);
+
+    return {
+      crumbs: [{ label: "Реестр тендеров" }, { label: "T-2026-014" }, { label: "Сравнение КП" }],
+      exportItems: [
+        { label: "Excel · срез сравнения" },
+        { label: "PDF · протокол" },
+        { separator: true },
+        { label: "Скопировать ссылку" },
+      ],
+
+      hTitle: s.title,
+      onTitle: (v) => this.setState({ title: v }),
+      status: {
+        label: s.status, tone: s.status === "Закрыт" ? "success" : s.status === "Сбор КП" ? "muted" : "amber",
+        items: this.STATUSES.map((st) => ({ label: st, onClick: () => this.setState({ status: st }) })),
+      },
+      fields: [
+        { label: "Объект", icon: iconBuilding, value: s.object, onChange: (v) => this.setState({ object: v }) },
+        { label: "Ответственный", icon: iconUser, value: s.owner, onChange: (v) => this.setState({ owner: v }) },
+        { label: "Срок сбора КП", icon: iconCal, kind: "date", value: s.deadline, onChange: (v) => this.setState({ deadline: v }) },
+        { label: "Бюджет тендера", icon: iconCoins, mono: true, value: this.money(tender) + " ₽",
+          onChange: (v) => { const n = parseInt(String(v).replace(/[^\d]/g, ""), 10); this.setState({ tenderBudget: isNaN(n) ? 0 : n }); } },
+      ],
+      stats: [
+        { label: "КП собрано", pct: 100, note: "3 из 3 приглашённых подрядчиков" },
+        { label: "Позиции закрыты всеми", pct: 90, note: "18 из 20 · отказ и «нет цены»" },
+      ],
+
+      bpLabel: bp.code + " · " + bp.name,
+      bpItems: this.BP.map((x) => ({ label: x.code + " · " + x.name, onClick: () => this.setState({ bpId: x.id }) })),
+      barCommittedStyle: "position:absolute;left:0;top:0;height:100%;border-radius:var(--radius-full) 0 0 var(--radius-full);background:var(--neutral-300);width:" + (bp.committed / denom * 100).toFixed(2) + "%;",
+      barTenderStyle: "position:absolute;top:0;height:100%;background:" + tenderFill + ";left:" + (bp.committed / denom * 100).toFixed(2) + "%;width:" + (tender / denom * 100).toFixed(2) + "%;",
+      limitMarkStyle: "position:absolute;top:-5px;left:" + (bp.budget / denom * 100).toFixed(2) + "%;width:1.5px;height:18px;background:var(--text);" + (bp.budget >= denom ? "display:none;" : ""),
+      tenderLegendDotStyle: "width:8px;height:8px;border-radius:2px;background:" + tenderFill + ";",
+      bpShareText: Math.round((bp.committed + tender) / bp.budget * 100) + "% лимита",
+      bpShareStyle: "font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:12px;font-weight:700;border-radius:var(--radius-full);padding:2px 9px;white-space:nowrap;color:" +
+        (over ? "var(--danger)" : "var(--text-muted)") + ";background:" + (over ? "var(--danger-soft)" : "var(--surface-sunken)") + ";",
+      bpCommittedText: this.money(bp.committed) + " ₽",
+      bpTenderText: this.money(tender) + " ₽",
+      bpBudgetText: this.money(bp.budget) + " ₽",
+      bpFreeText: over ? "нужно +" + this.money(shortfall) + " ₽" : "свободно " + this.money(free - tender) + " ₽",
+      bpFreeStyle: "font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:13px;font-weight:700;white-space:nowrap;color:" + (over ? "var(--danger)" : "var(--success-strong)") + ";",
+      over: over,
+      overTitle: "Бюджет тендера не помещается в позицию " + bp.code,
+      overText: "Свободно " + this.money(free) + " ₽ из " + this.money(bp.budget) + " ₽. Нужно поднять лимит на " + this.money(shortfall) +
+        " ₽, перенести часть объёма в другую позицию или сократить бюджет тендера.",
+
+      view: s.view,
+      setView: (v) => this.setState({ view: v }),
+      tabs: [
+        { value: "compare", label: "Сравнение", count: this.ITEMS.length },
+        { value: "parties", label: "Контрагенты", count: this.SUP.length },
+      ],
+      isCompare: s.view === "compare",
+      isParties: s.view === "parties",
+      isDecision: s.view === "decision",
+      goCompare: () => this.setState({ view: "compare" }),
+      analysisVariant: dockOpen ? "soft" : "ghost",
+      decisionVariant: s.view === "decision" ? "soft" : "primary",
+      decisionLabel: s.view === "decision" ? "Решение · открыто" : "К решению",
+      toggleDecision: () => this.setState({ view: s.view === "decision" ? "compare" : "decision" }),
+      parties: parties,
+      offersCount: this.SUP.reduce((a, x) => a + x.offers.filter((o) => !o.pending).length, 0),
+      inviteMore: () => this.showToast("Приглашение подрядчика — форма (демо)"),
+      askRound2: () => this.showToast("Запрос раунда 2 отправлен трём подрядчикам"),
+
+      layoutStyle: "display:grid;gap:16px;align-items:start;grid-template-columns:" + (dockOpen ? "minmax(0,1fr) 360px" : "minmax(0,1fr)") + ";",
+      dockOpen: dockOpen,
+      toggleDock: () => this.setState({ dockOpen: !dockOpen }),
+
+      preset: s.preset,
+      setPreset: setPreset,
+      presetOptions: Object.keys(this.PRESETS).map((id) => ({ value: id, label: this.PRESETS[id].label })),
+      modified: this.modified,
+      resetPreset: () => setPreset(s.preset),
+      metric: s.mainMetric,
+      setMetric: (v) => this.setState({ mainMetric: v }),
+      metricOptions: ["price", "deviation", "potential"].map((id) => ({ value: id, label: this.metricLabel(id) })),
+      rowView: s.rowView,
+      setRowView: (v) => this.setState({ rowView: v }),
+      rowViewOptions: [{ value: "sections", label: "Разделы" }, { value: "weight", label: "Вес" }, { value: "potential", label: "Потенциал" }],
+      strip: s.strip,
+      toggleStrip: () => this.setState({ strip: !s.strip }),
+      stripBtnStyle: this.chip(s.strip),
+      filterChips: Object.keys(this.FILTERS).map((id) => ({
+        label: this.FILTERS[id], style: this.chip(s.filters.includes(id)),
+        onClick: () => this.setState({ filters: s.filters.includes(id) ? s.filters.filter((x) => x !== id) : [...s.filters, id] }),
+      })),
+      summaryShown: list.length + " / " + this.ITEMS.length + " поз.",
+      summaryDeclined: this.ITEMS.filter((i) => i.declined).length + " отказ",
+      summaryMissing: this.ITEMS.filter((i) => this.SUP.some((x) => i.cells[x.id] && i.cells[x.id].missing)).length + " без цены",
+      summaryAnomalies: this.ITEMS.filter((i) => this.hasAnomaly(i)).length + " аномалии",
+      toast: s.toast,
+      labelColHead: s.rowView === "weight" ? "Позиция · по весу ↓" : s.rowView === "potential" ? "Позиция · по потенциалу ↓" : "Позиция",
+      supplierHeads: supplierHeads,
+      blocks: blocks,
+      grandTotals: grandTotals,
+
+      hasPair: hasPair,
+      pairTitle: hasPair ? pairSup[0].name + " → " + pairSup[1].name : "",
+      pairTotal: hasPair ? (pairDelta > 0 ? "+" : "−") + this.money(Math.abs(pairDelta)) + " ₽" : "",
+      pairTotalStyle: "margin-left:auto;font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:15px;font-weight:800;color:" +
+        (pairDelta > 0 ? "var(--danger)" : pairDelta < 0 ? "var(--success-strong)" : "var(--text)") + ";",
+      pairRows: pairRows,
+
+      scenarios: this.SCENARIOS.map((sc) => ({
+        label: sc.label, style: this.chip(s.scenario === sc.id),
+        onClick: () => {
+          if (sc.id === "bidding") setPreset("bidding");
+          else if (sc.id === "anomalies") setPreset("anomalies");
+          this.setState({ scenario: sc.id });
+        },
+      })),
+      insights: insights,
+      ask: s.ask,
+      onAsk: (e) => this.setState({ ask: e && e.target ? e.target.value : e }),
+      askResult: s.askResult,
+      runAsk: () => {
+        const q = (s.ask || "").trim() || "Где выгоднее и где риски по отмеченным ★";
+        const names = favs.map((id) => (this.SUP.find((x) => x.id === id) || {}).name).filter(Boolean);
+        this.setState({
+          askResult: "«" + q + "» — " + (names.length === 2
+            ? names.join(" против ") + ": МетСнаб дешевле на 316 тыс. ₽, основной вклад — фундамент и бетон. Проверьте прогрев у МетСнаб (нет цены) и аномалии СтройМонтажа."
+            : "отметьте двух подрядчиков ★, чтобы сравнить пару. Сейчас отмечено: " + (names.join(", ") || "никого") + "."),
+        });
+      },
+
+      decisionCards: decisionCards,
+      protocolText: "К заключению договора рекомендуется " + (win ? win.name : "—") + " с суммой " + this.money(win ? win.total : 0) +
+        " ₽ (" + (win && win.total <= s.tenderBudget ? "в пределах" : "выше") + " бюджета " + this.money(s.tenderBudget) +
+        " ₽). Потенциал дальнейших торгов по срезу — до " + this.money(totalPot) + " ₽.",
+      protocolSteps: [
+        { num: "01", text: "Запросить обоснование по позициям с аномалиями (3 поз.)." },
+        { num: "02", text: "Закрыть прогрев бетона у МетСнаб до подписания." },
+        { num: "03", text: "Провести раунд 2 по фундаменту и генподряду." },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

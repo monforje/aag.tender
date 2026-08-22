@@ -1,0 +1,73 @@
+/* ТОСТЫ. Живут в правом нижнем углу: рука с мышью обычно справа-снизу от
+   центра действия, а верх экрана занят каркасом. Панель НЕ прозрачна для
+   кликов (pointer-events:auto на элементе), но сам вьюпорт — прозрачен:
+   пустой угол не должен ловить мышь.
+
+   КРАЙ ПАНЕЛИ — хэйрлайн внутри тени (рецепт §0.2(b)-2): тост лежит на
+   белом интерфейсе, чистой тени ему мало.
+   ПОЯВЛЕНИЕ — выезд снизу на slow/emphasized: жест редкий, движение видно
+   целиком и обязано иметь характер. */
+.viewport {
+  position: fixed;
+  right: var(--cu-size-4);
+  bottom: var(--cu-size-4);
+  z-index: var(--z-toast);
+  display: flex;
+  flex-direction: column;
+  gap: var(--cu-size-2);
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--cu-size-2);
+  width: min(360px, calc(100vw - var(--cu-size-8)));
+  padding: var(--cu-size-3);
+  border-radius: var(--cu-radii-3);
+  background: var(--cu-background-main);
+  box-shadow: var(--cu-elevation-border-4);
+  pointer-events: auto;
+  animation: toast-in var(--cu-duration-slow) var(--cu-ease-emphasized);
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--cu-size-2));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.toastIcon {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  --icon-size: var(--cu-text-md);
+}
+.is-info .toastIcon    { color: var(--cu-tone-info-ink); }
+.is-success .toastIcon { color: var(--cu-tone-success-ink); }
+.is-warning .toastIcon { color: var(--cu-tone-warning-ink); }
+.is-danger .toastIcon  { color: var(--cu-tone-danger-ink); }
+
+.toastBody {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.toastTitle {
+  font-size: var(--cu-text-base);
+  font-weight: var(--cu-font-weight-medium);
+  line-height: var(--cu-leading-tight);
+}
+.toastDescription {
+  margin-top: 2px;
+  font-size: var(--cu-text-sm);
+  line-height: var(--cu-leading-normal);
+  color: var(--cu-content-secondary);
+}
+
+/* Крестик — микро-компонент <CloseButton variant="quiet"> (@/shared/ui/Micro):
+   геометрия и реакции переехали туда, чтобы тост, алерт и будущий дровер
+   закрывались одним и тем же крестиком. */

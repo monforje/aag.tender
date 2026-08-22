@@ -1,0 +1,121 @@
+/* ПОДСКАЗКА-ОБЪЯСНЕНИЕ ПОМЕТКИ. Поверхность и анатомия — как шапка карточки
+   тендера: белая карточка радиусом 12, капитель по центру называет ЧТО ЭТО,
+   тело из полей «подпись · значение», футер с пояснением на приглушённой
+   заливке. Состояние тона читают ЗНАЧЕНИЯ (--pop-ink), а не глиф в шапке.
+
+   Это <dialog>, а не div: таблица прокручивается внутри overflow-x:auto, и
+   абсолютный блок был бы обрезан при любом z-index — top layer обходит это
+   физически. show(), а НЕ showModal(): модальность делает страницу inert, и
+   курсор перестаёт доходить до соседних ячеек. Подсказка не окно.
+
+   Немодальный dialog НЕ уходит в top layer — он красится в общем порядке,
+   поэтому слой задаётся явно и ВЫШЕ меню (z-index 20 у дропдаунов): объяснение
+   данных важнее любой мебели. */
+.popup{
+  position: fixed; margin: 0; width: 272px; padding: 0;
+  border: 0; border-radius: var(--cu-radii-6);
+  background: var(--cu-background-main); color: var(--cu-content-primary);
+  box-shadow: var(--cu-elevation-border-4);
+  z-index: 60;
+  opacity: 0; transform: translateY(4px);
+  transition: opacity .13s ease, transform .13s ease;
+}
+.popup.is-visible{ opacity: 1; transform: translateY(0); }
+@media (prefers-reduced-motion: reduce){
+  .popup{ transition: none; }
+}
+/* Фокусное кольцо на самой панели читалось бы как ошибка ввода. */
+.popup:focus, .popup:focus-visible{ outline: none; }
+
+/* Хвостик — повёрнутый квадрат; центр по --arrow-x, которую считает
+   компонент по замеру цели. is-above переворачивает панель вместе с ним. */
+.popup::before{
+  content: ''; position: absolute; top: -5px; left: var(--arrow-x, 50%);
+  width: 10px; height: 10px; background: var(--cu-background-main);
+  transform: translateX(-50%) rotate(45deg);
+}
+.popup.is-above::before{
+  top: auto; bottom: -5px;
+  transform: translateX(-50%) rotate(225deg);
+}
+/* Подсказка, а не окно. */
+.popup::backdrop{ background: transparent; }
+
+/* Шапка — капитель по центру, как заголовки разделов таблицы: цвет состояния
+   остаётся значениям тела. */
+.head{
+  padding: 10px 16px 8px;
+  border-bottom: 1px solid var(--cu-border-default);
+  text-align: center;
+}
+.title{
+  font-size: 11px; line-height: 14px;
+  font-weight: var(--cu-font-weight-semibold);
+  letter-spacing: .07em; text-transform: uppercase;
+  color: var(--cu-content-secondary);
+}
+
+/* Тело — поля «подпись · значение»: фиксированная колонка подписи выстраивает
+   все строки на общей вертикали; значения прижаты вправо — они числа. */
+.body{
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 9px 16px;
+}
+.field{
+  display: grid; grid-template-columns: 112px minmax(0, 1fr);
+  align-items: center; column-gap: 12px;
+}
+.label{
+  font-size: 13px; line-height: 18px; white-space: nowrap;
+  color: var(--cu-content-secondary);
+}
+.value{
+  font-size: 13px; line-height: 18px;
+  font-weight: var(--cu-font-weight-medium);
+  font-variant-numeric: tabular-nums;
+  color: var(--cu-content-primary);
+  white-space: nowrap; text-align: right;
+}
+/* Состояние читается ЗНАЧЕНИЕМ, а не глифом в шапке. */
+.value--tone{ color: var(--pop-ink, var(--cu-content-primary)); }
+
+/* Поле со шкалой: трек общий для всех строк (25 % = вся длина), заливка —
+   тоном карточки. min-width:0 обязателен, иначе длинное значение вытолкнет
+   трек из панели. */
+.meter{
+  display: flex; align-items: center; justify-content: flex-end;
+  gap: 8px; min-width: 0;
+}
+.track{
+  width: 64px; height: 4px; flex: none;
+  border-radius: var(--cu-radii-round);
+  background: var(--cu-state-hover);
+  overflow: hidden;
+}
+.track i{
+  display: block; height: 100%;
+  border-radius: inherit;
+  background: var(--pop-tone, var(--cu-tone-neutral));
+}
+
+/* Футер — всё, что пояснение, а не число. Заливкой отделён от числового тела;
+   скругление повторяет нижние углы карточки (overflow:hidden нельзя —
+   срезал бы хвостик). */
+.foot{
+  margin-top: 7px; padding: 9px 16px 10px;
+  border-top: 1px solid var(--cu-border-default);
+  background: var(--cu-fill-subtle);
+  border-radius: 0 0 calc(var(--cu-radii-6) - 1px) calc(var(--cu-radii-6) - 1px);
+}
+.note{
+  font-size: 11.5px; line-height: 16px;
+  color: var(--cu-content-secondary);
+}
+
+/* Тон приходит атрибутом от содержимого: один каркас обслуживает все пометки.
+   Ровно пять тонов проекта, никаких локальных цветов. */
+.popup[data-tone='info']{    --pop-tone: var(--cu-tone-info);    --pop-ink: var(--cu-tone-info-ink); }
+.popup[data-tone='success']{ --pop-tone: var(--cu-tone-success); --pop-ink: var(--cu-tone-success-ink); }
+.popup[data-tone='warning']{ --pop-tone: var(--cu-tone-warning); --pop-ink: var(--cu-tone-warning-ink); }
+.popup[data-tone='danger']{  --pop-tone: var(--cu-tone-danger);  --pop-ink: var(--cu-tone-danger-ink); }
+.popup[data-tone='neutral']{ --pop-tone: var(--cu-tone-neutral); --pop-ink: var(--cu-tone-neutral-ink); }

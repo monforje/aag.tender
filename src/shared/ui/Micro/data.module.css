@@ -1,0 +1,74 @@
+/* ДАННЫЕ: точки состояния, дельты, группы аватаров, табличные цифры. */
+
+/* ТОЧКА СОСТОЯНИЯ — 8px круг тона. Цвет берётся из лестницы --cu-tone-*:
+   микро-компонент не знает ни одного конкретного статуса. */
+.status-dot {
+  display: inline-block;
+  flex: none;
+  width: var(--cu-size-2);
+  height: var(--cu-size-2);
+  border-radius: var(--cu-radii-round);
+  background: var(--status-dot-color);
+}
+.status-dot--info    { --status-dot-color: var(--cu-tone-info); }
+.status-dot--success { --status-dot-color: var(--cu-tone-success); }
+.status-dot--warning { --status-dot-color: var(--cu-tone-warning); }
+.status-dot--danger  { --status-dot-color: var(--cu-tone-danger); }
+.status-dot--neutral { --status-dot-color: var(--cu-tone-neutral); }
+
+/* ДЕЛЬТА: стрелка направления + число. Цвет подключается тоном ТОЛЬКО когда
+   вызывающий знает семантику («рост — хорошо» верно не для всех величин),
+   по умолчанию дельта тихая. Стрелка вниз — поворот глифа, а не второй
+   иконки в спрайте. */
+.delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.is-positive .delta-icon,
+.is-negative .delta-icon {
+  --icon-size: 12px;
+}
+.is-negative .delta-icon {
+  transform: rotate(180deg);
+}
+.is-neutral .delta-icon {
+  visibility: hidden; /* место держится: ряд дельт не «прыгает» столбиком */
+}
+
+/* ЦИФРЫ, КОТОРЫЕ СРАВНИВАЮТ, выровнены таблично: разряды стоят колонкой.
+   Число наследует кегль и цвет строки — это тот же текст, только ровный. */
+.numeric {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ГРУППА АВАТАРОВ. Кольцо вокруг каждого — фон поверхности под группой:
+   без него перекрытие сливало бы соседей в кляксу. */
+.avatar-group {
+  display: inline-flex;
+  align-items: center;
+}
+.avatar-ring {
+  box-shadow: 0 0 0 2px var(--avatar-group-bg, var(--cu-background-main));
+}
+.avatar-ring + .avatar-ring {
+  margin-left: calc(var(--cu-size-2) * -1);
+}
+/* Хвост переполнения: та же геометрия, что у аватара-инициала, но тише —
+   это счётчик, а не участник. */
+.avatar-more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--cu-size-7);
+  height: var(--cu-size-7);
+  border-radius: var(--cu-radii-round);
+  background: var(--cu-fill-subtle);
+  color: var(--cu-content-secondary);
+  font-size: var(--cu-text-xs);
+  font-weight: var(--cu-font-weight-medium);
+}
+.avatar-more.avatar-ring,
+.avatar-group > .avatar-more:not(:first-child) {
+  margin-left: calc(var(--cu-size-2) * -1);
+}

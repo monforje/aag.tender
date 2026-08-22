@@ -1,0 +1,22 @@
+/* Глиф «Анализа»: заливка крутится под клип-путём искры.
+   ДВИЖЕНИЕ ТОЛЬКО transform — композитор, без layout и paint; характер
+   постоянный, поэтому linear. Скорость и пауза приходят ПЕРЕМЕННЫМИ
+   (--ai-spin-duration / --ai-spin-play) от владельца состояния: переменная
+   наследуется сквозь DOM и, в отличие от класса, не спорит с границей
+   CSS-модулей. prefers-reduced-motion гасится глобальным клампом global.css —
+   отдельной ветки не нужно. */
+.sheen{
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: ai-spin var(--ai-spin-duration, 6s) linear infinite;
+  animation-play-state: var(--ai-spin-play, running);
+}
+@keyframes ai-spin{
+  to{ transform: rotate(360deg); }
+}
+
+/* Стопы спектра — ссылками на токены: перекрасят тему, перекрасится и глиф.
+   stop-color — обычное CSS-свойство, классом его задавать можно. */
+.stopA{ stop-color: var(--cu-ai-a); }
+.stopB{ stop-color: var(--cu-ai-b); }
+.stopC{ stop-color: var(--cu-ai-c); }

@@ -10,6 +10,10 @@ import s from './Table.module.css';
  * что у `searchSecondaryIconClass` в <SearchTrigger>.
  *
  * - `numeric` — числа и даты вправо;
+ * - `roomy`  — числовая колонка под НАВИСАЮЩУЮ пометку: бирка минимума в
+ *               сравнении КП свешивается за цену на ~40px, и резерв делается
+ *               паддингом всей колонки ([R6] аудита) — он общий всем строкам,
+ *               поэтому правое выравнивание не сдвигается;
  * - `mono`    — коды и артикулы моноширинным;
  * - `strong`  — колонка-якорь, с которой читают строку;
  * - `muted`   — второстепенное значение;
@@ -23,6 +27,7 @@ import s from './Table.module.css';
  */
 export const tableCell = {
   numeric: s.cellNumeric,
+  roomy: s.cellRoomy,
   mono: s.cellMono,
   strong: s.cellStrong,
   muted: s.cellMuted,
@@ -64,6 +69,8 @@ export const tableCell = {
  * A11Y:   настоящая <table> с <th scope="col"> — скринридер объявляет
  *         заголовок колонки при переходе по ячейкам; <caption> становится
  *         именем таблицы. Ни то ни другое не заменяется набором <div>.
+ *         stickyHead не меняет разметку: шапка остаётся обычным <thead>,
+ *         «липкость» — только позиционирование.
  *
  * @example
  * <Table caption={`Показано ${rows.length} из ${ROWS.length}`}>
@@ -71,15 +78,33 @@ export const tableCell = {
  *   <tbody>{rows.map((r) => <tr key={r.id}><td className={tableCell.mono}>{r.id}</td></tr>)}</tbody>
  * </Table>
  */
-export function Table({ caption, layout, children }: {
+export function Table({ caption, layout, stickyHead, children }: {
   caption?: ReactNode;
   /** 'fixed' — ширины из <colgroup> (см. UX). По умолчанию авторазметка. */
   layout?: 'auto' | 'fixed';
+  /**
+   * Липкая шапка: thead прибирается к верху ближайшего прокручиваемого
+   * ПРЕДКА страницы нативным position:sticky (детали — .module.css).
+   *
+   * КОГДА:  длинная таблица на странице со своим скроллом: строки едут под
+   *         неподвижной шапкой, пока таблица не кончится, — и шапка уходит
+   *         вместе с её концом.
+   * НЕ ДЛЯ: коротких таблиц — прилипшая шапка ради трёх строк читается как
+   *         поломка; им достаточно обычной страницы.
+   *
+   * Требование к окружению: между <table> и целевым скроллом не должно быть
+   * СВОЕГО прокручиваемого блока — его scrollport перехватил бы липкость
+   * себе. Поэтому в этом режиме лента отдаёт горизонтальную прокрутку
+   * наружу, а декорации переезжают с обёртки на саму таблицу: та теперь
+   * бывает шире обёртки. */
+  stickyHead?: boolean;
   children: ReactNode;
 }) {
   return (
-    <div className={s.tableWrap}>
-      <table className={cx(s.table, layout === 'fixed' && s.tableFixed)}>
+    <div className={cx(s.tableWrap, stickyHead && s.tableWrapStickyHead)}>
+      <table
+        className={cx(s.table, layout === 'fixed' && s.tableFixed, stickyHead && s.tableStickyHead)}
+      >
         {caption ? <caption className={s.caption}>{caption}</caption> : null}
         {children}
       </table>

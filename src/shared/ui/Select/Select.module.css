@@ -1,0 +1,52 @@
+/* ТРИГГЕР СЕЛЕКТА — та же поверхность, что у поля ввода из Input.module.css:
+   селект в полосе формы обязан читаться полем, а не ещё одной кнопкой.
+   Правила продублированы сознательно: селектор CSS-модуля не пересекает
+   границу модуля, и «общего» класса между слайсами не существует. */
+.trigger {
+  display: flex;
+  align-items: center;
+  gap: var(--cu-size-2);
+  width: 100%;
+  height: var(--cu-size-8);
+  padding-inline: var(--cu-size-3);
+  border: 1px solid var(--cu-border-default);
+  border-radius: var(--cu-radii-3);
+  background: var(--cu-background-main);
+  box-shadow: var(--cu-elevation-border-1);
+  font-size: var(--cu-text-base);
+  text-align: left;
+  color: var(--cu-content-primary);
+  transition: box-shadow var(--cu-duration-base) var(--cu-ease-standard);
+}
+.trigger:hover:not(:disabled):not(:focus-visible),
+.trigger:focus-visible {
+  outline: none;
+  box-shadow: var(--cu-elevation-border-1), var(--cu-state-ring);
+}
+.trigger:disabled {
+  background: var(--cu-fill-subtle);
+  border-color: transparent;
+  box-shadow: none;
+  cursor: default;
+}
+.is-invalid,
+.is-invalid:hover,
+.is-invalid:focus-visible {
+  box-shadow: var(--cu-elevation-border-1), 0 0 0 1px var(--cu-tone-danger);
+}
+
+.trigger-value {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.trigger-placeholder {
+  color: var(--cu-content-placeholder);
+}
+.caret {
+  flex: 0 0 auto;
+  --icon-size: 14px;
+  color: var(--cu-content-tertiary);
+}

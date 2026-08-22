@@ -1,0 +1,50 @@
+/* Кнопка-искра. Поверхность — анатомия IconButton variant="topbar": 28px,
+   радиус 7, заливка-таблетка по наведению (рецепт 1), кольцо фокуса
+   (рецепт 9). Собственная копия, а не сам <IconButton>: внутрь идёт
+   анимированный SVG, а не глиф из карты Icon; параметризовать примитив
+   можно будет со второго потребителя.
+   
+   РАЗМЕЩЕНИЕ ЗДЕСЬ НЕ ЖИВЁТ: позицию на строке заголовка задаёт страница
+   своим классом через className (см. .aiSlot в TenderSummary.module.css). */
+.trigger{
+  display: flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; flex: none;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: background-color var(--cu-animation-duration) var(--cu-animation-timing);
+}
+.trigger:hover{
+  background: var(--cu-state-hover);
+  /* Разгон переливания на отклик: та же механика, ускоренный кадр. */
+  --ai-spin-duration: 3s;
+}
+.trigger:active{ background: var(--cu-state-hover-strong); }
+.trigger:focus-visible{
+  outline: var(--cu-focus-ring);
+  outline-offset: 2px;
+}
+
+/* Панель открыта: текущее состояние (рецепт 2) и стоп-кадр спектра —
+   внимание ушло внутрь панели. Отрицательная задержка кладёт стоп-кадр на
+   определённый угол (~40° при шестисекундном периоде), а не «где застыло». */
+.isOpen{
+  background: var(--cu-state-hover-strong);
+  --ai-spin-play: paused;
+  --ai-spin-delay: -0.67s;
+}
+
+/* Запрос в полёте: быстрое мерцание вместо спиннера — состояние машины
+   читается темпом того же глифа, второй индикатор не заводится. */
+.isThinking{
+  --ai-spin-duration: 0.9s;
+  --ai-spin-play: running;
+  --ai-spin-delay: 0s;
+}
+
+/* Сбой: спектр обесцвечивается — цвет здесь означал жизнь запроса. */
+.isFailed{ --ai-spin-play: paused; }
+.isFailed svg{ filter: saturate(0); }
+
+/* Вне экрана и на скрытой вкладке зацикленная анимация не должна жечь кадры:
+   пауза атрибутом, который ставит IntersectionObserver/visibilitychange. */
+.trigger[data-offscreen]{ --ai-spin-play: paused; }

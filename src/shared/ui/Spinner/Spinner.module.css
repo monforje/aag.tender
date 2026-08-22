@@ -1,0 +1,23 @@
+.spinner {
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+.spinner svg {
+  width: var(--spinner-size);
+  height: var(--spinner-size);
+  animation: spin .8s linear infinite;
+}
+.is-sm {
+  --spinner-size: 14px;
+}
+.is-md {
+  --spinner-size: var(--cu-size-5);
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* prefers-reduced-motion останавливает вращение глобальным правилом из
+   global.css: остаётся статичное кольцо со скрытым текстом — процесс
+   по-прежнему объявлен, движение отключено. */

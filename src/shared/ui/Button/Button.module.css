@@ -34,6 +34,17 @@
 }
 .btn--primary:hover{ background: rgb(58,58,58); }
 
+/* Разрушающее действие. Цвет берётся из лестницы тонов (--cu-tone-danger),
+   а не заводится четвёртым красным: «необратимо» в этом приложении уже
+   имеет цвет, и кнопка обязана говорить тем же. Ховер — ступень ink того
+   же тона, ровно как осветление у primary. */
+.btn--danger{
+  padding-inline: 18px; background: var(--cu-tone-danger); color: #fff;
+  box-shadow: var(--cu-elevation-2);
+}
+.btn--danger:hover{ background: var(--cu-tone-danger-ink); }
+.btn--danger:disabled{ opacity: .4; box-shadow: none; cursor: default; }
+
 /* Компактный контрол → ступень ховера .06 из каталога состояний. Раньше одна
    из копий брала .05 «на глаз» — теперь ступень одна и выведена из правила. */
 .btn--secondary{

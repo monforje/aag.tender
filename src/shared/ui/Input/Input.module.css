@@ -1,0 +1,56 @@
+/* ПОВЕРХНОСТЬ ПОЛЯ ФОРМЫ. Геометрия снята со вторичной кнопки (32px, радиус
+   6, хэйрлайн-тень) — поле и кнопка в одной полосе обязаны быть одной высоты,
+   иначе полоса «мигает». Реакции — по каталогу состояний:
+     hover/focus — кольцо рецепта 4 (поле белое, заливать нечем);
+     ошибка      — тот же приём, но цветом тона danger.
+   Кольца рисуются box-shadow, а не outline: родное кольцо не повторяет
+   радиус и торчит углами на скруглении (см. .inline-edit в global.css). */
+.input {
+  width: 100%;
+  height: var(--cu-size-8);
+  padding-inline: var(--cu-size-3);
+  border: 1px solid var(--cu-border-default);
+  border-radius: var(--cu-radii-3);
+  background: var(--cu-background-main);
+  box-shadow: var(--cu-elevation-border-1);
+  font-family: inherit;
+  font-size: var(--cu-text-base);
+  color: var(--cu-content-primary);
+  transition: box-shadow var(--cu-duration-base) var(--cu-ease-standard),
+              background-color var(--cu-duration-base) var(--cu-ease-standard);
+}
+.input::placeholder {
+  color: var(--cu-content-placeholder);
+}
+.input:hover:not(:disabled):not(:focus-visible) {
+  box-shadow: var(--cu-elevation-border-1), var(--cu-state-ring);
+}
+.input:focus-visible {
+  outline: none;
+  box-shadow: var(--cu-elevation-border-1), var(--cu-state-ring);
+}
+.input:disabled {
+  background: var(--cu-fill-subtle);
+  border-color: transparent;
+  box-shadow: none;
+  color: var(--cu-content-placeholder);
+  cursor: default;
+}
+
+/* Ошибка перекрашивает КОЛЬЦО, а не рамку: рамка 1px слишком слабый канал
+   для состояния, на которое человек обязан отреагировать. */
+.is-invalid,
+.is-invalid:hover:not(:disabled),
+.is-invalid:focus-visible {
+  box-shadow: var(--cu-elevation-border-1), 0 0 0 1px var(--cu-tone-danger);
+}
+
+/* Многострочный собрат: поверхность та же, меняется только вертикаль.
+   Ресайз строго по вертикали — горизонтальный рвёт сетку формы. */
+.textarea {
+  height: auto;
+  min-height: calc(var(--cu-size-8) + var(--cu-size-1));
+  padding: var(--cu-size-2) var(--cu-size-3);
+  line-height: var(--cu-leading-normal);
+  resize: vertical;
+}

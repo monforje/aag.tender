@@ -20,16 +20,63 @@
  *  строке считался бы уже по «своим» объёмам у каждого. Сумма выводится.
  *
  *  ОТСУТСТВИЕ КЛЮЧА — ЭТО «ПОЗИЦИЯ НЕ ЗАКРЫТА», а не ноль. Ноль означал бы
- *  «готовы сделать бесплатно» и попал бы и в сумму, и в разброс. */
+ *  «готовы сделать бесплатно» и попал бы и в сумму, и в разброс.
+ *
+ *  ПОМЕТКИ (§4.6 аудита) ПРИХОДЯТ ГОТОВЫМИ В ДАННЫХ — макет их рисует, не
+ *  вычисляет. Исключений ровно два, и оба считаются ЗДЕСЬ, в одном проходе
+ *  `analyzeComparison()`, чтобы таблица, фильтры, счётчики и попап читали
+ *  одни и те же числа:
+ *  - «минимум» присуждается лучшей НЕаномальной цене, и только когда есть
+ *    ЧТО сравнивать (≥2 расценки): единственное КП — отсутствие конкуренции,
+ *    а не победа; аномально дешёвое выбывает из соревнования за минимум,
+ *    но остаётся в расчёте разброса;
+ *  - метка разброса выводится из вычисленного процента порогом, а не приходит
+ *    рядом с ним: один смысл — один порог, иначе число спорит с подписью. */
 
 import type { Tone } from '@/shared/ui/Badge';
 import type { IconName } from '@/shared/ui/Icon';
+
+/** Пороги формул. Числами-константами, а не магией по месту: фильтр, бейдж
+ *  ячейки и красная цифра обязаны делить ОДИН порог (правило [R4] аудита),
+ *  и разъехаться им неоткуда. */
+export const SPREAD_HIGH = 15;
+export const SPREAD_NOTICEABLE = 7;
+/** Допуск отклонения от медианы строки, ±% — симметричный: «дешевле на 8 %»
+ *  такой же повод спросить, как «дороже» (несимметричный порог демо — дефект). */
+export const DEV_TOLERANCE = 5;
+/** «Есть потенциал» с порогом, ₽ по строке: без него предикат пропускает все
+ *  строки подряд и фильтр — no-op (§4.4). */
+export const POTENTIAL_MIN = 50_000;
 
 export interface ComparePosition {
   id: string;
   title: string;
   qty: number;
   unit: string;
+  /** Ключевая позиция — ручная пометка закупщика или правило «топ по весу»;
+   *  решению о строке, двигающей итог, грош цена без ответственного за него. */
+  key?: boolean;
+  /** Объём до корректировки сметы: дифф против опубликованного показывают
+   *  ОБА значения (`920 → 840`), молчаливая подмена врала бы истории. */
+  qtyOrig?: number;
+  /** Строка снята из сметы после публикации. Остаются в DOM и в счётчиках —
+   *  это часть истории сметы, а не мусор. */
+  removed?: boolean;
+}
+
+/** Пометка ячейки «позиция × подрядчик». Всё — вход, ни одно поле не
+ *  выводится из цен: аномалия — вердикт внешнего анализа, потенциал —
+ *  торговая оценка, отказ — решение подрядчика (§5 аудита). */
+export interface CellMark {
+  /** Причина аномалии — обязательна при ней же: строку невозможно объяснить
+   *  подрядчику без причины, поэтому попап показывает её первым блоком. */
+  anomaly?: string;
+  /** Заявленный запас торга, ₽ ЗА ЕДИНИЦУ — как и цена: сумма по строке
+   *  выводится умножением на общий объём. */
+  potential?: number;
+  /** Отказ от объёма. Противоположен пробелу данных: отказ — решение,
+   *  отсутствие цены — дыра в КП; красить решение в тревогу — врать о нём. */
+  declined?: boolean;
 }
 
 /** Раздел сметы. Плоский список из тринадцати позиций читается как простыня:
@@ -78,6 +125,9 @@ export interface Contractor {
   submitted: string;
   /** Цена за единицу по id позиции. Ключа нет — позиция в КП не закрыта. */
   prices: Record<string, number>;
+  /** Пометки анализа по id позиции. Ключа нет — ячейка чистая: ни аномалии,
+   *  ни потенциала, ни отказа (отказ живёт здесь, а не отсутствием цены). */
+  marks?: Record<string, CellMark>;
 }
 
 /** Ответ на «дай сравнение по тендеру» — ровно то, чем живёт экран, и ничего
@@ -189,3 +239,202 @@ const DECIMAL = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 1 });
 export const money = (value: number): string => MONEY.format(value);
 /** Число с запятой и без хвоста нулей — объёмы (86,5 т) и проценты (7,9 %). */
 export const decimal = (value: number): string => DECIMAL.format(value);
+
+/* ═══════════════════ ПРОИЗВОДНЫЕ ЧИСЛА СТРОКИ ═══════════════════
+   Один проход по строке — всё производное считается здесь и только здесь:
+   таблица, фильтры, счётчики и попап читают одни и те же числа. */
+
+export interface RowFacts {
+  position: ComparePosition;
+  /** Закрытые расценки в порядке колонок — ВКЛЮЧАЯ аномальные: разброс
+   *  считается по всем ценам, минимум ищет обходной путь мимо них. */
+  bids: Array<{ contractorId: string; price: number }>;
+  median: number | null;
+  /** Разброс от минимума, %; меньше двух расценок — null, не ноль. */
+  spread: number | null;
+  /** Метка разброса ВЫВЕДЕНА из процента порогом, а не принята полем. */
+  spreadTag: 'none' | 'noticeable' | 'high' | null;
+  /** Подрядчик с лучшей НЕаномальной ценой; нет конкуренции — null. */
+  bestId: string | null;
+  /** Есть ли в строке аномальная расценка — подъём ячейковой пометки на
+   *  строку для фильтра и счётчика: у строки нет своей аномалии, есть чужие. */
+  anomaly: boolean;
+  /** Отказ и пробел данных — разные состояния и разные счётчики: отказ это
+   *  решение подрядчика, отсутствие расценки — дыра в КП (§4 слой 3). */
+  declined: boolean;
+  missing: boolean;
+  /** Максимум заявленного потенциала по строке, ₽ ПО СТРОКЕ (за единицу ×
+   *  общий объём): сортировка «По потенциалу» и фильтр читают его. */
+  maxPot: number;
+  /** Вес строки — сумма по самому дорогому предложению: «во сколько обойдётся
+   *  в худшем случае», оценка риска, а не факта. У снятой строки вес 0. */
+  weight: number;
+}
+
+/** Медиана — по всем закрытым расценкам, включая аномальные: она описывает
+ *  строку, а не судит её. */
+export const medianOf = (values: number[]): number | null => {
+  if (!values.length) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = sorted.length >> 1;
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+};
+
+/** Отклонение цены от медианы строки, % со знаком.
+ *
+ *  ЗАМЕНА, А НЕ РЕШЕНИЕ: настоящая база отклонения — внешняя эталонная цена
+ *  строки (сметная / прошлая закупка), которой в контракте пока нет, и из цен
+ *  КП её вывести нельзя — это доказано обратным счётом по демо-датасету
+ *  (§2.2 аудита). До появления поля медиана годится показать режим и ни для
+ *  чего больше. */
+export const deviationPct = (price: number, median: number): number =>
+  ((price - median) / median) * 100;
+
+export interface ComparisonFacts {
+  rows: RowFacts[];
+  byId: Map<string, RowFacts>;
+  /** Σ веса среза: база доли веса. Сумма долей даёт ровно 100 % — в отличие
+   *  от сломанного «% среза» демо, делившего вес на чужой итог подрядчика. */
+  sumWeight: number;
+}
+
+/** Пометки ячейки или пусто. Функцией, а не `contractor.marks?.[id]` по месту:
+ *  единственное место знает, что пометки могут не прийти вовсе. */
+export const cellMark = (contractor: Contractor, positionId: string): CellMark =>
+  contractor.marks?.[positionId] ?? {};
+
+export const hasAnomaly = (mark: CellMark): boolean => typeof mark.anomaly === 'string';
+
+export function analyzeComparison(groups: PositionGroup[], contractors: Contractor[]): ComparisonFacts {
+  const byContractor = new Map(contractors.map((c) => [c.id, c]));
+  const rows: RowFacts[] = groups.flatMap((group) => group.positions.map((position) => {
+    const closed = contractors
+      .filter((c) => c.prices[position.id] !== undefined)
+      .map((c) => ({ contractorId: c.id, price: c.prices[position.id] }));
+
+    const prices = closed.map((b) => b.price);
+    const min = Math.min(...prices);
+    const spread = prices.length > 1 ? ((Math.max(...prices) - min) / min) * 100 : null;
+
+    /* Минимум — лучшая НЕаномальная цена при живой конкуренции (§4.6). */
+    const fair = closed.filter((b) => !hasAnomaly(cellMark(byContractor.get(b.contractorId)!, position.id)));
+    const bestId = fair.length && prices.length > 1
+      ? fair.reduce((best, b) => (b.price < best.price ? b : best)).contractorId
+      : null;
+
+    return {
+      position,
+      bids: closed,
+      median: medianOf(prices),
+      spread,
+      spreadTag: spread === null ? null
+        : spread >= SPREAD_HIGH ? 'high'
+          : spread >= SPREAD_NOTICEABLE ? 'noticeable' : 'none',
+      bestId,
+      anomaly: closed.some((b) => hasAnomaly(cellMark(byContractor.get(b.contractorId)!, position.id))),
+      declined: contractors.some((c) => cellMark(c, position.id).declined === true),
+      missing: !position.removed
+        && contractors.some((c) => c.prices[position.id] === undefined && cellMark(c, position.id).declined !== true),
+      maxPot: Math.max(0, ...contractors.map(
+        (c) => (cellMark(c, position.id).potential ?? 0) * position.qty,
+      )),
+      weight: position.removed || !prices.length ? 0 : Math.max(...prices) * position.qty,
+    };
+  }));
+
+  const sumWeight = rows.reduce((acc, r) => acc + r.weight, 0);
+  return { rows, byId: new Map(rows.map((r) => [r.position.id, r])), sumWeight };
+}
+
+/* ═══════════════════ ПРЕДИКАТЫ ФИЛЬТРОВ ═══════════════════ */
+
+export type PredicateId = 'key' | 'spread' | 'anomaly' | 'pot' | 'med';
+
+export const PREDICATES: ReadonlyArray<{ id: PredicateId; label: string }> = [
+  { id: 'key', label: 'Ключевые' },
+  { id: 'spread', label: 'Высокий разброс' },
+  { id: 'anomaly', label: 'Аномалии' },
+  { id: 'pot', label: 'Есть потенциал' },
+  { id: 'med', label: 'Дороже медианы строки' },
+];
+
+/** Пропускает ли строку предикат. Комбинируются по И, порядок не важен,
+ *  пустой набор показывает всё. Порог «дороже медианы» ТОТ ЖЕ, что ставит
+ *  бейдж ячейки (±DEV_TOLERANCE): один смысл — один порог ([R4]). */
+export function predicatePasses(id: PredicateId, facts: RowFacts): boolean {
+  switch (id) {
+    case 'key': return facts.position.key === true;
+    case 'spread': return facts.spreadTag === 'high';
+    case 'anomaly': return facts.anomaly;
+    case 'pot': return facts.maxPot >= POTENTIAL_MIN;
+    case 'med': return facts.median !== null && facts.bids.some(
+      (b) => deviationPct(b.price, facts.median!) > DEV_TOLERANCE,
+    );
+  }
+}
+
+/** Строки, проходящие ВСЕ активные предикаты (И). */
+export const filterRows = (rows: RowFacts[], filters: PredicateId[]): RowFacts[] =>
+  rows.filter((row) => filters.every((id) => predicatePasses(id, row)));
+
+/** Счётчик предиката: сколько строк он пропустит на ВСЕХ данных — число на
+ *  невыбранном пункте иначе бесполезно (показывает «после всего остального»). */
+export const predicateCount = (id: PredicateId, rows: RowFacts[]): number =>
+  rows.filter((row) => predicatePasses(id, row)).length;
+
+/* ═══════════════════ СОСТОЯНИЕ ЭКРАНА И ПРЕСЕТЫ ═══════════════════ */
+
+export type CompareMetricId = 'price' | 'deviation' | 'potential';
+export type RowViewId = 'sections' | 'weight' | 'potential';
+
+export interface CompareView {
+  preset: PresetId;
+  mainMetric: CompareMetricId;
+  extraMetrics: CompareMetricId[];
+  rowView: RowViewId;
+  filters: PredicateId[];
+}
+
+export type PresetId = 'overview' | 'bidding' | 'anomalies';
+
+/** Пресет — не фильтр, а сохранённая комбинация ЧЕТЫРЁХ осей состояния:
+ *  показатель ячейки, подстрочники, вид строк, активные предикаты. Один клик —
+ *  ответ на один вопрос: что вообще предложили → где можно отжать → где врут.
+ *  Присваивает оси ЦЕЛИКОМ и своей логики не имеет. */
+export const PRESETS: Record<PresetId, Omit<CompareView, 'preset'>> = {
+  overview: { mainMetric: 'price', extraMetrics: [], rowView: 'sections', filters: [] },
+  bidding: { mainMetric: 'potential', extraMetrics: ['price'], rowView: 'potential', filters: ['pot'] },
+  anomalies: { mainMetric: 'deviation', extraMetrics: ['price'], rowView: 'weight', filters: ['anomaly'] },
+};
+
+export const PRESET_LABEL: Record<PresetId, string> = {
+  overview: 'Обзор',
+  bidding: 'Торги',
+  anomalies: 'Аномалии',
+};
+
+export const METRIC_LABEL: Record<CompareMetricId, string> = {
+  price: 'Цена', deviation: 'Отклонение', potential: 'Потенциал',
+};
+
+export const ROW_VIEW_LABEL: Record<RowViewId, string> = {
+  sections: 'По разделам', weight: 'По весу', potential: 'По потенциалу',
+};
+
+/** Показатели ячейки: главный крупно, остальные подстрочником, максимум три. */
+export const shownMetrics = (view: CompareView): CompareMetricId[] =>
+  [...new Set([view.mainMetric, ...view.extraMetrics])].slice(0, 3);
+
+const sameSet = (a: readonly string[], b: readonly string[]): boolean =>
+  a.length === b.length && a.every((x) => b.includes(x));
+
+/** Ушли ли от базы пресета хоть по одной из четырёх осей. Молча терять это
+ *  нельзя: пользователь обязан видеть, что смотрит не на «Обзор», а на свою
+ *  собственную нарезку. */
+export const isModifiedView = (view: CompareView): boolean => {
+  const base = PRESETS[view.preset];
+  return view.mainMetric !== base.mainMetric
+    || view.rowView !== base.rowView
+    || !sameSet(view.filters, base.filters)
+    || !sameSet(view.extraMetrics, base.extraMetrics);
+};

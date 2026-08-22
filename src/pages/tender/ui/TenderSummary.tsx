@@ -39,6 +39,10 @@ const DUE_LEVEL: Record<DueMode, { className?: string; icon: IconName }> = {
  *         shared «карточку с полями», а не копировать этот файл: здесь
  *         доменного знания ровно на подбор четырёх полей.
  *
+ *         Слот aside — правый край строки названия (сегодня кнопка «Анализ»).
+ *         Сводка не знает, что в нём, и не должна: позиционирование — её
+ *         забота (.headAside), содержимое — забота страницы.
+ *
  * UX:     отвечает на вопросы в порядке их возникновения: что это (название) →
  *         в каком состоянии (статус) → где (объект) → когда (срок) → с кого
  *         спрашивать → какие работы.
@@ -92,7 +96,7 @@ const DUE_LEVEL: Record<DueMode, { className?: string; icon: IconName }> = {
  * @example
  * <TenderSummary tender={tender} />
  */
-export function TenderSummary({ tender }: { tender: TenderRow }) {
+export function TenderSummary({ tender, aside }: { tender: TenderRow; aside?: ReactNode }) {
   const status = STATUS[tender.status];
   const due = bidsDue(tender);
   const level = DUE_LEVEL[due.mode];
@@ -110,13 +114,19 @@ export function TenderSummary({ tender }: { tender: TenderRow }) {
           обёрнута дважды намеренно: внешний span — анимируемая колейка
           (0fr → 1fr), внутренний прячет текст, пока колейка схлопнута.
           Единственный способ доехать до ширины ПО СОДЕРЖИМОМУ без магического
-          числа в max-width, которое разъедется на первом же длинном статусе. */}
+          числа в max-width, которое разъедется на первом же длинном статусе.
+
+          Правый край строки отдан СЛОТУ (aside): сегодня там кнопка «Анализ»,
+          сводка про неё не знает ничего — она рисует чужой узел у своей
+          кромки. Слот вынут из потока (см. .headAside), поэтому раскрытие
+          капсулы по-прежнему не двигает соседей: рецепт 10 остаётся законным. */}
       <div className={s.summaryHead}>
         <h1 className={s.summaryTitle} id={TITLE_ID}>{tender.title}</h1>
         <VisuallyHidden>Статус:</VisuallyHidden>
         <Badge className={s.status} tone={status.tone} icon={status.icon}>
           <span className={s.statusLabel}><span>{status.label}</span></span>
         </Badge>
+        {aside ? <span className={s.headAside}>{aside}</span> : null}
       </div>
 
       <dl className={s.summary} aria-labelledby={TITLE_ID} key={tender.id}>

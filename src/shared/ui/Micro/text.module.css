@@ -1,0 +1,36 @@
+/* ТЕКСТОВЫЕ МИКРО-ДЕТАЛИ. Кегль и цвет — только токенами шкалы;
+   собственных чисел здесь нет по определению слоя. */
+
+/* КЛАВИАТУРНАЯ КЛАВИША. Намеренно НЕ рамочный кейкап: в эталоне хоткей —
+   тихий текст правее подписи (12px, medium, placeholder-серый), и рамка
+   превратила бы подсказку во второй контрол в капсуле. */
+.kbd {
+  flex: none;
+  font-size: var(--cu-text-sm);
+  font-weight: var(--cu-font-weight-medium);
+  line-height: var(--cu-size-4);
+  color: var(--cu-content-placeholder);
+}
+
+/* ЗВЁЗДОЧКА ОБЯЗАТЕЛЬНОСТИ. aria-hidden ставит компонент: смысл «обязательно»
+   уже несёт required на контроле, звёздочка — только видимый канал. */
+.required-mark {
+  margin-left: 2px;
+  color: var(--cu-tone-danger-ink);
+}
+
+/* РАЗДЕЛИТЕЛЬ МЕТАДАННЫХ («автор · дата»). Пунктуация, а не контент:
+   скринридер её не читает. Зазор вокруг даёт Inline, а не сам глиф. */
+.dot {
+  color: var(--cu-content-quaternary);
+  user-select: none;
+}
+
+/* ОДНА СТРОКА С МНОГОТОЧИЕМ. Блок обязателен: text-overflow не работает
+   на инлайн-элементе без коробки. */
+.truncate {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}

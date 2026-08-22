@@ -1,0 +1,30 @@
+/* ПРОГРЕСС. Трек — тихая заливка в покое, заполнение — тон info по
+   умолчанию: «идёт работа» это info-значение, а не успех. Толщина 8px
+   (--cu-size-2): полоса должна читаться периферией, но не спорить со
+   строками текста вокруг. */
+.progress {
+  width: 100%;
+  height: var(--cu-size-2);
+  border-radius: var(--cu-radii-round);
+  background: var(--cu-fill-subtle);
+  overflow: hidden;
+}
+
+.fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--progress-color, var(--cu-tone-info));
+  transition: width var(--cu-duration-slow) var(--cu-ease-standard);
+}
+
+/* Неопределённый режим: бегунок ездит по треку без процентов. Цикл свой,
+   как у волны скелета — шкала --cu-duration-* про отклик контрола. */
+.fill--indeterminate {
+  width: 30%;
+  animation: slide 1.4s var(--cu-ease-standard) infinite;
+}
+
+@keyframes slide {
+  from { margin-left: -30%; }
+  to   { margin-left: 100%; }
+}

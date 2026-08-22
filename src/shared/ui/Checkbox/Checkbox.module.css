@@ -1,0 +1,82 @@
+/* ЧЕКБОКС. Квадрат 16px — размер ведущего глифа строки дерева: контрол
+   живёт в тех же списках и не должен быть крупнее текста, при котором
+   стоит. Отметка — заливка content-primary, БЕЗ цветного тона: «выбрано»
+   не значит «хорошо» или «плохо», смысловые цвета остаются бейджам.
+   Галочка нарисована рамками псевдоэлемента, а не иконкой: не тянет
+   <Icon> в самый частый контрол форм и не зависит от загрузки глифов. */
+.box {
+  display: inline-block;
+  flex: 0 0 auto;
+  position: relative;
+  width: var(--cu-size-4);
+  height: var(--cu-size-4);
+  border: 1px solid var(--cu-border-default);
+  border-radius: var(--cu-radii-2);
+  background: var(--cu-background-main);
+  transition: background-color var(--cu-duration-fast) var(--cu-ease-standard),
+              border-color var(--cu-duration-fast) var(--cu-ease-standard);
+}
+.input:checked + .box {
+  border-color: var(--cu-content-primary);
+  background: var(--cu-content-primary);
+}
+.input:checked + .box::after {
+  content: '';
+  position: absolute;
+  left: 4px; top: 1px;
+  width: 5px; height: 9px;
+  border: solid var(--cu-background-main);
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
+}
+/* Промежуточное состояние (indeterminate) — прочерк: часть детей выбрана. */
+.input:indeterminate + .box {
+  border-color: var(--cu-content-primary);
+  background: var(--cu-content-primary);
+}
+.input:indeterminate + .box::after {
+  content: '';
+  position: absolute;
+  left: 3px; right: 3px; top: 6px;
+  height: 1.5px;
+  background: var(--cu-background-main);
+}
+
+/* Ховер — компактный контрол, ступень .06 из каталога; гаснет у
+   отключённого. Фон, а не рамка: рамка уже занята состоянием. */
+.label:hover .input:not(:disabled) + .box {
+  background: var(--cu-state-hover);
+}
+.label:hover .input:not(:disabled):checked + .box,
+.label:hover .input:not(:disabled):indeterminate + .box {
+  background: rgb(58,58,58); /* тот же ховер primary-заливки, что у кнопки */
+}
+
+/* Кольцо фокуса получает КОРОБКА, а не невидимый инпут: пользователь должен
+   видеть, какой именно чекбокс активен. Соседний селектор внутри одного
+   модуля — законно. */
+.input:focus-visible + .box {
+  outline: var(--cu-focus-ring);
+  outline-offset: 1px;
+}
+.input:disabled + .box {
+  opacity: .35;
+}
+.input:disabled ~ .text {
+  color: var(--cu-content-placeholder);
+}
+
+.label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cu-size-2);
+  cursor: pointer;
+}
+.label:has(.input:disabled) {
+  cursor: default;
+}
+.text {
+  font-size: var(--cu-text-base);
+  line-height: var(--cu-leading-same);
+  user-select: none;
+}

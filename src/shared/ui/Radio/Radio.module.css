@@ -1,0 +1,67 @@
+/* РАДИО. Точка отмеченного — тот же content-primary, что у чекбокса: пара
+   «квадрат = независимые, круг = взаимоисключающие» читается формой
+   контура, и красить её в смысловые тона незачем. */
+.dot {
+  display: inline-block;
+  flex: 0 0 auto;
+  position: relative;
+  width: var(--cu-size-4);
+  height: var(--cu-size-4);
+  border: 1px solid var(--cu-border-default);
+  border-radius: var(--cu-radii-round);
+  background: var(--cu-background-main);
+  transition: border-color var(--cu-duration-fast) var(--cu-ease-standard),
+              background-color var(--cu-duration-fast) var(--cu-ease-standard);
+}
+.input:checked + .dot {
+  border-color: var(--cu-content-primary);
+  background: var(--cu-content-primary);
+}
+.input:checked + .dot::after {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  border-radius: inherit;
+  background: var(--cu-background-main);
+}
+
+.label:hover .input:not(:disabled) + .dot {
+  background: var(--cu-state-hover);
+}
+.label:hover .input:not(:disabled):checked + .dot {
+  background: rgb(58,58,58);
+}
+
+.input:focus-visible + .dot {
+  outline: var(--cu-focus-ring);
+  outline-offset: 1px;
+}
+.input:disabled + .dot {
+  opacity: .35;
+}
+.input:disabled ~ .text {
+  color: var(--cu-content-placeholder);
+}
+
+.label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cu-size-2);
+  cursor: pointer;
+}
+.label:has(.input:disabled) {
+  cursor: default;
+}
+.text {
+  font-size: var(--cu-text-base);
+  line-height: var(--cu-leading-same);
+  user-select: none;
+}
+
+/* Группа: вертикальный столбик — норма списка радио; зазор в одну ступень
+   шкалы держит ритм без margin у самих пунктов. */
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--group-gap);
+}

@@ -1,0 +1,69 @@
+/* ПАГИНАЦИЯ. Квадраты 24px — компактная ступень контрола: это плотный
+   хвост таблицы, а не полоса действий. Текущая страница кодируется
+   заливкой (рецепт 2) и aria-current, БЕЗ веса шрифта и цвета текста:
+   одно состояние — один канал. */
+.pagination {
+  display: flex;
+  align-items: center;
+  gap: var(--cu-size-1);
+}
+
+.navBtn,
+.page {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--cu-size-6);
+  height: var(--cu-size-6);
+  padding-inline: var(--cu-size-1);
+  border-radius: var(--cu-radii-2);
+  font-size: var(--cu-text-sm);
+  line-height: var(--cu-leading-same);
+  color: var(--cu-content-secondary);
+  transition: background-color var(--cu-duration-base) var(--cu-ease-standard),
+              color var(--cu-duration-base) var(--cu-ease-standard);
+}
+.page:hover:not(:disabled):not(.is-current) {
+  background: var(--cu-state-hover);
+  color: var(--cu-content-primary);
+}
+.is-current {
+  background: var(--cu-state-hover);
+  color: var(--cu-content-primary);
+}
+/* Размер глифов стрелок задаётся переменной на КНОПКЕ и наследуется внутрь
+   <Icon>; поворот — модификатором на самом спане иконки, потому что класс
+   уходит прямо в неё. */
+.navBtn {
+  --icon-size: 14px;
+}
+.navPrev {
+  transform: rotate(90deg);
+}
+.navNext {
+  transform: rotate(-90deg);
+}
+.navBtn:hover:not(:disabled) {
+  background: var(--cu-state-hover);
+  color: var(--cu-content-primary);
+}
+
+.page:focus-visible,
+.navBtn:focus-visible {
+  outline: var(--cu-focus-ring);
+  outline-offset: 1px;
+}
+
+.page:disabled,
+.navBtn:disabled {
+  opacity: .35;
+  cursor: default;
+}
+
+.ellipsis {
+  min-width: var(--cu-size-5);
+  text-align: center;
+  font-size: var(--cu-text-sm);
+  line-height: var(--cu-leading-same);
+  color: var(--cu-content-tertiary);
+}

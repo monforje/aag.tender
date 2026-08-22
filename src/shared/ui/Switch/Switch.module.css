@@ -1,0 +1,53 @@
+/* СВИТЧ. Трек 28×16, бегунок 12: контрол живёт в строках списков рядом с
+   чекбоксом 16px и не имеет права быть крупнее соседа-отметки.
+   Отмеченный трек — content-primary, как у чекбокса и primary-кнопки:
+   «включено» в этом интерфейсе всегда одного цвета. */
+.switch {
+  position: relative;
+  flex: 0 0 auto;
+  width: 28px;
+  height: var(--cu-size-4);
+  border-radius: var(--cu-radii-round);
+  border: 1px solid var(--cu-border-default);
+  background: var(--cu-fill-subtle);
+  transition: background-color var(--cu-duration-fast) var(--cu-ease-standard),
+              border-color var(--cu-duration-fast) var(--cu-ease-standard);
+}
+.switch:hover:not(:disabled) {
+  /* Контрол с собственной заливкой шагает вверх — правило шкалы состояний. */
+  background: var(--cu-state-hover-strong);
+}
+.is-checked {
+  border-color: var(--cu-content-primary);
+  background: var(--cu-content-primary);
+}
+.is-checked:hover:not(:disabled) {
+  border-color: rgb(58,58,58);
+  background: rgb(58,58,58); /* ховер primary-заливки, как у кнопки */
+}
+
+.thumb {
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 12px;
+  height: 12px;
+  border-radius: inherit;
+  background: var(--cu-background-main);
+  box-shadow: var(--cu-elevation-1);
+  transition: translate var(--cu-duration-fast) var(--cu-ease-standard);
+}
+.is_checked .thumb {
+  /* translate, а не transform: свойство композитится само и не спорит с
+     будущими трансформациями бегунка. */
+  translate: 14px 0;
+}
+
+.switch:focus-visible {
+  outline: var(--cu-focus-ring);
+  outline-offset: 2px;
+}
+.switch:disabled {
+  opacity: .35;
+  cursor: default;
+}

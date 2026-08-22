@@ -48,10 +48,8 @@
   font-size: 14px; font-weight: var(--cu-font-weight-medium);
   color: var(--cu-content-quaternary);
 }
-.search__kbd{
-  font-size: 12px; font-weight: var(--cu-font-weight-medium); line-height: 16px;
-  color: var(--cu-content-placeholder); flex: 0 0 auto;
-}
+/* Хоткей рисует микро-компонент <Kbd> (@/shared/ui/Micro): раньше правило
+   жило здесь, и вторая капсула с хоткеем скопировала бы его вслепую. */
 .search__ai{
   display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto;
   margin-left: auto; padding-inline-start: 8px;

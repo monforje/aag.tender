@@ -1,0 +1,27 @@
+/* ПОЛЕ ФОРМЫ: подпись над контролом, подсказка/ошибка под ним. Зазор между
+   ними — одна ступень шкалы (4px): ритм «подпись-контрол» плотнее ритма
+   между полями, который держит Stack формы. */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cu-size-1);
+}
+
+.label {
+  font-size: var(--cu-text-sm);
+  font-weight: var(--cu-font-weight-medium);
+  line-height: var(--cu-leading-same);
+  color: var(--cu-content-secondary);
+}
+
+/* Подсказка и ошибка занимают ОДНО место (ошибка заменяет подсказку),
+   поэтому класс один, отличается только цвет. */
+.help {
+  font-size: var(--cu-text-sm);
+  line-height: var(--cu-leading-normal);
+  color: var(--cu-content-tertiary);
+}
+.is-error {
+  color: var(--cu-tone-danger-ink);
+}

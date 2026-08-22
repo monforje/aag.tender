@@ -1,0 +1,30 @@
+/* ТИПОГРАФИКА: два примитива над шкалой кеглей из global.css (§1).
+   Значения НЕ задаются здесь числами — только имена токенов: смена шкалы
+   должна доходить до всех экранов без правки модулей. */
+
+.text {
+  /* inherit вместо primary по умолчанию: примитив обязан не «красить», а
+     НЕ мешать — цвет наследуется от родителя, если тон не назван явно. */
+  color: var(--text-color, inherit);
+  font-size: var(--text-size);
+  line-height: var(--text-leading);
+}
+.text--truncate {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.heading {
+  color: var(--cu-content-primary);
+  font-weight: var(--cu-font-weight-semibold);
+  line-height: var(--cu-leading-tight);
+  /* Заголовок в этом интерфейсе не рисует свою вертикаль: ритм страницы
+     держат Stack и полосы шапок. Внешние margin у заголовков — источник
+     «дыр» между секциями, которых никто не заказывал. */
+}
+.heading--truncate {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}

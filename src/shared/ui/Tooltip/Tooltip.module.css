@@ -1,0 +1,25 @@
+/* ТУЛТИП: тёмная капсула над содержимым. Цвет инвертирован относительно
+   страницы намеренно — подсказка не принадлежит ни одной поверхности,
+   и «чужой» фон отделяет её без рамок и теней по периметру.
+   pointer-events:none обязателен: курсор, попавший на сам тултип, иначе
+   гасит ховер триггера и тултип мигает. */
+.bubble {
+  position: fixed;
+  z-index: var(--z-menu);
+  max-width: 240px;
+  width: max-content;
+  padding: var(--cu-size-1) var(--cu-size-2);
+  border-radius: var(--cu-radii-3);
+  background: var(--cu-content-primary);
+  color: var(--cu-content-on-dark);
+  font-size: var(--cu-text-sm);
+  line-height: var(--cu-leading-tight);
+  box-shadow: var(--cu-elevation-3);
+  pointer-events: none;
+}
+
+/* Обёртка прозрачна для раскладки (display:contents): она существует только
+   чтобы слушать события поддерева и мерить прямоугольник ребёнка. */
+.root {
+  display: contents;
+}

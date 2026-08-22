@@ -1,0 +1,73 @@
+/* БОКОВАЯ ПАНЕЛЬ — нативный <dialog>, прижатый к правому краю. Платформа даёт
+   фокус, Escape и верхний слой; здесь геометрия, край и движение.
+
+   КРАЙ: чистая тень --cu-elevation-4, как у <Modal>: под панелью тёмная
+   подложка, хэйрлайну рисовать нечего.
+   ДВИЖЕНИЕ: панель въезжает справа (duration slow, ease emphasized — редкий
+   жест движется медленней), уход зеркален входу. Как и у Popover, для
+   <dialog> мало transition: display и overlay меняются дискретно, поэтому
+   allow-discrete + @starting-style обязательны. */
+.drawer {
+  position: fixed;
+  inset: 0 0 0 auto;
+  margin: 0;
+  height: 100dvh;
+  width: min(var(--drawer-width, 440px), calc(100vw - var(--cu-size-8)));
+  padding: 0;
+  border: 0;
+  background: var(--cu-background-main);
+  box-shadow: var(--cu-elevation-4);
+  color: var(--cu-content-primary);
+  transform: translateX(24px);
+  opacity: 0;
+  transition:
+    opacity var(--cu-duration-slow) var(--cu-ease-emphasized),
+    transform var(--cu-duration-slow) var(--cu-ease-emphasized),
+    overlay var(--cu-duration-base) allow-discrete,
+    display var(--cu-duration-base) allow-discrete;
+}
+.drawer[open] {
+  transform: none;
+  opacity: 1;
+}
+@starting-style {
+  .drawer[open] {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+}
+
+.drawer:focus, .drawer:focus-visible { outline: none; }
+.drawer::backdrop { background: rgba(32,32,32,.35); }
+
+/* Тело — та же обёртка-разделитель, что у Modal: без неё клик по содержимому
+   неотличим от клика по подложке. Вертикальный ритм внутри панели держит
+   потребитель (там свои секции), поэтому gap здесь не задаётся. */
+.drawer__body {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: var(--cu-size-4);
+  overflow-y: auto;
+}
+
+.drawer__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--cu-size-2);
+}
+.drawer__title {
+  font-size: var(--cu-text-xl);
+  line-height: calc(var(--cu-text-xl) * 4 / 3);
+  font-weight: var(--cu-font-weight-semibold);
+  color: var(--cu-content-primary);
+}
+.drawer__foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--cu-size-2);
+  margin-top: auto;
+  padding-top: var(--cu-size-3);
+  border-top: 1px solid var(--cu-border-default);
+}

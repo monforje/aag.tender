@@ -1,0 +1,99 @@
+/* ЛЕГЕНДА ПОМЕТОК. Ширина панели задаётся переменной --pop-width — её читает
+   сам <Popover> (мост через границу модулей, как --col у колонок); паддинг и
+   поверхность остаются его. Образцы собираются из ТЕХ ЖЕ компонентов глифов
+   ./assets, что красят ячейки таблицы, поэтому размеры ниже повторяют
+   табличные (бирка 38×28 — ровно как .tag в TenderCompare.module.css). */
+.root{ --pop-width: 380px; }
+
+.body{
+  display: flex; flex-direction: column;
+  max-height: min(480px, calc(100dvh - 120px));
+  overflow-y: auto;
+}
+
+/* Строка словаря: образец в фиксированной колонке — названия стоят на одной
+   вертикали, глаз ходит по ним сверху вниз, не спотыкаясь о разную ширину
+   образцов. */
+.item{
+  display: grid; grid-template-columns: 120px minmax(0, 1fr);
+  column-gap: 12px; align-items: center;
+  padding-block: 7px;
+}
+.about{ display: flex; flex-direction: column; gap: 1px; }
+.name{
+  font-size: 13px; line-height: 18px;
+  font-weight: var(--cu-font-weight-medium);
+  color: var(--cu-content-primary);
+}
+.text{ font-size: 12px; line-height: 16px; color: var(--cu-content-secondary); }
+
+/* Колонка образцов: глифы по центру, размер — табличный.
+   Селектор СТРОГО по прямым детям: маркеры — голые <svg>, а иконки <Icon>
+   обёрнуты в span.icon и размеряются своей переменной --icon-size — общее
+   правило не должно до них дотягиваться (именно оно выдавливало иконку из
+   капсулы «Отказ»: 16px поверх обёртки 11px). */
+.sample{
+  display: flex; align-items: center; justify-content: center;
+  min-height: 28px;
+}
+.sample > svg{ display: block; height: 16px; width: auto; overflow: visible; }
+
+/* Бирка «мин» — в натуральную величину таблицы: меньше она нечитаема. */
+.sample--tag{ width: 38px; height: 28px; }
+.sample--tag svg{ width: 100%; height: 100%; }
+
+/* Пробел данных: пунктирная рамка и тире — тот же приём, что в ячейке. */
+.sample--missing{
+  padding: 3px 12px;
+  outline: 1px dashed var(--cu-border-default); outline-offset: -2px;
+  color: var(--cu-content-secondary);
+}
+
+/* Отказ: капсула нейтрального тона — значения совпадают с ячейкой сравнения. */
+/* Отказ: капсула нейтрального тона — значения совпадают с ячейкой сравнения.
+   line-height:1 обязателен: в inline-flex слово и глиф центрируются как два
+   отдельных бокса, и при line-height:18px текстовый бокс набирал лишние
+   полстроки метриками шрифта — капс «Отказа» уезжал относительно центра
+   значка. Единичная высота строки выравнивает оба предмета на одной оси. */
+.sample--chip{
+  display: inline-flex; align-items: center; gap: 4px;
+  height: 18px; padding: 0 8px;
+  border-radius: var(--cu-radii-round);
+  font-size: 11px; line-height: 1;
+  font-weight: var(--cu-font-weight-medium);
+  background: var(--cu-tone-neutral-fill); color: var(--cu-tone-neutral-ink);
+}
+.sample--chip-icon{ --icon-size: 11px; }
+
+/* Правка объёма: старое значение зачёркнуто третичным, новое рядом — та же
+   пара, что в колонке объёма. */
+.sample--corrected{
+  font-size: 13px; line-height: 18px; white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.sample--corrected s{ color: var(--cu-content-tertiary); }
+
+/* Ярусы разброса: треки одной шкалы с порогами из модели. */
+.spread-demo{ display: flex; flex-direction: column; gap: 3px; width: 110px; }
+.spread-row{ display: inline-flex; align-items: center; gap: 8px; }
+.spread-track{
+  width: 44px; height: 4px; border-radius: var(--cu-radii-round);
+  background: var(--cu-state-hover); overflow: hidden;
+}
+.spread-track i{ display: block; height: 100%; border-radius: inherit; }
+.spread-track i[data-tone='none']{ background: var(--cu-tone-neutral); }
+.spread-track i[data-tone='noticeable']{ background: var(--cu-tone-warning); }
+.spread-track i[data-tone='high']{ background: var(--cu-tone-danger); }
+.spread-cap{
+  font-size: 11px; line-height: 14px;
+  color: var(--cu-content-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Доля веса: трек с success-заливкой, шкала = 100 % среза. */
+.share-track{
+  display: block; width: 64px; height: 4px;
+  border-radius: var(--cu-radii-round);
+  background: var(--cu-state-hover); overflow: hidden;
+}
+.share-track i{ display: block; height: 100%; border-radius: inherit; background: var(--cu-tone-success); }

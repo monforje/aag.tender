@@ -1,6 +1,7 @@
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import { cx } from '@/shared/lib/cx';
 import { Icon } from '@/shared/ui/Icon';
+import { Kbd } from '@/shared/ui/Micro';
 import s from './SearchTrigger.module.css';
 
 interface SearchTriggerProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -45,7 +46,7 @@ export function SearchTrigger({
     <button type="button" className={cx(s.search, className)} {...rest}>
       <Icon name="search" className={s.searchIcon} />
       <span className={s.searchPlaceholder}>{placeholder}</span>
-      {hotkey ? <span className={s.searchKbd}>{hotkey}</span> : null}
+      {hotkey ? <Kbd>{hotkey}</Kbd> : null}
       {secondary ? <span className={s.searchAi}>{secondary}</span> : null}
     </button>
   );

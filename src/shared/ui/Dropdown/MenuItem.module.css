@@ -1,8 +1,12 @@
 /* Пункт выпадающего меню. Стили переехали из Dropdown.module.css без
-   изменения значений — сменилась только разметка (роль и слоты). */
+   изменения значений — сменилась только разметка (роль и слоты).
+   Пункт — <button>: Enter и Space жмут его сами, reset уже снял с кнопки
+   фон и рамку; здесь задаётся всё остальное. */
 .dd__item{
   display: flex; align-items: center; gap: 8px;
-  padding: 7px 10px; border-radius: var(--cu-radii-3); font-size: 13px; line-height: 18px;
+  width: 100%; padding: 7px 10px;
+  border-radius: var(--cu-radii-3); font-size: 13px; line-height: 18px;
+  text-align: left;
   color: var(--cu-content-secondary);
   /* cursor:default — намеренный выбор для пунктов-заглушек: курсор не должен
      обещать действие, которого нет. Кликабельный пункт (есть onSelect)
@@ -19,5 +23,16 @@
    удаление, и никакой реакции на наведение. */
 .dd__item--disabled{ opacity: .45; pointer-events: none; }
 /* Правая приписка — хоткей или счётчик. Прижата к правому краю и всегда тише
-   основного текста: это справка, а не второй заголовок. */
-.dd__item__hint{ margin-left: auto; color: var(--cu-content-placeholder); font-size: 12px; }
+   основного текста: это справка, а не второй заголовок. Счётчик предиката —
+   данные ([R1]), поэтому secondary, а не tertiary. */
+.dd__item__hint{ margin-left: auto; color: var(--cu-content-secondary); font-size: 12px; }
+
+/* Галочка одиночного выбора: слот постоянный, видна только отмеченной —
+   атрибутным селектором по состоянию, класс-модификатор для этого не нужен. */
+.dd__item__check{
+  display: inline-flex; margin-left: auto;
+  color: var(--cu-tone-success-ink); --icon-size: 16px;
+  visibility: hidden;
+}
+.dd__item__hint ~ .dd__item__check{ margin-left: 0; }
+.dd__item[aria-checked='true'] .dd__item__check{ visibility: visible; }
