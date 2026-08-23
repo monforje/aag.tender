@@ -18,14 +18,14 @@ import s from './CompareSettings.module.css';
 const PLAIN_ROWS = [
   {
     key: 'spreadNoticeable',
-    label: 'Разброс «заметный», %',
+    label: 'Разброс «заметный»',
     hint: 'Строка помечается как заметно расходящаяся.',
     min: 0,
     max: 100,
   },
   {
     key: 'spreadHigh',
-    label: 'Разброс «высокий», %',
+    label: 'Разброс «высокий»',
     hint: 'Строка получает тег и попадает в фильтр «Высокий разброс».',
     min: 1,
     max: 100,
@@ -203,10 +203,15 @@ function Setting({ label, description, hint, children }: {
   return (
     <div className={s.setting}>
       <div className={s.settingInfo}>
-        <label className={s.settingLabel} htmlFor={id}>
-          {label}
+        {/* Кнопка «?» стоит РЯДОМ с <label>, а не внутри него, хотя выглядит
+            частью подписи. Внутри она давала две беды сразу: весь текст
+            подсказки уходил в доступное имя поля (скринридер читал цитату
+            канона вместо «Коэффициент аномалии»), а клик по кнопке считался
+            кликом по подписи и переводил фокус в поле. */}
+        <div className={s.settingLabelRow}>
+          <label className={s.settingLabel} htmlFor={id}>{label}</label>
           {hint}
-        </label>
+        </div>
         <p id={descId} className={s.settingDescription}>{description}</p>
       </div>
       {control}
