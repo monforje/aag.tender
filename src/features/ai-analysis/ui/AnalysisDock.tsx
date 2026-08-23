@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { cx } from '@/shared/lib/cx';
+import { plural } from '@/shared/lib/plural';
 import { Button } from '@/shared/ui/Button';
 import { Dropdown, MenuItem } from '@/shared/ui/Dropdown';
 import { ErrorState } from '@/shared/ui/ErrorState';
@@ -9,7 +10,7 @@ import { Skeleton } from '@/shared/ui/Skeleton';
 import { reducedMotion } from '@/shared/lib/reducedMotion';
 import type { CompareThresholds, Comparison } from '@/entities/comparison';
 import type {
-  AnalysisItem, AnalysisRef, AnalysisResult,
+  AnalysisItem, AnalysisRef, AnalysisResult, AnalysisSection,
   AnalysisSectionId, AnalysisSubsectionId, AnalysisTransition,
 } from '../model/analysis';
 import { useAnalysisRuns } from '../model/useAnalysisRuns';
@@ -54,7 +55,8 @@ function withRefs(text: string, refs: AnalysisRef[], onPick: () => void): ReactN
   return nodes;
 }
 
-/** Пункт разбора. У «ещё не подал» и полноты слот модели пуст — заметки нет. */
+/** Пункт разбора: серверные факты, затем слот модели. У «ещё не подал» и
+ *  полноты слот пуст всегда (`mute`) — заметки просто нет. */
 function Item({ item, onTransition }: {
   item: AnalysisItem;
   onTransition: (t: AnalysisTransition) => void;
@@ -78,6 +80,18 @@ function Item({ item, onTransition }: {
       ) : null}
     </li>
   );
+}
+
+/** Сколько внутри — чтобы свёрнутая секция говорила, стоит ли её открывать.
+ *  У «Общей картины» счётчика нет: там фиксированный набор показателей, и
+ *  число «7 показателей» не значит ничего. */
+function secHint(section: AnalysisSection): string | null {
+  if (section.subsections) {
+    const n = section.subsections.length;
+    return `${n} ${plural(n, 'раздел', 'раздела', 'разделов')}`;
+  }
+  const n = section.items?.length ?? 0;
+  return n ? `${n} ${plural(n, 'пункт', 'пункта', 'пунктов')}` : null;
 }
 
 /**
@@ -156,20 +170,27 @@ function RoundPicker({ value, options, onChange }: {
  * НЕ ДЛЯ: свободных вопросов (чат остался рядом под пометкой «скоро», §10),
  *         автоматических пересчётов при смене данных — вместо них плашка.
  *
- * UX:     до запуска панель объясняет это и держит единственную кнопку.
- *         Результат: сводка ≤ 3 якорей → секции нативными <details>, свёрнутые,
- *         порядок фиксированный. Плашка устаревания появляется ТОЛЬКО у текущего
- *         раунда и называет причину; снимок прошлого круга не устаревает (§8.2).
+ * UX:     до запуска панель объясняет это и держит единственную кнопку; без
+ *         единого КП кнопки нет вовсе, а причина названа текстом.
+ *         Результат: сводка ≤ 3 якорей → ТРИ главные секции нативными
+ *         <details>, свёрнутые, порядок фиксированный; подсекции базового
+ *         разбора вложены В НЕГО. Якорь сводки раскрывает оба уровня — иначе
+ *         переход уходит в свёрнутую секцию, то есть в никуда.
+ *         Плашка устаревания появляется ТОЛЬКО у текущего раунда, называет
+ *         причину и различает две степени (§8.2): «частично» — уехали пороги,
+ *         «устарел» — уехали данные. Снимок прошлого круга не устаревает.
  *         Клик по слову-сущности применяет «пресет + фокус» к таблице.
  * A11Y:   открытие переносит фокус в шапку (как у чата), Escape закрывает;
  *         секции — нативные details/summary, клавиатура бесплатно; смена раунда
  *         объявляется через aria-live области результата.
  */
 export function AnalysisDock({
-  open, onClose, comparison, prevComparison, thresholds, onTransition, onResultChange,
+  open, onClose, tenderId, comparison, prevComparison, thresholds, onTransition, onResultChange,
 }: {
   open: boolean;
   onClose: () => void;
+  /** Тендер, у которого просят разбор: с эндпоинтом он уйдёт в путь запроса. */
+  tenderId: string;
   /** Снимок КП, по которому считается разбор. */
   comparison: Comparison;
   /** Снимок предыдущего раунда — база секций сравнения кругов. */
@@ -191,16 +212,18 @@ export function AnalysisDock({
   /* Запуски по раундам, устаревание и сам расчёт — в хуке: правил там три,
      и в теле компонента они тонули между разметкой секций. */
   const {
-    entry, running, failed, run, roundNo, setRoundNo, rounds, round, isDataRound, staleReason,
-  } = useAnalysisRuns({ comparison, prevComparison, thresholds, onResultChange });
+    entry, running, failed, run, roundNo, setRoundNo, rounds, round, isDataRound, staleness,
+  } = useAnalysisRuns({ tenderId, comparison, prevComparison, thresholds, onResultChange });
 
   useEffect(() => {
     if (open) headingRef.current?.focus();
   }, [open]);
 
+  /* Якорь сводки раскрывает ОБА уровня: подсекция живёт внутри свёрнутой
+     секции, и раскрытие одной её не показывает — переход уходил бы в никуда. */
   const goto = (section: AnalysisSectionId, subsection?: AnalysisSubsectionId) => {
     const key = subsection ?? section;
-    setUnfolded((all) => ({ ...all, [key]: true }));
+    setUnfolded((all) => ({ ...all, [section]: true, [key]: true }));
     window.setTimeout(() => {
       document.getElementById(`${AI_DOCK_ID}-a-${key}`)
         ?.scrollIntoView({ block: 'start', behavior: reducedMotion() ? 'auto' : 'smooth' });
@@ -267,13 +290,20 @@ export function AnalysisDock({
           isDataRound ? (
             <div className={s.idle}>
               <span className={cx(base.aiTile, s.idleTile)}><SparkGlyph size={20} /></span>
-              <p className={s.idleTitle}>Разбор ещё не запускали</p>
-              <p className={s.idleSub}>
-                Панель сама ничего не считает. Разбор строится по КП, поданным на момент запуска.
+              {/* Ни одного КП — запуск НЕДОСТУПЕН И НАЗВАНА ПРИЧИНА (05 §4,
+                  граничные случаи): погашенная кнопка без объяснения читается
+                  как поломка панели. */}
+              <p className={s.idleTitle}>
+                {comparison.contractors.length ? 'Разбор ещё не запускали' : 'Разбирать нечего'}
               </p>
-              <Button variant="primary" disabled={!comparison.contractors.length} onClick={run}>
-                Анализировать
-              </Button>
+              <p className={s.idleSub}>
+                {comparison.contractors.length
+                  ? 'Панель сама ничего не считает. Разбор строится по КП, поданным на момент запуска.'
+                  : 'По тендеру не подано ни одного КП — сравнивать не с чем. Разбор станет доступен с первым предложением.'}
+              </p>
+              {comparison.contractors.length ? (
+                <Button variant="primary" onClick={run}>Анализировать</Button>
+              ) : null}
             </div>
           ) : (
             <div className={s.idle}>
@@ -309,11 +339,21 @@ export function AnalysisDock({
         {/* ── готово ── */}
         {entry?.result ? (
           <>
-            {/* Плашка устаревания: причина и перезапуск одним действием. */}
-            {staleReason ? (
-              <div role="status" className={s.stale}>
+            {/* Плашка устаревания: причина и перезапуск одним действием.
+                ДВЕ СТЕПЕНИ (05 §8.2), и они не синонимы: «частично» — те же
+                КП, иначе расставленные метки; «устарел» — разбор описывает
+                другие данные. Смешать их значило бы звать пересчитывать
+                одинаково срочно там, где срочность разная. */}
+            {staleness ? (
+              <div
+                role="status"
+                className={cx(s.stale, staleness.level === 'partial' && s.stalePartial)}
+              >
                 <p className={s.staleText}>
-                  <strong>Разбор устарел.</strong> {staleReason}.
+                  <strong>
+                    {staleness.level === 'partial' ? 'Разбор частично устарел.' : 'Разбор устарел.'}
+                  </strong>
+                  {' '}{staleness.reason}.
                 </p>
                 <Button variant="secondary" onClick={run}>Пересчитать</Button>
               </div>
@@ -332,17 +372,38 @@ export function AnalysisDock({
                   className={s.summaryItem}
                   onClick={() => goto(point.section, point.subsection)}
                 >
-                  <span>{point.text}</span>
+                  <span className={s.summaryText}>{point.text}</span>
                   <Icon name="arrowRightUp" className={s.summaryIcon} />
                 </button>
               ))}
             </nav>
 
+            {/* ТРИ ГЛАВНЫЕ СЕКЦИИ, порядок фиксирован (05 §4): изменения
+                поставщиков → общая картина круга → базовый разбор. Подсекции
+                базового разбора живут ВНУТРИ него, а не рядом: разложенные по
+                верхнему уровню, они читались как шесть равных разделов, и
+                «полнота» весила столько же, сколько целый круг торгов. */}
             {entry.result.sections.map((section) => {
-              if (section.meta) {
-                return (
-                  <section key={section.id} id={`${AI_DOCK_ID}-a-${section.id}`} className={s.sec}>
+              const hint = secHint(section);
+              return (
+                <details
+                  key={section.id}
+                  id={`${AI_DOCK_ID}-a-${section.id}`}
+                  className={s.sec}
+                  open={unfolded[section.id] ?? false}
+                  onToggle={(e) => {
+                    const el = e.currentTarget;
+                    setUnfolded((all) => ({ ...all, [section.id]: el.open }));
+                  }}
+                >
+                  <summary className={s.secHead}>
                     <h3 className={s.secTitle}>{section.title}</h3>
+                    {hint ? <span className={s.secHint}>{hint}</span> : null}
+                    <Icon name="chevronDown" className={s.secChevron} />
+                  </summary>
+
+                  {/* Фиксированный набор показателей круга (05 §4.2). */}
+                  {section.meta ? (
                     <dl className={s.meta}>
                       {section.meta.map((row) => (
                         <div key={row.label} className={s.metaRow}>
@@ -351,65 +412,47 @@ export function AnalysisDock({
                         </div>
                       ))}
                     </dl>
-                    {section.note ? (
-                      <p className={s.itemNote}>
-                        <SparkGlyph size={11} className={s.noteSpark} />
-                        {section.note}
-                      </p>
-                    ) : null}
-                  </section>
-                );
-              }
-              if (section.items?.length) {
-                const key = section.id;
-                return (
-                  <details
-                    key={key}
-                    id={`${AI_DOCK_ID}-a-${key}`}
-                    className={s.sec}
-                    open={unfolded[key] ?? false}
-                    onToggle={(e) => {
-                      const el = e.currentTarget;
-                      setUnfolded((all) => ({ ...all, [key]: el.open }));
-                    }}
-                  >
-                    <summary className={s.secHead}>
-                      <h3 className={s.secTitle}>{section.title}</h3>
-                      <Icon name="chevronDown" className={s.secChevron} />
-                    </summary>
+                  ) : null}
+                  {section.note ? (
+                    <p className={cx(s.itemNote, s.secNote)}>
+                      <SparkGlyph size={11} className={s.noteSpark} />
+                      {section.note}
+                    </p>
+                  ) : null}
+
+                  {section.items?.length ? (
                     <ul className={s.list}>
                       {section.items.map((item) => (
                         <Item key={item.id} item={item} onTransition={onTransition} />
                       ))}
                     </ul>
-                  </details>
-                );
-              }
-              return (section.subsections ?? []).map((sub) => {
-                const key = sub.id;
-                return (
-                  <details
-                    key={key}
-                    id={`${AI_DOCK_ID}-a-${key}`}
-                    className={s.sec}
-                    open={unfolded[key] ?? false}
-                    onToggle={(e) => {
-                      const el = e.currentTarget;
-                      setUnfolded((all) => ({ ...all, [key]: el.open }));
-                    }}
-                  >
-                    <summary className={s.secHead}>
-                      <h3 className={s.secTitle}>{sub.title}</h3>
-                      <Icon name="chevronDown" className={s.secChevron} />
-                    </summary>
-                    <ul className={s.list}>
-                      {sub.items.map((item) => (
-                        <Item key={item.id} item={item} onTransition={onTransition} />
-                      ))}
-                    </ul>
-                  </details>
-                );
-              });
+                  ) : null}
+
+                  {section.subsections?.map((sub) => (
+                    <details
+                      key={sub.id}
+                      id={`${AI_DOCK_ID}-a-${sub.id}`}
+                      className={s.sub}
+                      open={unfolded[sub.id] ?? false}
+                      onToggle={(e) => {
+                        const el = e.currentTarget;
+                        setUnfolded((all) => ({ ...all, [sub.id]: el.open }));
+                      }}
+                    >
+                      <summary className={s.subHead}>
+                        <h4 className={s.subTitle}>{sub.title}</h4>
+                        <span className={s.secHint}>{sub.items.length}</span>
+                        <Icon name="chevronDown" className={s.secChevron} />
+                      </summary>
+                      <ul className={s.list}>
+                        {sub.items.map((item) => (
+                          <Item key={item.id} item={item} onTransition={onTransition} />
+                        ))}
+                      </ul>
+                    </details>
+                  ))}
+                </details>
+              );
             })}
 
             <p className={s.disclaimer}>

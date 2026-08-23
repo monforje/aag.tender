@@ -1,21 +1,21 @@
 /* ЧИСЛОВОЕ ПОЛЕ СО СВОИМ СТЕППЕРОМ.
 
-   ПОВЕРХНОСТЬ СВОЯ, а не от <Input>, и это отступление записано сознательно.
-   Обычное поле — 32px, белое, с хэйрлайн-тенью: оно рассчитано на НАБОР
-   текста. Здесь набирают редко, а подкручивают постоянно, поэтому контрол
-   крупнее (42px), лежит на приглушённой заливке и держит две зоны нажатия по
-   краям — форма следует за жестом. Пока это единственная такая пара в
-   проекте; появится вторая — общее уедет в токены, а не в copy-paste.
+   ВЫСОТА — 32px, шкала проекта: столько же у <Input>, у вторичной кнопки и у
+   IconButton в полосе. Первая версия была 42px из макета, и в панели рядом с
+   28-пиксельными контролами она читалась чужой — крупный контрол не делает
+   интерфейс удобнее, он делает его громким.
 
-   Заливка вместо белого ещё и разводит два контрола на одной строке: слева
-   подпись с описанием на холсте панели, справа — контрол, и граница между
-   ними читается без рамки-разделителя. */
+   ПОВЕРХНОСТЬ СВОЯ, а не от <Input>: то поле белое и рассчитано на НАБОР
+   текста, здесь набирают редко, а подкручивают постоянно. Приглушённая
+   заливка разводит два контрола на одной строке — слева подпись с описанием
+   на холсте панели, справа контрол, и граница между ними читается без
+   рамки-разделителя. */
 .field{
   display: flex; align-items: center;
   flex: 0 0 auto;
-  height: 42px;
+  height: var(--cu-size-8);
   border: 1px solid var(--cu-border-default);
-  border-radius: var(--cu-radii-4);
+  border-radius: var(--cu-radii-3);
   background: var(--cu-fill-subtle);
   overflow: hidden;   /* заливка кнопок не должна вылезать за скругление */
   transition: box-shadow var(--cu-duration-base) var(--cu-ease-standard),
@@ -28,18 +28,18 @@
   box-shadow: var(--cu-state-ring);
 }
 
-/* Кнопка шага. 42×42 — заведомо выше порога WCAG 2.2 SC 2.5.8 (минимум
-   24×24), ради которого всё и затевалось: у нативного спиннера, который она
-   заменяет, ширина была около восьми пикселей.
+/* Кнопка шага. 28×30 — порог WCAG 2.2 SC 2.5.8 (минимум 24×24) выполнен по
+   обеим осям с запасом; у нативного спиннера, который она заменяет, ширина
+   была около восьми пикселей.
 
-   Знак крупнее подписи (17px против 13px): «−» и «+» — единственное, что у
-   кнопки есть, и в кегле текста они читались бы опечаткой. line-height:1
+   Знак чуть крупнее подписи (15px против 13px): «−» и «+» — единственное, что
+   у кнопки есть, и в кегле текста они читались бы опечаткой. line-height:1
    обязателен — иначе базовая линия глифа уводит знак вниз от центра. */
 .step{
   display: flex; align-items: center; justify-content: center;
   flex: 0 0 auto;
-  width: 42px; align-self: stretch;
-  font-size: 17px; line-height: 1;
+  width: 28px; align-self: stretch;
+  font-size: 15px; line-height: 1;
   color: var(--cu-content-tertiary);
   transition: background-color var(--cu-duration-base) var(--cu-ease-standard),
               color var(--cu-duration-base) var(--cu-ease-standard);
@@ -65,11 +65,11 @@
    браузерный спиннер остался бы стоять рядом с нашей кнопкой «+». */
 .control{
   flex: 0 0 auto;
-  width: 46px; height: 100%;
+  width: 40px; height: 100%;
   border: 0; background: none; box-shadow: none;
   padding: 0;
   font-family: inherit;
-  font-size: 15px; font-weight: var(--cu-font-weight-semibold);
+  font-size: var(--cu-text-base); font-weight: var(--cu-font-weight-semibold);
   color: var(--cu-content-primary);
   text-align: center;
   appearance: textfield;
@@ -85,8 +85,8 @@
 /* Единица прижата к числу отрицательным отступом: «15 %» читается парой, а не
    двумя отдельными значениями. Тоном тише — она постоянна, меняется число. */
 .unit{
-  margin-inline: -2px 10px;
-  font-size: var(--cu-text-base);
+  margin-inline: -2px 8px;
+  font-size: var(--cu-text-sm);
   color: var(--cu-content-tertiary);
 }
 

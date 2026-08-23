@@ -2,8 +2,10 @@
    таблица под ней живёт и перекрашивается вслед за ручкой порога. */
 
 /* Мост ширины панели: --pop-width читает <Popover> (наследование по DOM),
-   дефолт 232px тесен строкам «подпись с пояснением слева, контрол справа». */
-.root{ --pop-width: 480px; }
+   дефолт 232px тесен строкам «подпись с пояснением слева, контрол справа».
+   420, а не 480: описание при 480 растягивалось в строку, которую глаз уже
+   не берёт одним движением, а контрол уезжал от подписи слишком далеко. */
+.root{ --pop-width: 420px; }
 
 /* ── шестерня ⚙ ────────────────────────────────────────────────────────────
    Каталог состояний, рецепт 11 (поворот глифа на месте). Крутится SVG внутри
@@ -34,15 +36,12 @@
   .gear[aria-expanded='true'] svg{ transform: none; }
 }
 
-.body{ padding: 10px; }
+.body{ padding: 4px 10px 10px; }
 
-/* Заголовок панели. Она перестала быть безымянным набором полей: четыре
-   порога с последствиями — это раздел настроек, и он называется. */
-.title{
-  margin: 0 0 2px;
-  font-size: 15px; font-weight: 650;
-  color: var(--cu-content-primary);
-}
+/* Вкладки — шапка окна. Отделены от строк ЗАЗОРОМ, а не линией: разделители
+   внутри списка настроек уже несут ритм, и вторая линия рядом спорила бы с
+   ними за роль границы. Своя полоска активной вкладки у <Tabs> есть. */
+.tabs{ margin-bottom: 4px; }
 
 /* ── строка настройки ──────────────────────────────────────────────────────
    Подпись с пояснением слева, контрол справа. Разделитель, а не воздух:
@@ -51,11 +50,10 @@
 .setting{
   display: flex; align-items: center; justify-content: space-between;
   gap: 16px;
-  padding: 16px 0;
+  padding: 10px 0;
   border-bottom: 1px solid var(--cu-border-default);
 }
-.setting:first-of-type{ padding-top: 12px; }
-.setting:last-of-type{ padding-bottom: 14px; border-bottom: 0; }
+.setting:last-of-type{ padding-bottom: 12px; border-bottom: 0; }
 
 .setting-info{ min-width: 0; flex: 1; }
 
@@ -71,17 +69,19 @@
   cursor: pointer;
 }
 
-/* Пояснение — что порог МЕНЯЕТ. Ограничено по ширине: строка длиннее ~290px
-   перестаёт читаться абзацем и начинает конкурировать с контролом справа. */
+/* Пояснение — что порог МЕНЯЕТ. Ограничено по ширине: строка длиннее ~250px
+   перестаёт читаться абзацем и начинает конкурировать с контролом справа.
+   Зазор до подписи 3px против 20px между строками: внутригрупповой зазор
+   обязан быть кратно меньше межгруппового, иначе группировка читается шумом. */
 .setting-description{
-  max-width: 290px; margin: 0;
-  font-size: var(--cu-text-sm); line-height: 1.45;
+  max-width: 250px; margin: 0;
+  font-size: var(--cu-text-sm); line-height: 1.4;
   color: var(--cu-content-tertiary);
 }
 
 /* Сброс — во всю ширину: он относится ко ВСЕМ четырём порогам сразу, а кнопка
    в углу читалась бы действием последней строки. */
-.reset{ width: 100%; height: 38px; margin-top: 4px; }
+.reset{ width: 100%; height: var(--cu-size-8); margin-top: 10px; }
 
 /* Кнопка «?» у коэффициента и тултип при ней. Обёртка позиционируется:
    тултип встаёт НАД кнопкой и правым краем по ней — это его якорь, а не
@@ -92,12 +92,12 @@
    тача, основной жест — наведение. */
 .k-help-toggle{
   display: inline-flex; align-items: center; justify-content: center;
-  width: 20px; height: 20px; padding: 0;
+  width: 18px; height: 18px; padding: 0;
   border: 1px solid var(--cu-border-default);
   border-radius: var(--cu-radii-round);
   background: var(--cu-background-main);
   color: var(--cu-content-tertiary);
-  font-size: 12px; font-weight: var(--cu-font-weight-semibold); line-height: 1;
+  font-size: 11px; font-weight: var(--cu-font-weight-semibold); line-height: 1;
   cursor: help;
   transition: border-color var(--cu-duration-base) var(--cu-ease-standard),
               color var(--cu-duration-base) var(--cu-ease-standard);
@@ -144,3 +144,65 @@
   color: rgba(255,255,255,.5);
   font-style: italic;
 }
+
+/* ── вкладка «Фильтры» ─────────────────────────────────────────────────────
+   Переехала сюда вместе со списком из полосы: отдельной кнопки у предикатов
+   больше нет, они — второй срез того же окна.
+
+   Значок-счётчик на самой шестерне — решение с полосы реестра (.btn-badge
+   там же): тёмная капсула в углу кнопки, кольцо в цвет подложки. Число
+   ВЫБРАННЫХ предикатов, не строк; для скринридера его несёт имя кнопки
+   («Параметры анализа · фильтров: N»), значок — визуальный дубль ([R1]).
+   Без него активные фильтры перестали бы читаться с полосы вовсе. */
+.btn-badge{
+  position: absolute; top: -3px; right: -4px;
+  display: flex; align-items: center; justify-content: center;
+  min-width: 15px; height: 15px; padding-inline: 4px; border-radius: var(--cu-radii-round);
+  background: rgb(32,32,32); color: #fff;
+  font-size: 10px; font-weight: var(--cu-font-weight-semibold); line-height: 1;
+  box-shadow: 0 0 0 2px var(--cu-global-sidebar-background);
+}
+
+/* Список предикатов: те же 2px воздуха между строками, что и в телах панелей
+   проекта, — плотный чек-лист читается одним столбиком. */
+.predicates{ display: flex; flex-direction: column; gap: 2px; }
+
+.predicate{
+  display: flex; align-items: center; gap: 8px;
+  width: 100%; height: 30px; padding: 0 8px;
+  border-radius: var(--cu-radii-3);
+  font-size: 13px; text-align: left;
+  color: var(--cu-content-primary);
+  transition: background-color var(--cu-animation-duration) var(--cu-animation-timing);
+}
+.predicate:hover{ background: var(--cu-state-hover-subtle); }
+.predicate:focus-visible{ outline: var(--cu-focus-ring); outline-offset: -2px; }
+
+/* Глифовая колонка: фиксированные 26px держат названия на одной вертикали.
+   svg высотой 16px, ширина своя — маркеры разные по пропорциям. */
+.predicate__glyph{
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; flex: none;
+}
+.predicate__glyph svg{ display: block; height: 16px; width: auto; overflow: visible; }
+
+.predicate__label{ flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Счётчик «сколько строк пропустит ЭТОТ предикат на всех данных». Это данные,
+   поэтому secondary, а не tertiary ([R1]). */
+.predicate__count{
+  color: var(--cu-content-secondary);
+  font-size: 12px; font-variant-numeric: tabular-nums;
+}
+/* Пустой предикат честно тусклый, но кликабельный: ноль — тоже ответ. */
+.predicate--empty .predicate__label,
+.predicate--empty .predicate__glyph{ opacity: .45; }
+
+/* Галочка выбора — тем же приёмом, что у <MenuItem>: слот всегда на месте,
+   видна только отмеченной (иначе строки прыгали бы). */
+.predicate__check{
+  display: inline-flex; --icon-size: 16px;
+  color: var(--cu-tone-success-ink);
+  visibility: hidden;
+}
+.predicate[aria-checked='true'] .predicate__check{ visibility: visible; }

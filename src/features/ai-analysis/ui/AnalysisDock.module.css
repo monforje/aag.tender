@@ -47,6 +47,11 @@
   font-size: var(--cu-text-sm); line-height: var(--cu-leading-normal);
   color: var(--cu-content-primary);
 }
+.stalePartial{
+  /* «Частично» — не тревога: КП те же, разъехались только пороги. Тон ниже
+     на ступень, чтобы срочность читалась разной, а не одинаково жёлтой. */
+  background: var(--cu-tone-info-fill);
+}
 .snapshotNote{
   font-size: var(--cu-text-xs); line-height: var(--cu-leading-same);
   text-transform: uppercase; letter-spacing: .06em;
@@ -82,7 +87,10 @@
 /* ── сводка-якоря ────────────────────────────────────────────────────────── */
 .summary{ display: flex; flex-direction: column; gap: 4px; }
 .summaryItem{
-  display: flex; align-items: center; gap: var(--cu-size-2);
+  /* Не center: пункт сводки переносится на две строки, и стрелка, выровненная
+     по всей высоте кнопки, повисала между ними. Она указывает НА ПУНКТ —
+     значит стоит на его первой строке. */
+  display: flex; align-items: flex-start; gap: var(--cu-size-2);
   width: 100%;
   padding: 8px 10px;
   border-radius: var(--cu-radii-3);
@@ -93,10 +101,19 @@
 }
 .summaryItem:hover{ background: var(--cu-state-hover); }
 .summaryItem:focus-visible{ outline: var(--cu-focus-ring); outline-offset: -1px; }
-.summaryItem > span{ flex: 1; min-width: 0; }
+/* КЛАСС, А НЕ `.summaryItem > span`. Тот селектор — (0,1,1) и бил по
+   специфичности `.summaryIcon` (0,1,0), а <Icon> оборачивает глиф тем же
+   тегом <span>: `flex: none` у стрелки не применялся никогда, и она забирала
+   ПОЛОВИНУ строки, отчего казалась висящей в пустоте посередине. Тот самый
+   капкан «модификатор, сцепленный с тегом» из CLAUDE.md, только наоборот. */
+.summaryText{ flex: 1; min-width: 0; }
 .summaryIcon{
   --icon-size: 12px;
   flex: none;
+  /* Оптический центр стрелки — центр ПЕРВОЙ строки: (12 × 1,4 − 12) / 2.
+     Считается из тех же токенов, что кегль пункта, поэтому смена шкалы её
+     не роняет. */
+  margin-top: calc((var(--cu-text-sm) * var(--cu-leading-normal) - 12px) / 2);
   color: var(--cu-content-tertiary);
 }
 
@@ -118,6 +135,14 @@
   font-size: 13px; line-height: 18px;
   font-weight: var(--cu-font-weight-semibold);
 }
+/* Сколько внутри: свёрнутая секция обязана говорить, стоит ли её открывать —
+   иначе три закрытые полосы читаются как пустая панель. */
+.secHint{
+  flex: none;
+  font-size: 11px; line-height: 14px;
+  font-variant-numeric: tabular-nums;
+  color: var(--cu-content-tertiary);
+}
 .secChevron{
   --icon-size: 14px;
   flex: none;
@@ -131,6 +156,35 @@
   display: flex; flex-direction: column; gap: var(--cu-size-4);
   padding: 2px 2px var(--cu-size-4);
 }
+
+/* ── подсекции базового разбора ──────────────────────────────────────────── */
+/* Вложены В секцию, а не разложены рядом с ней: главных секций три (05 §4), и
+   уровень подсекции обязан читаться уровнем — отсюда рельс слева, тон и кегль
+   ниже родителя. Сдвиг делает рельс, а не отступ у каждого потомка: иначе
+   вертикаль ломается на первом же пункте без заголовка. */
+.sub{
+  margin-left: 2px;
+  padding-left: var(--cu-size-3);
+  border-left: 1px solid var(--cu-border-default);
+  scroll-margin-top: var(--cu-size-4);
+}
+.sub + .sub{ margin-top: 2px; }
+.subHead{
+  display: flex; align-items: center; gap: var(--cu-size-2);
+  width: 100%;
+  padding: 7px 2px;
+  cursor: pointer;
+  list-style: none;
+}
+.subHead::-webkit-details-marker{ display: none; }
+.subTitle{
+  flex: 1; min-width: 0;
+  font-size: var(--cu-text-sm); line-height: 18px;
+  font-weight: var(--cu-font-weight-medium);
+  color: var(--cu-content-secondary);
+}
+.sub[open] > .subHead .subTitle{ color: var(--cu-content-primary); }
+.sub[open] > .subHead .secChevron{ transform: rotate(180deg); }
 
 /* ── пункт разбора ───────────────────────────────────────────────────────── */
 .item{ display: flex; flex-direction: column; gap: 4px; }
@@ -150,6 +204,8 @@
   color: var(--cu-content-secondary);
 }
 .noteSpark{ flex: none; margin-top: 2px; }
+/* Фраза о секции целиком — под её показателями, с тем же полем, что у них. */
+.secNote{ padding: 0 2px var(--cu-size-4); }
 
 /* Кликабельная сущность (05 §6): видна без наведения — пунктир + мягкий
    красный; числа сами по себе не подчёркиваются. */
@@ -166,7 +222,10 @@
 }
 
 /* ── общая картина раунда: фиксированный набор показателей ───────────────── */
-.meta{ display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.meta{
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 2px 2px 10px;
+}
 .metaRow{
   display: grid; grid-template-columns: 118px minmax(0, 1fr);
   gap: var(--cu-size-3);

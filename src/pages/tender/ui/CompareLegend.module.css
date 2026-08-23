@@ -46,7 +46,7 @@
 
 /* Штамп «МИН»: значения совпадают с .tag ячейки сравнения — дрейф исключён
    сверкой при правке, отдельного класса-моста ради одного слова нет. */
-.sample--tag{  font-size: 11px; line-height: 1;
+.sample--tag{  font-size: 10px; line-height: 1;
   font-weight: var(--cu-font-weight-bold);
   letter-spacing: .02em;
   color: var(--cu-tone-success-ink);

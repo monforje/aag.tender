@@ -180,6 +180,10 @@ export const MOCK_ROUND2_PARTIAL: Comparison = {
       ...MOCK_ROUND1.contractors[1],
       submittedInRound: 2,
       prevPrices: IG_R1,
+      /* Условие ПОЯВИЛОСЬ в этом круге — в первом его не было. Разбор обязан
+         назвать это отдельной строкой: изменение условий читают наравне с
+         ценой (05 §4.1). */
+      prevConditions: [],
       conditions: ['Предоплата 20 %'],
       prices: IG_R2,
     },
@@ -212,6 +216,7 @@ export const MOCK_ROUND2_FULL: Comparison = {
       ...MOCK_ROUND1.contractors[2],
       submittedInRound: 2,
       prevPrices: SM_R1,
+      prevConditions: [],
       conditions: ['Аванс 30 %'],
       /* Отказ ушёл: вместо решения — цена. Заполненность подросла до 96 %,
          но w4 так и остался незакрытым — статус «частично». */

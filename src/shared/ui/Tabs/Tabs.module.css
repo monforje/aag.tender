@@ -1,24 +1,32 @@
 /* ВКЛАДКИ ПОВЕРХНОСТЕЙ — визуальная грамматика SecondaryHeader, ужатая до
    примитива: активная вкладка = цвет текста + нижняя полоска (::after на
-   хит-зоне), ховер-таблетка только у неактивной. Второго индикатора нет:
-   одно состояние кодируется одним набором каналов. */
+   хит-зоне), подсветка только у неактивной. Второго индикатора нет: одно
+   состояние кодируется одним набором каналов.
+
+   ЗОНА ПОДСВЕТКИ — ПРЯМОУГОЛЬНИК 5px ВОКРУГ ПОДПИСИ, а не капсула, и это не
+   вкусовщина: ровно так красит вкладки SecondaryHeader (Page.module.css) —
+   единственный таблист, который пользователь этого приложения видел до сих
+   пор, в шапке реестра и на карточке тендера. Круглая таблетка здесь
+   выглядела бы другим контролом; в проекте капсула закреплена за чипами и
+   сегментом, а не за вкладками. Кегль и ритм оттуда же: 12/16, padding 4px. */
 .tablist {
   display: flex;
   align-items: center;
-  gap: var(--cu-size-1);
+  gap: var(--cu-size-2);
 }
 
 .tab {
   position: relative;
   height: var(--cu-size-7);
-  padding-inline: var(--cu-size-1);
 }
-/* Хит-зона шире подписи: попасть легче, а полоска рисуется по ней же. */
+/* Полоска активной прибита к низу хит-зоны и во всю её ширину — как у
+   SecondaryHeader: зазор между вкладками держит .tablist, а не паддинг
+   каждой, иначе полоска не доходит до краёв подписи. */
 .tab::after {
   content: '';
   position: absolute;
-  left: var(--cu-size-1);
-  right: var(--cu-size-1);
+  left: 0;
+  right: 0;
   bottom: -2px;
   height: 2px;
   border-radius: var(--cu-radii-round);
@@ -27,11 +35,10 @@
 .tab-content {
   display: inline-flex;
   align-items: center;
-  height: var(--cu-size-6);
-  padding-inline: var(--cu-size-2);
-  border-radius: var(--cu-radii-round);
-  font-size: var(--cu-text-base);
-  line-height: var(--cu-leading-same);
+  padding: 4px;
+  border-radius: 5px;
+  font-size: var(--cu-text-sm);
+  line-height: 16px;
   color: var(--cu-content-secondary);
   transition: background-color var(--cu-duration-base) var(--cu-ease-standard),
               color var(--cu-duration-base) var(--cu-ease-standard);
@@ -49,5 +56,5 @@
 .tab:focus-visible {
   outline: var(--cu-focus-ring);
   outline-offset: 1px;
-  border-radius: var(--cu-radii-round);
+  border-radius: 5px;
 }

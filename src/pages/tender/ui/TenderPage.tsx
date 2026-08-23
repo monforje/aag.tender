@@ -250,6 +250,7 @@ export function TenderPage() {
         <AnalysisDock
           open={aiOpen}
           onClose={closeAi}
+          tenderId={tender.id}
           comparison={data.comparison}
           prevComparison={data.prevComparison}
           thresholds={screen.thresholds}

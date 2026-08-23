@@ -126,7 +126,8 @@ export function BidCell({ row, contractor, view, thresholds, bind, note, flash }
     : Math.min(row.spread / thresholds.spreadHigh, 1);
 
   /* Монета запаса торга — пометка данных, от режима не зависит; сидит на
-     главной строке у её основания (правый верхний угол занят штампом «МИН»). */
+     главной строке у её основания. Штампу «МИН» отведён левый нижний угол
+     ячейки — с монетой они не пересекаются по вертикали. */
   const coinData: CellPopupData | null = mark.potential ? {
     tone: 'info',
     title: 'Заявленный запас торга',

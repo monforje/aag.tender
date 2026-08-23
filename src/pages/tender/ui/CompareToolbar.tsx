@@ -1,18 +1,14 @@
-import { type ReactElement } from 'react';
-import { cx } from '@/shared/lib/cx';
-import { toggle } from '@/shared/lib/toggle';
-import { Button } from '@/shared/ui/Button';
 import {
-  Dropdown, DropdownGroup, MenuItem, MenuPanel, useDropdownSlot,
+  Dropdown, DropdownGroup, MenuItem, useDropdownSlot,
 } from '@/shared/ui/Dropdown';
 import { Icon } from '@/shared/ui/Icon';
-import { IconButton } from '@/shared/ui/IconButton';
 import { Segmented } from '@/shared/ui/Segmented';
 import { Switch } from '@/shared/ui/Switch';
 import {
-  METRIC_LABEL, predicateCount, PREDICATES, PRESET_LABEL, ROW_VIEW_LABEL, SATELLITE_LABEL, type CompareMetricId, type CompareThresholds, type CompareView, type PredicateId, type PresetId, type RowFacts, type RowViewId, type SatelliteId,
+  METRIC_LABEL, PRESET_LABEL, ROW_VIEW_LABEL, SATELLITE_LABEL,
+  type CompareMetricId, type CompareThresholds, type CompareView,
+  type PresetId, type RowFacts, type RowViewId, type SatelliteId,
 } from '@/entities/comparison';
-import { AnomalyGlyph, CoinMark, KeyMark, MedMark, SpreadMark } from './assets';
 import { CompareLegend } from './CompareLegend';
 import { CompareSettings } from './CompareSettings';
 import s from './CompareToolbar.module.css';
@@ -20,17 +16,6 @@ import s from './CompareToolbar.module.css';
 const METRICS = Object.keys(METRIC_LABEL) as CompareMetricId[];
 const ROW_VIEWS = Object.keys(ROW_VIEW_LABEL) as RowViewId[];
 const SATELLITES = Object.keys(SATELLITE_LABEL) as SatelliteId[];
-
-/* Глиф предиката в меню фильтров — ТОТ ЖЕ маркер, что красит ячейки таблицы:
-   один смысл — один глиф везде. Посажены на фиксированную колонку 26px,
-   поэтому названия пунктов стоят на одной вертикали. */
-const PREDICATE_GLYPH: Record<PredicateId, ReactElement> = {
-  key: <KeyMark />,
-  spread: <SpreadMark />,
-  anomaly: <AnomalyGlyph />,
-  pot: <CoinMark />,
-  med: <MedMark />,
-};
 
 interface ToolbarProps {
   view: CompareView;
@@ -134,15 +119,6 @@ export function CompareToolbar({
           })}
         </div>
 
-        {/* Секция 3: пороги тендера — окно по значку ⚙. */}
-        {onThresholds ? (
-          <CompareSettings
-            thresholds={thresholds}
-            onChange={onThresholds}
-            allRows={allRows}
-          />
-        ) : null}
-
         <QuietSelect
           slot="compare-rows"
           icon="list"
@@ -199,7 +175,20 @@ export function CompareToolbar({
         ) : null}
 
         <CompareLegend thresholds={thresholds} />
-        <FiltersMenu view={view} allRows={allRows} onPatch={onPatch} />
+        {/* Шестерня стоит ПОСЛЕДНЕЙ, на месте прежней кнопки «Фильтры»: по
+            регламенту настройки живут у правого края, а фильтры теперь её
+            вкладка — отдельной кнопки у них больше нет. Седьмой контрол в
+            полосе не читался, а по смыслу предикаты — та же настройка
+            взгляда на таблицу, что и пороги. */}
+        {onThresholds ? (
+          <CompareSettings
+            thresholds={thresholds}
+            onChange={onThresholds}
+            allRows={allRows}
+            filters={view.filters}
+            onFilters={(filters) => onPatch({ filters })}
+          />
+        ) : null}
         </div>
       </div>
     </DropdownGroup>
@@ -241,80 +230,6 @@ function QuietSelect<T extends string>({ slot, cap, icon, value, options, onPick
           <span className={s.triggerVal}>{current?.label}</span>
           <Icon name="caretSmall" className={s.triggerCaret} />
         </button>
-      )}
-    </Dropdown>
-  );
-}
-
-/** Предикаты — ОДИН триггер «Фильтры» с каунтером выбранных и поповером
- *  чек-листа. Комбинируются по И; меню не закрывается по клику. */
-function FiltersMenu({ view, allRows, onPatch }: {
-  view: CompareView;
-  allRows: RowFacts[];
-  onPatch: (patch: Partial<Omit<CompareView, 'preset'>>) => void;
-}) {
-  const control = useDropdownSlot('compare-filters');
-  const active = view.filters;
-
-  return (
-    <Dropdown
-      {...control}
-      menuAlign="right"
-      closeOnSelect={false}
-      menu={(
-        <MenuPanel
-          className={s.panel}
-          footer={(
-            <>
-              <Button
-                variant="secondary"
-                disabled={!active.length}
-                onClick={() => onPatch({ filters: [] })}
-              >
-                Сбросить всё
-              </Button>
-              <Button variant="primary" onClick={control.onClose}>Готово</Button>
-            </>
-          )}
-        >
-          <div className={s.predicates}>
-            {PREDICATES.map((predicate) => {
-              const count = predicateCount(predicate.id, allRows);
-              return (
-                <button
-                  key={predicate.id}
-                  type="button"
-                  role="menuitemcheckbox"
-                  aria-checked={active.includes(predicate.id)}
-                  className={cx(s.predicate, !count && s.predicateEmpty)}
-                  onClick={() => onPatch({ filters: toggle(active, predicate.id) })}
-                >
-                  <span className={s.predicateGlyph}>{PREDICATE_GLYPH[predicate.id]}</span>
-                  <span className={s.predicateLabel}>{predicate.label}</span>
-                  <span className={s.predicateCount}>{count}</span>
-                  <span className={s.predicateCheck} aria-hidden="true">
-                    <Icon name="checkCircle" />
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </MenuPanel>
-      )}
-    >
-      {(trigger) => (
-        /* Тот же триггер, что у «Фильтров» реестра: глиф 32×32 без подписи,
-           счётчик выбранных — значком в углу. Подпись «Фильтры» рядом с
-           сегментом и двумя дропдаунами читалась третьей кнопкой в ряд;
-           состояние уходит в aria-label и значок ([R1]). */
-        <IconButton
-          {...trigger}
-          variant="topbar"
-          icon="filter"
-          label={active.length ? `Фильтры · ${active.length}` : 'Фильтры'}
-          active={active.length > 0}
-          badge={active.length ? <span className={s.btnBadge}>{active.length}</span> : null}
-        />
       )}
     </Dropdown>
   );

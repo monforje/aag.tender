@@ -32,6 +32,11 @@ export function RoundsPanel({ comparison, onSimulateSubmission }: {
 }) {
   const rounds = comparison.rounds ?? [];
   const activeNo = snapshotRound(comparison);
+  /* Круг, которого ЖДУТ КП, — это `current` РЕЕСТРА, а не раунд снимка: пока
+     во втором круге не подали ни одного КП, снимок остаётся первым, и демо-
+     подача, привязанная к номеру снимка, не показывалась вовсе — второй раунд
+     был недостижим из интерфейса. */
+  const currentNo = rounds.find((r) => r.status === 'current')?.number ?? activeNo;
   const byId = new Map(comparison.contractors.map((c) => [c.id, c]));
 
   return (
@@ -75,11 +80,11 @@ export function RoundsPanel({ comparison, onSimulateSubmission }: {
               <Badge tone={status.tone} icon={status.icon}>{status.label}</Badge>
               <span className={s.meta}>
                 Подали: {submitted} из {invited}
-                {round.number === activeNo && waiting.length > 0 ? (
+                {round.number === currentNo && waiting.length > 0 ? (
                   <> · ждём: {waiting.join(', ')}</>
                 ) : null}
               </span>
-              {round.number === activeNo && waiting.length > 0 && onSimulateSubmission ? (
+              {round.number === currentNo && waiting.length > 0 && onSimulateSubmission ? (
                 <Button variant="secondary" className={s.act} onClick={onSimulateSubmission}>
                   Отметить подачу КП
                 </Button>
