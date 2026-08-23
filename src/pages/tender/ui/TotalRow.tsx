@@ -1,39 +1,42 @@
 import { cx } from '@/shared/lib/cx';
-import { money, type Bid, type RowFacts } from '@/entities/tender';
+import { cellMark, money, type Bid, type CompareMetricId, type RowFacts } from '@/entities/tender';
 import { tableCell } from '@/shared/ui/Table';
 import s from './TenderCompare.module.css';
 
 /**
- * Строка итога сравнения: и подытог раздела, и итог по срезу.
+ * Строка итога сравнения: подытог раздела или итог всей таблицы.
  *
  * КОГДА:  закрывает каждый раздел в виде «По разделам» и весь срез внизу
  *         таблицы (<TenderCompare>).
- * НЕ ДЛЯ: итога карточки подрядчика (сумма КП живёт на <ContractorCard>) и
- *         «Итого» сметы вне среза — здесь считается ТОЛЬКО видимое.
+ * НЕ ДЛЯ: итога карточки подрядчика (сумма КП живёт на <ContractorCard>) —
+ *         здесь сводка ПО СТРОКАМ таблицы.
  *
- * UX:     один счёт из переданных строк, то есть видимых: визуальная
- *         фильтрация с неизменным итогом — это враньё в подытоге (§0 аудита).
- *         Подытог раздела и итог среза обязаны считать одинаково — два итогоа
- *         на одном экране спорить не имеют права. Просто «Итого»: раздел назван
- *         строкой выше — повторять его имя значит заставить прочитать его
- *         дважды.
+ * UX:     ПОДЫТОГ УЗЛА СООТВЕТСТВУЕТ СЕЛЕКТУ (модель ячейки §4): Σ стоимостей
+ *         либо Σ потенциалов — иначе строка итога спорила бы с числами над ней.
+ *         Считается по ВСЕМ позициям узла: фильтр меняет состав видимых строк,
+ *         но не суммы — одно число на итог, второе «по фильтру» из модели
+ *         вынесено (решение владельца 22.08.2026). Подытог раздела и итог
+ *         таблицы считают одинаково — два итого на одном экране спорить не
+ *         имеют права. Просто «Итого»: раздел назван строкой выше — повторять
+ *         его имя значит заставить прочитать его дважды.
  * A11Y:   пустой счёт читается тире, а не нулём — ноль означал бы согласие.
  *
  * @example
- * <TotalRow label="Итого" rows={rows} bids={bids} />
+ * <TotalRow label="Итого" rows={groupRows} bids={bids} metric={view.mainMetric} />
  */
-export function TotalRow({ label, rows, bids }: {
+export function TotalRow({ label, rows, bids, metric }: {
   label: string;
-  /** Строки, ВОШЕДШИЕ в срез после фильтров; суммы складываются только из них. */
+  /** Все позиции узла (или всей сметы) — независимо от активных фильтров. */
   rows: RowFacts[];
   bids: Bid[];
+  metric: CompareMetricId;
 }) {
   return (
     <tr className={s.totalRow}>
       <td colSpan={4} className={s.totalLabel}>{label}</td>
       {bids.map((bid) => {
         const sum = rows.reduce(
-          (acc, r) => acc + (bid.contractor.prices[r.position.id] ?? 0) * r.position.qty,
+          (acc, r) => acc + cellValue(bid.contractor, r, metric),
           0,
         );
         return (
@@ -44,4 +47,14 @@ export function TotalRow({ label, rows, bids }: {
       })}
     </tr>
   );
+}
+
+/** Значение одной пары работа × подрядчик в деньгах выбранного режима:
+ *  стоимость — расценка × общий объём; потенциал — заявленный запас за
+ *  единицу × объём (источника запаса нет — вклада в Σ потенциалов нет). */
+function cellValue(contractor: Bid['contractor'], row: RowFacts, metric: CompareMetricId): number {
+  if (metric === 'potential') {
+    return (cellMark(contractor, row.position.id).potential ?? 0) * row.position.qty;
+  }
+  return (contractor.prices[row.position.id] ?? 0) * row.position.qty;
 }

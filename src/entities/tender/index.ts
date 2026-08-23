@@ -4,16 +4,17 @@ export {
   type BidsDue, type DueMode, type Filters, type StatusId, type TenderRow,
 } from './model/registry';
 export {
-  analyzeComparison, applyTransition, BID_STATUS, bidStatus, cellMark,
-  DEV_TOLERANCE, decimal, deviationPct, filterRows, flatten, groupSum,
-  hasAnomaly, hasPreviousRound, isModifiedView, METRIC_LABEL, medianOf, money,
-  POTENTIAL_MIN, PREDICATES, predicateCount, predicatePasses,
-  PRESETS, PRESET_LABEL, rankBids, ROW_VIEW_LABEL, shownMetrics,
-  snapshotRound, SPREAD_HIGH, SPREAD_NOTICEABLE, spread, sumOf,
-  type Bid, type BidStatusId, type CellMark, type CompareMetricId,
-  type Comparison, type ComparisonFacts, type ComparePosition, type CompareView,
-  type Contractor, type PredicateId, type PositionGroup, type PresetId,
-  type RowFacts, type RowViewId, type RoundStatus, type ComparisonRound,
+  analyzeComparison, applyTransition, BID_STATUS, bidStatus, cellLines, cellMark,
+  clampThresholds, DEV_TOLERANCE, decimal, deviationPct, filterRows, flatten,
+  groupSum, hasAnomaly, hasPreviousRound, isModifiedView, METRIC_LABEL, medianOf,
+  money, moneyCompact, POTENTIAL_MIN, PREDICATES, predicateCount, predicatePasses,
+  PRESETS, PRESET_LABEL, rankBids, ROW_VIEW_LABEL, SATELLITE_LABEL,
+  snapshotRound, spread, sumOf, SYSTEM_THRESHOLDS,
+  type Bid, type BidStatusId, type CellLine, type CellMark, type CompareMetricId,
+  type CompareThresholds, type Comparison, type ComparisonFacts, type ComparePosition,
+  type CompareView, type Contractor, type PredicateId, type PositionGroup,
+  type PresetId, type RowFacts, type RowViewId, type RoundStatus, type ComparisonRound,
+  type SatelliteId, type TransitionMetricId,
 } from './model/comparison';
 /* Демо-данные — отдельным импортом и с отдельным именем: подменить их ответом
    API значит убрать ровно эту строку и то место, где её берут. */

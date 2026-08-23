@@ -480,6 +480,29 @@
 .stack{ display: inline-block; text-align: right; }
 .price-line{ display: block; white-space: nowrap; }
 
+/* База-стоимость под основным показателем (модель ячейки §1, правило 2):
+   стоимость обязана читаться ЧИСЛОМ, но не спорить с главным за взгляд —
+   средний кегль между главным числом и справочной ставкой. */
+.base-line{
+  display: block; white-space: nowrap;
+  font-size: var(--cu-text-sm); line-height: 16px;
+  font-weight: var(--cu-font-weight-medium);
+}
+
+/* Суффикс отклонения — липнет к строке стоимости (главной или базовой).
+   Нейтральный третичный тон сознательно: это характеристика базы, а не
+   тревога; тревогу называет попап. */
+.dev-suffix{
+  margin-left: 6px;
+  font-size: var(--cu-text-xs); line-height: 1;
+  color: var(--cu-content-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Ставка за единицу — последняя строка, справочная: производная величина
+   со знаком «примерно» (≈) прямо в тексте. */
+.rate-line{ display: block; white-space: nowrap; }
+
 /* Цена — главный текст ячейки: кегль не меняется, ничего не двигается.
    position:relative нужен монете (left:-25px). Минимум называет САМА
    отметка в углу: бывший мазок маркера под ценой снят — второй зелёный
@@ -536,7 +559,6 @@
 .tag:focus-visible,
 .coin:focus-visible,
 .key-mark:focus-visible,
-.med-mark:focus-visible,
 .spread-mark:focus-visible{
   outline: var(--cu-focus-ring); outline-offset: 2px; border-radius: 6px;
 }
@@ -581,26 +603,6 @@
 }
 .key-mark:hover svg{ animation: key-turn .7s cubic-bezier(.36,.07,.19,.97); }
 
-/* Дороже медианы — «леденец» по середине высоты цены. Тон neutral-ink — самый
-   тихий маркер: отсчёт, а не тревога и не возможность.
-
-   ВЫСОТА — вычисленная, не на глаз ([инвариант]): цифры 14px занимают
-   полосу ≈ от базовой линии до +10px (капс-высота ~0.7em), их оптическая
-   середина — +5px над базовой. Глиф высотой 19px обязан занять −4,5…+14,5px,
-   то есть его нижний край — на 5px НИЖЕ базовой линии; у svg-кнопки базовая
-   линия = нижний край бокса → vertical-align: −5px (middle ставил центр
-   глифа по x-height строки и уводил его вниз). */
-.med-mark{
-  position: relative; display: inline-block;
-  width: 22px; height: 19px; margin-left: 4px; vertical-align: -5px;
-  cursor: help; color: var(--cu-tone-neutral-ink);
-}
-.med-mark svg{ display: block; width: 100%; height: 100%; overflow: visible; }
-@keyframes med-rise{
-  0%{ transform: translateY(0) } 45%{ transform: translateY(-1.4px) } 100%{ transform: translateY(0) }
-}
-.med-mark:hover [data-mk='rise']{ animation: med-rise .55s cubic-bezier(.34,1.4,.64,1); }
-
 /* Высокий разброс — линейка размаха в колонке разброса; hover: засечки
    разъезжаются на ±1.15px, диапазон «дышит» шириной. */
 .spread-mark{
@@ -621,8 +623,7 @@
 /* Единая зона reduced-motion: все hover-анимации брелоков гасятся одним
    блоком. */
 @media (prefers-reduced-motion: reduce){
-  .tag:hover, .coin:hover, .key-mark:hover svg{ animation: none; }
-  .med-mark:hover [data-mk='rise'],
+  .tag:hover, .coin:hover, .key-mark:hover svg,
   .spread-mark:hover [data-mk='cap-l'],
   .spread-mark:hover [data-mk='cap-r']{ animation: none; }
 }
@@ -660,13 +661,9 @@
 }
 .chip-icon{ --icon-size: 11px; }
 
-/* Отклонение сверх допуска ±5 % — симметрично в обе стороны (Д.3):
-   «дешевле на 8 %» такой же повод спросить, как «дороже». */
-.dev-hot{ color: var(--cu-tone-danger-ink); font-weight: var(--cu-font-weight-medium); }
-
 /* ── МИКРОШКАЛЫ ──────────────────────────────────────────────────────────── */
-/* Разброс: шкала ОБЩАЯ для всех строк (25 % = вся длина) — сравнивать бары
-   между строками можно только на одной шкале. Цвет заливки = тон яруса. */
+/* Разброс: шкала ОБЩАЯ для всех строк (высокий ярус = вся длина) — сравнивать
+   бары между строками можно только на одной шкале. Цвет заливки = тон яруса. */
 .spread-bar{
   display: block; width: 24px; height: 3px;
   margin-top: 3px; margin-left: auto;

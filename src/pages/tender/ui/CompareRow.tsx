@@ -1,5 +1,7 @@
 import { cx } from '@/shared/lib/cx';
-import { decimal, money, type Bid, type CompareView, type RowFacts } from '@/entities/tender';
+import {
+  decimal, money, type Bid, type CompareThresholds, type CompareView, type RowFacts,
+} from '@/entities/tender';
 import type { CellPopupBind } from '@/shared/ui/CellPopup';
 import { tableCell } from '@/shared/ui/Table';
 import { BidCell } from './BidCell';
@@ -34,9 +36,11 @@ import s from './TenderCompare.module.css';
  * <CompareRow row={row} view={view} bids={bids} sumWeight={facts.sumWeight}
  *             bind={popup.bind} focused={focusRowId === row.position.id} />
  */
-export function CompareRow({ row, view, bids, sumWeight, bind, focused, noteFor, flashCells }: {
+export function CompareRow({ row, view, thresholds, bids, sumWeight, bind, focused, noteFor, flashCells }: {
   row: RowFacts;
   view: CompareView;
+  /** Пороги тендера: метки разброса и аномальность делят их с фильтрами. */
+  thresholds: CompareThresholds;
   bids: Bid[];
   sumWeight: number;
   bind: CellPopupBind;
@@ -110,7 +114,7 @@ export function CompareRow({ row, view, bids, sumWeight, bind, focused, noteFor,
       </td>
       <td className={tableCell.muted}>{removed ? '—' : position.unit}</td>
 
-      <SpreadCell row={row} bind={bind} />
+      <SpreadCell row={row} bind={bind} thresholds={thresholds} />
 
       {bids.map((bid) => (
         <BidCell
@@ -118,6 +122,7 @@ export function CompareRow({ row, view, bids, sumWeight, bind, focused, noteFor,
           row={row}
           contractor={bid.contractor}
           view={view}
+          thresholds={thresholds}
           bind={bind}
           note={noteOf(bid.contractor.id)}
           flash={flashOf(bid.contractor.id)}

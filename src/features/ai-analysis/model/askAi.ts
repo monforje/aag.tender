@@ -11,6 +11,7 @@
 
 import {
   deriveInsights,
+  type CompareThresholds,
   type Contractor,
   type Insight,
   type PositionGroup,
@@ -35,8 +36,11 @@ export interface AiAnswer {
    сводка. Первое совпадение выигрывает, поэтому «дешевле» в вопросе про торги
    не уводит от пары: сравнение проверяется раньше запасов только когда в
    вопросе есть явное «сравн/против/★». */
-export function askAi(question: string, ctx: AskContext): AiAnswer {
-  const insights = deriveInsights(ctx.groups, ctx.contractors, ctx.starred);
+export function askAi(
+  question: string,
+  ctx: AskContext & { thresholds: CompareThresholds },
+): AiAnswer {
+  const insights = deriveInsights(ctx.groups, ctx.contractors, ctx.starred, ctx.thresholds);
   const q = question.toLowerCase();
 
   if (/риск|аномали|подозрител/.test(q)) return risks(insights);

@@ -12,8 +12,8 @@ import { plural } from '@/shared/lib/plural';
 import {
   analyzeComparison, filterRows, flatten, isModifiedView, METRIC_LABEL,
   rankBids, ROW_VIEW_LABEL,
-  type Bid, type Comparison, type CompareView, type PositionGroup, type PresetId,
-  type RowFacts,
+  type Bid, type Comparison, type CompareThresholds, type CompareView,
+  type PositionGroup, type PresetId, type RowFacts,
 } from '@/entities/tender';
 import { choose, resolveTone } from '../model/compareFormat';
 import { useTableDock } from '../model/useTableDock';
@@ -35,11 +35,12 @@ import s from './TenderCompare.module.css';
  *         (раздел «КП» — это документы, а не сопоставление цифр).
  *
  * ДАННЫЕ: приходят ПРОПАМИ — смета разделами и КП подрядчиков (тип
- *         Comparison), пометки анализа — готовыми полями КП (`marks`).
- *         Всё производное считается `analyzeComparison()` одним проходом:
- *         таблица, фильтры, счётчики и попап читают одни и те же числа.
- *         Фильтрация происходит ДО подытогов — итоги складываются из видимых
- *         строк, иначе они врут (правило «dc», §0 аудита).
+ *         Comparison), пометки анализа — готовыми полями КП (`marks`),
+ *         пороги аналитики — настройками тендера. Всё производное считается
+ *         `analyzeComparison()` одним проходом: таблица, фильтры, счётчики и
+ *         попап читают одни и те же числа. Фильтр меняет состав видимых
+ *         строк, но НЕ подытоги: одно число на итог, второе «по фильтру» из
+ *         модели вынесено (решение владельца 22.08.2026).
  *
  * UX:     ПРЕСЕТ присваивает четыре оси состояния целиком; любое ручное
  *         движение поднимает чип «Изменён · Сброс» — молча терять уход от базы
@@ -73,6 +74,7 @@ import s from './TenderCompare.module.css';
 export function TenderCompare({
   groups, contractors,
   view, onPreset, onPatch,
+  thresholds, onThresholds,
   starred, onToggleStar,
   focusRowId, onFocusClear,
   onHeadStuckChange,
@@ -85,6 +87,11 @@ export function TenderCompare({
   view: CompareView;
   onPreset: (preset: PresetId) => void;
   onPatch: (patch: Partial<Omit<CompareView, 'preset'>>) => void;
+  /** Пороги аналитики — настройки ТЕНДЕРА (не константы и не личный профиль):
+      каскадируют в метки ячеек, фильтры, легенду и сводку. */
+  thresholds: CompareThresholds;
+  /** Правка порогов из окна настроек; зажим делает вызывающий (clampThresholds). */
+  onThresholds?: (thresholds: CompareThresholds) => void;
   /** Избранные ★ подрядчики читаются и пишутся наружу по той же причине. */
   starred: string[];
   onToggleStar: (contractorId: string) => void;
@@ -111,7 +118,7 @@ export function TenderCompare({
       Пересчёт — тринадцать позиций на три КП, мемоизировать тут нечего. */
   const positions = flatten(groups);
   const bids = rankBids(contractors, positions);
-  const facts = analyzeComparison(groups, contractors);
+  const facts = analyzeComparison(groups, contractors, thresholds);
 
   const modified = isModifiedView(view);
 
@@ -134,19 +141,22 @@ export function TenderCompare({
      попап на любом постороннем движении (звезда, перекраска колонки). */
   const popup = useCellPopup();
   useEffect(() => { popup.close(true); },
-    [view.mainMetric, view.rowView, view.extraMetrics, view.filters]);
+    [view.mainMetric, view.showDeviation, view.showRate, view.rowView, view.filters]);
 
   /* Липкая шапка + автосайдбар + доскролл к строке из «Анализа». Правило
      автосайдбара и история решения — в JSDoc хука. */
   const { dockRef } = useTableDock({ focusRowId, onHeadStuckChange });
 
-  /* Строки, прошедшие ВСЕ предикаты; разделы собирают свои из них же. */
+  /* Строки, прошедшие ВСЕ предикаты; разделы собирают свои из них же.
+     Для ПОДЫТОГОВ узла нужен полный набор его позиций: фильтр прячет строки,
+     но суммы не двигает. */
   const visible = filterRows(facts.rows, view.filters);
   const visibleIds = new Set(visible.map((r) => r.position.id));
+  const byIdOf = (p: { id: string }): RowFacts | undefined => facts.byId.get(p.id);
   const rowsOfGroup = (group: PositionGroup): RowFacts[] =>
-    group.positions
-      .map((p) => facts.byId.get(p.id))
-      .filter((r): r is RowFacts => !!r && visibleIds.has(r.position.id));
+    group.positions.map(byIdOf).filter((r): r is RowFacts => !!r && visibleIds.has(r.position.id));
+  const allRowsOfGroup = (group: PositionGroup): RowFacts[] =>
+    group.positions.map(byIdOf).filter((r): r is RowFacts => !!r);
 
   /* Пустой ответ — штатное состояние, а не сбой. Проверка стоит после хуков:
      до них ранний возврат менял бы их число между рендерами. */
@@ -170,6 +180,8 @@ export function TenderCompare({
       <div className={s.headGap}>
         <CompareToolbar
           view={view}
+          thresholds={thresholds}
+          onThresholds={onThresholds}
           allRows={facts.rows}
           modified={modified}
           analysisApplied={analysisApplied}
@@ -198,10 +210,10 @@ export function TenderCompare({
           layout="fixed"
           caption={[
             `Показано ${visible.length} из ${facts.rows.length} позиций`,
-            `показатель «${METRIC_LABEL[view.mainMetric]}»`,
+            `основной показатель «${METRIC_LABEL[view.mainMetric]}»`,
             ROW_VIEW_LABEL[view.rowView].toLowerCase(),
             view.filters.length
-              ? `фильтров: ${view.filters.length} (применены до подытогов)`
+              ? `фильтров: ${view.filters.length}`
               : 'без фильтров',
           ].join(' · ')}
         >
@@ -304,6 +316,7 @@ export function TenderCompare({
                       key={row.position.id}
                       row={row}
                       view={view}
+                      thresholds={thresholds}
                       bids={bids}
                       sumWeight={facts.sumWeight}
                       bind={popup.bind}
@@ -313,7 +326,7 @@ export function TenderCompare({
                     />
                   )) : null}
 
-                  <TotalRow label="Итого" rows={rows} bids={bids} />
+                  <TotalRow label="Итого" rows={allRowsOfGroup(group)} bids={bids} metric={view.mainMetric} />
                 </tbody>
               );
             })
@@ -329,6 +342,7 @@ export function TenderCompare({
                     key={row.position.id}
                     row={row}
                     view={view}
+                    thresholds={thresholds}
                     bids={bids}
                     sumWeight={facts.sumWeight}
                     bind={popup.bind}
@@ -340,9 +354,9 @@ export function TenderCompare({
             </tbody>
           )}
 
-          {/* Итог по срезу — всегда из видимых строк, тем же счётом, что и
-              подытоги: два итогоа на одном экране спорить не имеют права. */}
-          {visible.length ? <TotalRow label="Итого по срезу" rows={visible} bids={bids} /> : null}
+          {/* Полный итог КП — единственное число: фильтром и свёрткой не
+              пересчитывается (§3 модели), потому складывается из всех позиций. */}
+          <TotalRow label="Итого" rows={facts.rows} bids={bids} metric={view.mainMetric} />
         </Table>
         </div>
       </div>

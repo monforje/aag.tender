@@ -1,0 +1,53 @@
+/* Окно настроек сравнения (пороги аналитики тендера). Панель <Popover> —
+   таблица под ней живёт и перекрашивается вслед за ручкой порога. */
+
+.body{
+  display: flex; flex-direction: column; gap: 12px;
+  width: 300px;
+}
+
+.row{ display: block; }
+
+.input{ text-align: right; }
+
+/* Голова строки коэффициента: поле + кнопка подсказки на одной линии.
+   Кнопка прижата к правому краю подписи, не к полю — спрашивают про СМЫСЛ
+   порога, а не про значение в боксе. */
+.k-head{ display: flex; align-items: end; gap: 4px; }
+.k-field{ flex: 1; }
+.k-help-toggle{
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; margin-bottom: 4px;
+  border-radius: var(--cu-radii-round);
+  color: var(--cu-content-tertiary);
+}
+.k-help-toggle:hover{ color: var(--cu-content-secondary); background: var(--cu-state-hover); }
+.k-help-toggle:focus-visible{ outline: var(--cu-focus-ring); outline-offset: 2px; }
+.k-help-toggle svg{ --icon-size: 16px; }
+
+/* Разбор коэффициента — цитата metrics.md §9: текст в потоке панели, не
+   hover-only, читается с клавиатуры и на таче. */
+.k-help{
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--cu-border-default);
+  border-radius: var(--cu-radii-2);
+  background: var(--cu-fill-subtle);
+  font-size: var(--cu-text-xs); line-height: 17px;
+  color: var(--cu-content-secondary);
+}
+.k-help b{ font-weight: var(--cu-font-weight-medium); color: var(--cu-content-primary); }
+.k-formula{
+  font-size: 11px; line-height: 16px;
+  font-weight: var(--cu-font-weight-medium);
+  color: var(--cu-content-primary);
+}
+.k-source{
+  color: var(--cu-content-tertiary);
+  font-style: italic;
+}
+
+.footer{
+  display: flex; justify-content: flex-end;
+  padding-top: 2px;
+}

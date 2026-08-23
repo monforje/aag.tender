@@ -7,9 +7,10 @@ import {
   PageHeader, Screen, ScreenPlaceholder, SecondaryHeader, type SecondaryTab,
 } from '@/shared/ui/Page';
 import {
-  applyTransition, MOCK_ROUND1, MOCK_ROUND2_FULL, MOCK_ROUND2_PARTIAL,
-  PRESETS, tenderById,
-  type AnalysisResult, type AnalysisTransition, type CompareView, type PresetId,
+  applyTransition, MOCK_ROUND1, MOCK_ROUND2_FULL,
+  MOCK_ROUND2_PARTIAL, PRESETS, SYSTEM_THRESHOLDS, tenderById,
+  type AnalysisResult, type AnalysisTransition, type CompareThresholds,
+  type CompareView, type PresetId,
 } from '@/entities/tender';
 import { useWorkspaceStore } from '@/entities/workspace';
 import { AI_DOCK_ID, AiTrigger, AnalysisDock } from '@/features/ai-analysis';
@@ -115,6 +116,10 @@ export function TenderPage() {
 
   /* Срез сравнения, ★ и подсветка — общий слой таблицы и дока. */
   const [view, setView] = useState<CompareView>({ preset: 'overview', ...PRESETS.overview });
+  /* Пороги аналитики — НАСТРОЙКИ ТЕНДЕРА (не константы кода): системный старт,
+     правятся в окне `⚙` на полосе сравнения. Живут рядом со срезом — URL их
+     не ловит по той же причине, что и фильтры реестра. */
+  const [thresholds, setThresholds] = useState<CompareThresholds>(SYSTEM_THRESHOLDS);
   const [starred, setStarred] = useState<string[]>([]);
   const [focusRowId, setFocusRowId] = useState<string | null>(null);
   /* Открытость панели — состояние КАРКАСА (колонка рядом с main), не страницы:
@@ -244,6 +249,8 @@ export function TenderPage() {
             view={view}
             onPreset={handleManualPreset}
             onPatch={handleManualPatch}
+            thresholds={thresholds}
+            onThresholds={setThresholds}
             starred={starred}
             onToggleStar={toggleStar}
             focusRowId={focusRowId ?? flash?.rowId ?? null}
@@ -291,6 +298,7 @@ export function TenderPage() {
           onClose={closeAi}
           comparison={dataset}
           prevComparison={prevDataset}
+          thresholds={thresholds}
           rev={datasetId}
           revNote={CHANGE_NOTE[datasetId]}
           onTransition={handleTransition}

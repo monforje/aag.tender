@@ -20,10 +20,10 @@
 
 import { plural } from '@/shared/lib/plural';
 import {
-  analyzeComparison, cellMark, decimal, deviationPct, flatten, hasAnomaly,
-  medianOf, money, POTENTIAL_MIN, rankBids, snapshotRound, SPREAD_NOTICEABLE, sumOf,
-  type CompareMetricId, type ComparePosition, type Comparison, type Contractor,
-  type PresetId, type RowFacts,
+  analyzeComparison, cellMark, decimal, deviationPct, flatten,
+  medianOf, money, POTENTIAL_MIN, rankBids, snapshotRound, sumOf,
+  type ComparePosition, type CompareThresholds, type Comparison, type Contractor,
+  type PresetId, type RowFacts, type TransitionMetricId,
 } from './comparison';
 
 /* ── контракт вывода ──────────────────────────────────────────────────────── */
@@ -50,7 +50,7 @@ export interface AnalysisEvidence {
 
 export interface AnalysisTransition {
   preset: PresetId;
-  requiredMetrics?: CompareMetricId[];
+  requiredMetrics?: TransitionMetricId[];
   focus?: { positionId?: string; contractorId?: string };
 }
 
@@ -121,11 +121,17 @@ const wref = (p: ComparePosition): AnalysisRef => ({ kind: 'work', id: p.id, lab
 /**
  * Строит разбор по снимку КП. `prev` — снимок предыдущего раунда: без него
  * бюджет и объём круга честно читаются «нет данных» вместо выдуманных чисел.
+ * `thresholds` — текущие пороги тендера: они каскадируют в сводку и метки
+ * (изменение порога не обесценивает данные, но меняет разбор).
  *
  * Один вызов — один результат; диалога здесь нет по решению владельца
  * (05 §1). Возвращает null только когда разбирать решительно нечего.
  */
-export function buildAnalysis(comparison: Comparison, prev?: Comparison): AnalysisResult | null {
+export function buildAnalysis(
+  comparison: Comparison,
+  prev: Comparison | undefined,
+  thresholds: CompareThresholds,
+): AnalysisResult | null {
   const { groups, contractors } = comparison;
   if (!groups.length || !contractors.length) return null;
 
@@ -135,7 +141,7 @@ export function buildAnalysis(comparison: Comparison, prev?: Comparison): Analys
   const hasPrev = rounds.some((r) => r.number === roundNumber - 1);
 
   const positions = flatten(groups);
-  const facts = analyzeComparison(groups, contractors);
+  const facts = analyzeComparison(groups, contractors, thresholds);
   const bids = rankBids(contractors, positions);
   const byId = new Map(contractors.map((c) => [c.id, c]));
   const invitedIds = round?.invited?.length ? round.invited : contractors.map((c) => c.id);
@@ -396,7 +402,7 @@ export function buildAnalysis(comparison: Comparison, prev?: Comparison): Analys
     }
 
     const spreadTotals = (bids[bids.length - 1].sum - bids[0].sum) / (bids[0].sum || 1) * 100;
-    const dense = spreadTotals < SPREAD_NOTICEABLE;
+    const dense = spreadTotals < thresholds.spreadNoticeable;
     overview.push({
       id: 'to:field', section: 'base_review', subsection: 'tender_overview',
       title: `Поле ${dense ? 'плотное' : 'раздёрнуто'}: итоги расходятся на ${Math.round(spreadTotals)} %`,
@@ -453,17 +459,20 @@ export function buildAnalysis(comparison: Comparison, prev?: Comparison): Analys
   }
 
   /* Аномалии: сначала пары с особыми условиями — они опаснее для поспешного
-     вывода (05 §4.3.3); дальше — по величине отклонения. */
+     вывода (05 §4.3.3); дальше — по величине отклонения. Флаг ячейки
+     ОБЪЕДИНЁННЫЙ (вердикт данных или формула k), причина берётся из данных:
+     у пары, найденной только формулой, слота причины нет — модель говорит
+     стандартной фразой «запросить обоснование». */
   const anomalyPairs: Array<{ row: RowFacts; c: Contractor; reason: string; dev: number }> = [];
   for (const row of facts.rows) {
     if (row.position.removed || !row.anomaly || row.median === null) continue;
     for (const c of contractors) {
-      const mark = cellMark(c, row.position.id);
-      if (!hasAnomaly(mark)) continue;
+      const bid = row.bids.find((b) => b.contractorId === c.id);
+      if (!bid?.anomaly) continue;
       const price = c.prices[row.position.id];
       if (price === undefined) continue;
       anomalyPairs.push({
-        row, c, reason: mark.anomaly ?? '', dev: deviationPct(price, row.median),
+        row, c, reason: cellMark(c, row.position.id).anomaly ?? '', dev: deviationPct(price, row.median),
       });
     }
   }

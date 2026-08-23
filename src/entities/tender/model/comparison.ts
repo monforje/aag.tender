@@ -22,39 +22,89 @@
  *  ОТСУТСТВИЕ КЛЮЧА — ЭТО «ПОЗИЦИЯ НЕ ЗАКРЫТА», а не ноль. Ноль означал бы
  *  «готовы сделать бесплатно» и попал бы и в сумму, и в разброс.
  *
- *  ПОМЕТКИ (§4.6 аудита) ПРИХОДЯТ ГОТОВЫМИ В ДАННЫХ — макет их рисует, не
- *  вычисляет. Исключений ровно два, и оба считаются ЗДЕСЬ, в одном проходе
+ *  ПОМЕТКИ ЯЧЕЕК ПРИХОДЯТ ГОТОВЫМИ В ДАННЫХ — макет их рисует, не вычисляет
+ *  (§5 аудита): аномальная цена с причиной, потенциал за единицу, отказ.
+ *  Производные от порогов состояния считаются ЗДЕСЬ, в одном проходе
  *  `analyzeComparison()`, чтобы таблица, фильтры, счётчики и попап читали
- *  одни и те же числа:
+ *  одни и те же числа. Их четыре:
  *  - «минимум» присуждается лучшей НЕаномальной цене, и только когда есть
  *    ЧТО сравнивать (≥2 расценки): единственное КП — отсутствие конкуренции,
- *    а не победа; аномально дешёвое выбывает из соревнования за минимум,
- *    но остаётся в расчёте разброса;
- *  - метка разброса выводится из вычисленного процента порогом, а не приходит
- *    рядом с ним: один смысл — один порог, иначе число спорит с подписью. */
+ *    а не победа;
+ *  - метка разброса выводится из процента порогом, а не приходит рядом с ним;
+ *  - аномальность ЯЧЕЙКИ объединяет внешнюю пометку с формулой metrics.md §9
+ *    (`dᵢ ≥ k × median(dᵢ остальных)`): коэффициент — настройка тендера,
+ *    вердикт данных сильнее формулы, а причина остаётся полем данных;
+ *  - «ключевая» — ручная пометка закупщика ИЛИ правило «топ по весу до
+ *    накопительной доли keyShare» (metrics.md §8).
+ *
+ *  МОДЕЛЬ ЯЧЕЙКИ И КОНТРОЛОВ — источника 22.08.2026
+ *  (`ct-workspace-model.md`): основной показатель ровно один (селект),
+ *  отклонение и ставка — СПУТНИКИ стоимости, а не равноправные показатели.
+ *  Стоимость присутствует в ячейке всегда; состав строк ячейки кодирует
+ *  `cellLines()`, пресеты и переход из анализа выражаются через те же оси.
+ *  «Набора показателей с меткой главного» больше нет. */
 
 import type { Tone } from '@/shared/ui/Badge';
 import type { IconName } from '@/shared/ui/Icon';
 
-/** Пороги формул. Числами-константами, а не магией по месту: фильтр, бейдж
- *  ячейки и красная цифра обязаны делить ОДИН порог (правило [R4] аудита),
- *  и разъехаться им неоткуда.
+/** Пороги аналитики — НАСТРОЙКИ ТЕНДЕРА, а не константы кода (решение
+ *  владельца 22.08.2026: пороги принадлежат тендеру, личных и организационных
+ *  дефолтов нет). У каждого — системное стартовое значение; специалист правит
+ *  их в том тендере, где смотрит. Изменение порога каскадирует в метки,
+ *  фильтры, сводку и контекст ИИ, но НЕ меняет tender_revision и не
+ *  обесценивает данные.
  *
- *  Ярусы разброса — ПРОДУКТОВЫЕ значения из канона `metrics.md` §7:
- *  до 15 % обычный, 15–40 % заметный, от 40 % высокий (решение владельца,
- *  22.08.2026). Аномалия в продукте считается формулой «k × медиана отклонений»,
- *  k = 2; здесь она приходит готовой пометкой в данных, формула не дублируется.
- *
- *  Два порога ниже в metrics.md НЕ определены — это демо-устройства нашего
- *  экрана, а не продуктовые константы; менять их без повода нельзя, но и
- *  ссылаться на них как на канон тоже. */
-export const SPREAD_HIGH = 40;
-export const SPREAD_NOTICEABLE = 15;
-/** Допуск отклонения от медианы строки, ±% — симметричный: «дешевле на 8 %»
- *  такой же повод спросить, как «дороже» (несимметричный порог демо — дефект). */
+ *  Все функции расчёта принимают пороги явным аргументом — значений по
+ *  умолчанию нет по той же причине, что и у прочих аргументов файла. */
+export interface CompareThresholds {
+  /** Разброс «заметный», % — мягкая отметка строки. */
+  spreadNoticeable: number;
+  /** Разброс «высокий», % — тег, подсветка, фильтр. */
+  spreadHigh: number;
+  /** Коэффициент аномалии k: ячейка помечается, если dᵢ ≥ k × median(dᵢ
+   *  остальных). Единственный порог-КОЭФФИЦИЕНТ — в окне настроек ему
+   *  обязательна подсказка с разбором (metrics.md §9). */
+  anomalyK: number;
+  /** Доля ключевых работ, % — накопительная доля веса до отсечки. */
+  keyShare: number;
+}
+
+export const SYSTEM_THRESHOLDS: CompareThresholds = {
+  /** Ярусы разброса — продуктовые значения metrics.md §7. */
+  spreadNoticeable: 15,
+  spreadHigh: 40,
+  /** ОТСТУПЛЕНИЕ ОТ КАНОНА, записанное сознательно. В metrics.md §9 старт
+   *  k = 2, но при РОВНО ТРЁХ участниках формула вырождается: медиана двух
+   *  «остальных» отклонений равна их полусумме, и порог k = 2 превращается
+   *  во второе по величине отклонение — худшая ячейка КАЖДОЙ строки получает
+   *  пометку всегда, независимо от данных. На полях из трёх КП честный старт —
+   *  3: помечается только явно выпадающий (d_max ≥ 1,5 второго). Вопрос о
+   *  калибровке на реальных полях — владельцу; см. COMPARE-MODEL-AUDIT.md. */
+  anomalyK: 3,
+  keyShare: 80,
+};
+
+/** Защита окна настроек от бессмыслицы: заметный не выше высокого, k и доли —
+ *  в осмысленных границах. Прогонять через неё КАЖДОЕ изменение порога:
+ *  незажатое значение тихо каскадировало бы во все метки экрана. */
+export const clampThresholds = (t: CompareThresholds): CompareThresholds => {
+  const num = (v: number, min: number, max: number): number =>
+    Math.min(max, Math.max(min, Number.isFinite(v) ? v : min));
+  const spreadHigh = num(t.spreadHigh, 1, 100);
+  return {
+    spreadNoticeable: num(t.spreadNoticeable, 0, spreadHigh),
+    spreadHigh,
+    anomalyK: num(t.anomalyK, 1, 10),
+    keyShare: num(t.keyShare, 1, 100),
+  };
+};
+
+/** Допуск отклонения от медианы строки для ФИЛЬТРА «Дороже медианы», ±%
+ *  симметрично по смыслу, положительно по знаку. Это устройство фильтра, а не
+ *  настройка из окна: в перечне порогов модели его нет. */
 export const DEV_TOLERANCE = 5;
 /** «Есть потенциал» с порогом, ₽ по строке: без него предикат пропускает все
- *  строки подряд и фильтр — no-op (§4.4). */
+ *  строки подряд и фильтр — no-op (§4.4). Тоже устройство фильтра. */
 export const POTENTIAL_MIN = 50_000;
 
 /* ═══════════════════ РАУНДЫ ТОРГОВ ═══════════════════
@@ -80,8 +130,8 @@ export interface ComparePosition {
   title: string;
   qty: number;
   unit: string;
-  /** Ключевая позиция — ручная пометка закупщика или правило «топ по весу»;
-   *  решению о строке, двигающей итог, грош цена без ответственного за него. */
+  /** Ручная пометка закупщика. Правило «топ по весу» добавляет ключевые
+   *  поверх ручных (`analyzeComparison`): одно другому не мешает. */
   key?: boolean;
   /** Объём до корректировки сметы: дифф против опубликованного показывают
    *  ОБА значения (`920 → 840`), молчаливая подмена врала бы истории. */
@@ -96,7 +146,9 @@ export interface ComparePosition {
  *  торговая оценка, отказ — решение подрядчика (§5 аудита). */
 export interface CellMark {
   /** Причина аномалии — обязательна при ней же: строку невозможно объяснить
-   *  подрядчику без причины, поэтому попап показывает её первым блоком. */
+   *  подрядчику без причины, поэтому попап показывает её первым блоком.
+   *  У ячейки, помеченной ТОЛЬКО формулой (без внешнего вердикта), причины
+   *  нет — попап даёт стандартную фразу вместо неё. */
   anomaly?: string;
   /** Заявленный запас торга, ₽ ЗА ЕДИНИЦУ — как и цена: сумма по строке
    *  выводится умножением на общий объём. */
@@ -316,10 +368,19 @@ const MONEY = new Intl.NumberFormat('ru-RU', {
   style: 'currency', currency: 'RUB', maximumFractionDigits: 0,
 });
 const DECIMAL = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 1 });
+const COMPACT = new Intl.NumberFormat('ru-RU', {
+  style: 'currency', currency: 'RUB',
+  notation: 'compact', maximumFractionDigits: 0,
+});
 
 /** Рубли без копеек: в сравнении КП значащие разряды — миллионы, и копейки
  *  только удлиняют колонку. */
 export const money = (value: number): string => MONEY.format(value);
+/** Деньги с сокращением порядков БЕЗ дробных — формат примеров модели ячейки
+ *  (`164 тыс. ₽`): главный показатель потенциального режима длинным числом
+ *  ломает строку, а точность после первой значащей цифры там ничего не
+ *  решает. */
+export const moneyCompact = (value: number): string => COMPACT.format(value);
 /** Число с запятой и без хвоста нулей — объёмы (86,5 т) и проценты (7,9 %). */
 export const decimal = (value: number): string => DECIMAL.format(value);
 
@@ -330,8 +391,11 @@ export const decimal = (value: number): string => DECIMAL.format(value);
 export interface RowFacts {
   position: ComparePosition;
   /** Закрытые расценки в порядке колонок — ВКЛЮЧАЯ аномальные: разброс
-   *  считается по всем ценам, минимум ищет обходной путь мимо них. */
-  bids: Array<{ contractorId: string; price: number }>;
+   *  считается по всем ценам, минимум ищет обходной путь мимо них.
+   *  `anomaly` — ОБЪЕДИНЁННЫЙ флаг ячейки: внешний вердикт из `marks`
+   *  или результат формулы k (метки разброса и минимума живут отдельными
+   *  полями строки, аномальность — свойство ячейки). */
+  bids: Array<{ contractorId: string; price: number; anomaly: boolean }>;
   median: number | null;
   /** Разброс от минимума, %; меньше двух расценок — null, не ноль. */
   spread: number | null;
@@ -352,6 +416,9 @@ export interface RowFacts {
   /** Вес строки — сумма по самому дорогому предложению: «во сколько обойдётся
    *  в худшем случае», оценка риска, а не факта. У снятой строки вес 0. */
   weight: number;
+  /** Строка попала в ключевые ПРАВИЛОМ «топ по весу до накопительной доли
+   *  keyShare» — независимо от ручной пометки `position.key`. */
+  keyDerived: boolean;
 }
 
 /** Медиана — по всем закрытым расценкам, включая аномальные: она описывает
@@ -388,7 +455,31 @@ export const cellMark = (contractor: Contractor, positionId: string): CellMark =
 
 export const hasAnomaly = (mark: CellMark): boolean => typeof mark.anomaly === 'string';
 
-export function analyzeComparison(groups: PositionGroup[], contractors: Contractor[]): ComparisonFacts {
+/** Формула аномалии metrics.md §9: ячейка помечается, если её отклонение от
+ *  медианы превышает k × медиану отклонений ОСТАЛЬНЫХ — выброс ищется
+ *  относительно того, как расходятся другие участники этой же строки.
+ *  Минимум три расценки; при нулевой медиане и при нулевой медиане отклонений
+ *  остальных действуют правила канона. Возвращает флаг НА КАЖДУЮ цену (в
+ *  порядке входа). */
+function deriveAnomalies(prices: number[], k: number): boolean[] {
+  const flags = prices.map(() => false);
+  if (prices.length < 3) return flags;
+  const median = medianOf(prices);
+  if (median === null || median === 0) return flags;
+  const devs = prices.map((p) => Math.abs(p / median - 1));
+  devs.forEach((d, i) => {
+    const others = devs.filter((_, j) => j !== i);
+    const medOthers = medianOf(others)!;
+    flags[i] = medOthers === 0 ? d > 0 : d >= k * medOthers;
+  });
+  return flags;
+}
+
+export function analyzeComparison(
+  groups: PositionGroup[],
+  contractors: Contractor[],
+  thresholds: CompareThresholds,
+): ComparisonFacts {
   const byContractor = new Map(contractors.map((c) => [c.id, c]));
   const rows: RowFacts[] = groups.flatMap((group) => group.positions.map((position) => {
     const closed = contractors
@@ -397,24 +488,34 @@ export function analyzeComparison(groups: PositionGroup[], contractors: Contract
 
     const prices = closed.map((b) => b.price);
     const min = Math.min(...prices);
-    const spread = prices.length > 1 ? ((Math.max(...prices) - min) / min) * 100 : null;
+    const spreadPct = prices.length > 1 ? ((Math.max(...prices) - min) / min) * 100 : null;
 
-    /* Минимум — лучшая НЕаномальная цена при живой конкуренции (§4.6). */
-    const fair = closed.filter((b) => !hasAnomaly(cellMark(byContractor.get(b.contractorId)!, position.id)));
+    /* Аномальность ячейки: внешний вердикт ИЛИ формула k. Оба источника
+       сходятся в одном флаге — таблица, фильтр и попап не спорят. */
+    const derived = deriveAnomalies(prices, thresholds.anomalyK);
+    const bids = closed.map((b, i) => ({
+      contractorId: b.contractorId,
+      price: b.price,
+      anomaly: derived[i]
+        || hasAnomaly(cellMark(byContractor.get(b.contractorId)!, position.id)),
+    }));
+
+    /* Минимум — лучшая НЕаномальная цена при живой конкуренции. */
+    const fair = bids.filter((b) => !b.anomaly);
     const bestId = fair.length && prices.length > 1
       ? fair.reduce((best, b) => (b.price < best.price ? b : best)).contractorId
       : null;
 
     return {
       position,
-      bids: closed,
+      bids,
       median: medianOf(prices),
-      spread,
-      spreadTag: spread === null ? null
-        : spread >= SPREAD_HIGH ? 'high'
-          : spread >= SPREAD_NOTICEABLE ? 'noticeable' : 'none',
+      spread: spreadPct,
+      spreadTag: spreadPct === null ? null
+        : spreadPct >= thresholds.spreadHigh ? 'high'
+          : spreadPct >= thresholds.spreadNoticeable ? 'noticeable' : 'none',
       bestId,
-      anomaly: closed.some((b) => hasAnomaly(cellMark(byContractor.get(b.contractorId)!, position.id))),
+      anomaly: bids.some((b) => b.anomaly),
       declined: contractors.some((c) => cellMark(c, position.id).declined === true),
       missing: !position.removed
         && contractors.some((c) => c.prices[position.id] === undefined && cellMark(c, position.id).declined !== true),
@@ -422,10 +523,25 @@ export function analyzeComparison(groups: PositionGroup[], contractors: Contract
         (c) => (cellMark(c, position.id).potential ?? 0) * position.qty,
       )),
       weight: position.removed || !prices.length ? 0 : Math.max(...prices) * position.qty,
+      keyDerived: false,
     };
   }));
 
+  /* Ключевые по правилу «топ по весу»: минимальное число самых тяжёлых строк,
+     чья накопительная доля достигает keyShare; строка отсечки включается
+     (metrics.md §8). Снятые и неоценённые строки веса не имеют — в набор не
+     попадают. Ручные пометки `position.key` добавляются ПОВЕРХ этого. */
   const sumWeight = rows.reduce((acc, r) => acc + r.weight, 0);
+  if (sumWeight > 0) {
+    let acc = 0;
+    for (const row of [...rows].sort((a, b) => b.weight - a.weight)) {
+      if (row.weight <= 0) break;
+      acc += row.weight;
+      row.keyDerived = true;
+      if ((acc / sumWeight) * 100 >= thresholds.keyShare) break;
+    }
+  }
+
   return { rows, byId: new Map(rows.map((r) => [r.position.id, r])), sumWeight };
 }
 
@@ -446,7 +562,7 @@ export const PREDICATES: ReadonlyArray<{ id: PredicateId; label: string }> = [
  *  бейдж ячейки (±DEV_TOLERANCE): один смысл — один порог ([R4]). */
 export function predicatePasses(id: PredicateId, facts: RowFacts): boolean {
   switch (id) {
-    case 'key': return facts.position.key === true;
+    case 'key': return facts.position.key === true || facts.keyDerived;
     case 'spread': return facts.spreadTag === 'high';
     case 'anomaly': return facts.anomaly;
     case 'pot': return facts.maxPot >= POTENTIAL_MIN;
@@ -465,29 +581,50 @@ export const filterRows = (rows: RowFacts[], filters: PredicateId[]): RowFacts[]
 export const predicateCount = (id: PredicateId, rows: RowFacts[]): number =>
   rows.filter((row) => predicatePasses(id, row)).length;
 
-/* ═══════════════════ СОСТОЯНИЕ ЭКРАНА И ПРЕСЕТЫ ═══════════════════ */
+/* ═══════════ СОСТОЯНИЕ ЭКРАНА: ОСИ МОДЕЛИ ЯЧЕЙКИ ═══════════ */
 
-export type CompareMetricId = 'price' | 'deviation' | 'potential';
+/** Основные показатели ячейки — закрытое перечисление по правилу
+ *  размерности (источник §1): основным может быть только то, что суммируется
+ *  в подытог. Отклонение — характеристика стоимости (%), ставка — производная
+ *  (₽/ед.), обе живут спутниками, а не здесь. */
+export type CompareMetricId = 'cost' | 'potential';
+
+/** Спутники стоимости — галочки панели таблицы. Описывают стоимость, поэтому
+ *  НЕ зависят от селекта основного: она в ячейке есть всегда. */
+export type SatelliteId = 'deviation' | 'rate';
+
+export const SATELLITE_LABEL: Record<SatelliteId, string> = {
+  deviation: 'Отклонение',
+  rate: 'Ставка',
+};
+
 export type RowViewId = 'sections' | 'weight' | 'potential';
 
 export interface CompareView {
   preset: PresetId;
   mainMetric: CompareMetricId;
-  extraMetrics: CompareMetricId[];
+  showDeviation: boolean;
+  showRate: boolean;
   rowView: RowViewId;
   filters: PredicateId[];
 }
 
 export type PresetId = 'overview' | 'bidding' | 'anomalies';
 
-/** Пресет — не фильтр, а сохранённая комбинация ЧЕТЫРЁХ осей состояния:
- *  показатель ячейки, подстрочники, вид строк, активные предикаты. Один клик —
- *  ответ на один вопрос: что вообще предложили → где можно отжать → где врут.
- *  Присваивает оси ЦЕЛИКОМ и своей логики не имеет. */
+/** Пресет — не фильтр, а сохранённая комбинация ВСЕХ осей модели: основной
+ *  показатель, спутники, вид строк, активные предикаты. Один клик — ответ на
+ *  один вопрос: что вообще предложили → где можно отжать → где врут.
+ *  Присваивает оси ЦЕЛИКОМ и своей логики не имеет: всё, что пресет делает,
+ *  повторяется руками теми же контролами (источник §2).
+ *
+ *  «Аномалии»: основной «Отклонение» упразднён вместе с моделью наборов —
+ *  режим собирается из стоимости с галочкой отклонения и фильтров разброса и
+ *  аномалий; порядок строк отдаётся весу, потому что риск смотрят сверху вниз
+ *  по влиянию на итог. */
 export const PRESETS: Record<PresetId, Omit<CompareView, 'preset'>> = {
-  overview: { mainMetric: 'price', extraMetrics: [], rowView: 'sections', filters: [] },
-  bidding: { mainMetric: 'potential', extraMetrics: ['price'], rowView: 'potential', filters: ['pot'] },
-  anomalies: { mainMetric: 'deviation', extraMetrics: ['price'], rowView: 'weight', filters: ['anomaly'] },
+  overview: { mainMetric: 'cost', showDeviation: false, showRate: false, rowView: 'sections', filters: [] },
+  bidding: { mainMetric: 'potential', showDeviation: false, showRate: false, rowView: 'potential', filters: ['pot'] },
+  anomalies: { mainMetric: 'cost', showDeviation: true, showRate: false, rowView: 'weight', filters: ['spread', 'anomaly'] },
 };
 
 export const PRESET_LABEL: Record<PresetId, string> = {
@@ -497,50 +634,87 @@ export const PRESET_LABEL: Record<PresetId, string> = {
 };
 
 export const METRIC_LABEL: Record<CompareMetricId, string> = {
-  price: 'Цена', deviation: 'Отклонение', potential: 'Потенциал',
+  cost: 'Стоимость', potential: 'Потенциал',
 };
 
 export const ROW_VIEW_LABEL: Record<RowViewId, string> = {
   sections: 'По разделам', weight: 'По весу', potential: 'По потенциалу',
 };
 
-/** Показатели ячейки: главный крупно, остальные подстрочником, максимум три. */
-export const shownMetrics = (view: CompareView): CompareMetricId[] =>
-  [...new Set([view.mainMetric, ...view.extraMetrics])].slice(0, 3);
+/** Строка ячейки в терминах модели: главное число, база-стоимость или
+ *  справочная ставка. */
+export type CellLine =
+  | { kind: 'main'; metric: CompareMetricId }
+  | { kind: 'base' }
+  | { kind: 'rate' };
 
-/** Переход «анализ → таблица» (06-ai-contract.md §5, §7): пресет задаёт
- *  главный показатель, вид строк и фильтр; required_metrics лишь ДОБАВЛЯЕТ
- *  показатели, нужные выводу. Merge-семантика: набор пользователя объединяется
- *  с набором пресета и обязательными, при лимите трёх вытесняются самые старые
- *  вторичные подписи — новый главный и обязательные сохраняются. */
+/** Состав строк ячейки — единственное место, знающее правила источника §1:
+ *
+ *  1. основной показатель — ровно одна первая строка;
+ *  2. стоимость присутствует всегда: если основной не она — второй строкой
+ *     как база (константа режима, а не опция);
+ *  3. отклонение липнет к стоимости суффиксом на той строке, где она стоит;
+ *  4. ставка — последней строкой, по галочке;
+ *  5. порядок ФИКСИРОВАН и не зависит от того, в какой последовательности
+ *     что включали: соседние колонки обязаны сравниваться построчно;
+ *  6. подписей словами нет — различают порядок строк и порядок величин.
+ *
+ *  Рендер читает план, а не придумывает состав сам: так правило №5 нельзя
+ *  нарушить локальной правкой ячейки. */
+export function cellLines(view: CompareView): { lines: CellLine[]; deviationOn: 'main' | 'base' | null } {
+  const lines: CellLine[] = [{ kind: 'main', metric: view.mainMetric }];
+  const deviationOn = view.showDeviation
+    ? view.mainMetric === 'cost' ? 'main' : 'base'
+    : null;
+  if (view.mainMetric !== 'cost') lines.push({ kind: 'base' });
+  if (view.showRate) lines.push({ kind: 'rate' });
+  return { lines, deviationOn };
+}
+
+/** Словарь показателей протокола ИИ (06-ai-contract.md §5): контракт старше
+ *  новой модели ячейки и говорит прежними именами. Отображение на оси — в
+ *  `applyTransition`; до переноса протокола в канон семантика наша. */
+export type TransitionMetricId = 'cost' | 'price' | 'deviation' | 'potential';
+
+/** Переход «анализ → таблица» (06-ai-contract.md §5, §7): пресет задаёт все
+ *  оси целиком; required_metrics лишь ДОБАВЛЯЕТ то, что нужно для прочтения
+ *  вывода. Отображение старого словаря контракта на новые оси:
+ *  - `price` / `cost` — no-op: стоимость в ячейке есть всегда (§1, правило 2);
+ *  - `deviation` — включает галочку отклонения;
+ *  - `potential` — ставит потенциал ОСНОВНЫМ: в новой модели он виден только
+ *    так, отдельного спутника у него нет. */
 export function applyTransition(
   view: CompareView,
-  transition?: { preset: PresetId; requiredMetrics?: CompareMetricId[] },
+  transition?: { preset: PresetId; requiredMetrics?: TransitionMetricId[] },
 ): CompareView {
   if (!transition) return view;
   const base = PRESETS[transition.preset];
-  const extra = [...new Set([...base.extraMetrics, ...(transition.requiredMetrics ?? [])])]
-    .filter((m) => m !== base.mainMetric)
-    .slice(0, 2);
-  return {
+  const next: CompareView = {
     preset: transition.preset,
     mainMetric: base.mainMetric,
-    extraMetrics: extra,
+    showDeviation: base.showDeviation,
+    showRate: base.showRate,
     rowView: base.rowView,
     filters: [...base.filters],
   };
+  for (const metric of transition.requiredMetrics ?? []) {
+    if (metric === 'deviation') next.showDeviation = true;
+    if (metric === 'potential') next.mainMetric = 'potential';
+  }
+  return next;
 }
 
 const sameSet = (a: readonly string[], b: readonly string[]): boolean =>
   a.length === b.length && a.every((x) => b.includes(x));
 
-/** Ушли ли от базы пресета хоть по одной из четырёх осей. Молча терять это
- *  нельзя: пользователь обязан видеть, что смотрит не на «Обзор», а на свою
+/** Ушли ли от базы пресета хоть по одной из осей. Молча терять это нельзя:
+ *  пользователь обязан видеть, что смотрит не на «Обзор», а на свою
  *  собственную нарезку. */
 export const isModifiedView = (view: CompareView): boolean => {
   const base = PRESETS[view.preset];
   return view.mainMetric !== base.mainMetric
+    || view.showDeviation !== base.showDeviation
+    || view.showRate !== base.showRate
     || view.rowView !== base.rowView
-    || !sameSet(view.filters, base.filters)
-    || !sameSet(view.extraMetrics, base.extraMetrics);
+    || !sameSet(view.filters, base.filters);
 };

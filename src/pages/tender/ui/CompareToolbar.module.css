@@ -33,6 +33,21 @@
 .trigger__icon,
 .trigger__caret{ color: var(--cu-content-tertiary); --icon-size: 14px; }
 
+/* ── секция спутников стоимости ────────────────────────────────────────────
+   Две пары «свитч + подпись» одной группой: постоянно видимы, от селекта
+   основного не зависят (описывают стоимость, а она в ячейке есть всегда). */
+.satellites{
+  display: inline-flex; align-items: center; gap: 12px;
+  height: 28px; padding: 0 10px;
+  border-radius: var(--cu-radii-3);
+}
+.satellite{
+  display: inline-flex; align-items: center; gap: 6px;
+  cursor: pointer;
+  font-size: 13px; white-space: nowrap;
+  color: var(--cu-content-secondary);
+}
+
 /* ── чип «Изменён · Сброс» (Д.2) ───────────────────────────────────────────
    Состояние ушло от базы пресета — молча не теряем. Капсула тона info:
    это факт о состоянии, а не тревога. */

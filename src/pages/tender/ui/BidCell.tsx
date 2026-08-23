@@ -1,50 +1,54 @@
 import { type ReactNode } from 'react';
 import { cx } from '@/shared/lib/cx';
 import {
-  cellMark, DEV_TOLERANCE, decimal, deviationPct, hasAnomaly, money, shownMetrics,
-  SPREAD_HIGH,
-  type CompareView, type Contractor, type RowFacts,
+  cellLines, cellMark, decimal, deviationPct, hasAnomaly, money, moneyCompact,
+  type CellLine, type CompareThresholds, type CompareView, type Contractor,
+  type RowFacts,
 } from '@/entities/tender';
 import type { CellPopupBind, CellPopupData } from '@/shared/ui/CellPopup';
 import { tableCell } from '@/shared/ui/Table';
 import { Icon } from '@/shared/ui/Icon';
 import { pctSigned } from '../model/compareFormat';
-import { CoinMark, MedMark } from './assets';
+import { CoinMark } from './assets';
 import s from './TenderCompare.module.css';
 
 /**
- * Ячейка КП: цена одного подрядчика в одной позиции строки сравнения.
+ * Ячейка КП: показатели одного подрядчика по одной работе.
  *
  * КОГДА:  в хвосте каждой строки <CompareRow> — по одной на поданное КП.
  * НЕ ДЛЯ: колонки «Разброс» (см. SpreadCell) и сводки по подрядчику
- *         (см. ContractorCard) — здесь только ОДНА расценка и её пометки.
+ *         (см. ContractorCard).
  *
- * UX:     ГЛАВНОЕ ЧИСЛО ячейки живёт одной строкой, под ним удельная цена
- *         и дополнительные показатели пресета (максимум три). ПОМЕТКИ ТИХИЕ
- *         В ПОКОЕ: зелёный штамп «МИН» в правом верхнем углу ячейки,
- *         монета запаса торга, леденец «дороже медианы», штриховка аномалии
- *         отвечают на вопрос «куда смотреть»; «почему так» объясняет общий
- *         попап таблицы.
- *         Минимум живёт ТОЛЬКО в режиме «Цена» и только у лучшей неаномальной
- *         цены при живой конкуренции (§2, §4.6 аудита). Леденец — только когда
- *         смысл не занят ценником или штриховкой: второй глиф про то же был бы
- *         шумом.
- *         ОТКАЗ И ПРОБЕЛ — РАЗНЫЕ СОСТОЯНИЯ: отказ капсулой нейтрального тона
- *         (решение подрядчика; красить его в danger — врать о природе),
- *         отсутствие цены — тире с пунктиром (дыра в КП; отсутствие ключа —
- *         не ноль).
+ * СОСТАВ СТРОК задаёт `cellLines()` (модель ячейки, источник §1): основной
+ *         показатель первой строкой; стоимость присутствует ВСЕГДА — если
+ *         основной не она, второй строкой как база; отклонение липнет к
+ *         стоимости суффиксом на той же строке; ставка — последней, по
+ *         галочке. Подписей словами нет: строки различают порядок и порядок
+ *         величин, режим называется в панели («Показано: …»).
+ *
+ * UX:     ПОМЕТКИ ТИХИЕ В ПОКОЕ И НЕ ЗАВИСЯТ ОТ РЕЖИМА: штамп «МИН» стоит
+ *         всегда на минимуме стоимости позиции — подсветка «лучшая» вынута
+ *         из селекта сознательно (§3 источника), монета запаса торга,
+ *         штриховка аномалии и пунктир пробела данных отвечают на вопрос
+ *         «куда смотреть»; «почему так» объясняет общий попап таблицы.
+ *         Леденец «дороже медианы» упразднён вместе с моделью наборов:
+ *         сигнал отклонения теперь живёт суффиксом по галочке.
+ *         ОТКАЗ И ПРОБЕЛ — РАЗНЫЕ СОСТОЯНИЯ: отказ капсулой нейтрального тона,
+ *         отсутствие цены — тире с пунктиром (отсутствие ключа — не ноль).
  * A11Y:   каждый триггер попапа — кнопка со своим именем; у аномалии цель —
- *         содержимое ячейки, а не сама ячейка: фокусная цель обязана быть
- *         интерактивным элементом. Payload попапов собирается готовым —
- *         ячейка ничего не делегирует счёт.
+ *         содержимое ячейки. Payload попапов собирается готовым — ячейка
+ *         ничего не делегирует счёт.
  *
  * @example
- * <BidCell row={row} contractor={bid.contractor} view={view} bind={popup.bind} />
+ * <BidCell row={row} contractor={bid.contractor} view={view}
+ *          thresholds={thresholds} bind={popup.bind} />
  */
-export function BidCell({ row, contractor, view, bind, note, flash }: {
+export function BidCell({ row, contractor, view, thresholds, bind, note, flash }: {
   row: RowFacts;
   contractor: Contractor;
   view: CompareView;
+  /** Пороги тендера: нормировка метра попапа делит их с фильтрами и легендой. */
+  thresholds: CompareThresholds;
   bind: CellPopupBind;
   /** Комментарий разбора к этой ячейке («почему важно / что делать»).
    *  Приходит только ПОСЛЕ запуска анализа; до него попап показывает одни
@@ -94,57 +98,46 @@ export function BidCell({ row, contractor, view, bind, note, flash }: {
 
   const qty = position.qty;
   const sum = price * qty;
-  const anomaly = hasAnomaly(mark);
   const median = row.median;
   const dev = median !== null ? deviationPct(price, median) : null;
 
-  const metrics = shownMetrics(view);
-  const mainMetric = metrics[0];
-  const extras = metrics.slice(1);
+  /* Аномальность ячейки ОБЪЕДИНЯЕТ внешний вердикт и формулу k — флаг уже
+     посчитан одним проходом в analyzeComparison, здесь он только читается. */
+  const anomaly = row.bids.find((b) => b.contractorId === contractor.id)?.anomaly
+    ?? hasAnomaly(mark);
 
-  /* Минимум живёт ТОЛЬКО в режиме «Цена» и только у лучшей неаномальной цены
-     при живой конкуренции (§2, §4.6 аудита). */
-  const isMin = mainMetric === 'price' && row.bestId === contractor.id;
+  const plan = cellLines(view);
 
-  /* Главное число ячейки — по выбранному показателю. */
-  let head: ReactNode;
-  if (mainMetric === 'price') {
-    head = money(sum);
-  } else if (mainMetric === 'potential') {
-    head = mark.potential ? `+${money(mark.potential * qty)}` : '—';
-  } else {
-    head = dev === null ? '—' : (
-      <span className={cx(Math.abs(dev) > DEV_TOLERANCE && s.devHot)}>
-        {pctSigned(dev)}
-      </span>
-    );
-  }
+  /* Минимум стоимости — неподвижная точка опоры: при любом режиме указывает
+     на ту же ячейку, селектом не управляется (§3 источника). */
+  const isMin = row.bestId === contractor.id;
 
-  /* Подстрочники: удельная цена всегда, за ней дополнительные показатели
-     пресета (максимум три показателя на ячейку). */
-  const subs = [
-    <span key="unit" className={tableCell.sub}>{money(price)}/{position.unit}</span>,
-    ...extras.map((m) => (
-      <span key={m} className={tableCell.sub}>
-        {m === 'price'
-          ? money(sum)
-          : m === 'potential'
-            ? (mark.potential ? `+${money(mark.potential * qty)}` : 'без запаса')
-            : `${dev === null ? '—' : pctSigned(dev)} к медиане`}
-      </span>
-    )),
-  ];
+  /* Суффикс отклонения живёт на строке стоимости — главной или базовой. */
+  const devSuffix = plan.deviationOn !== null && dev !== null ? (
+    <span className={s.devSuffix} title="Отклонение от медианы строки">
+      {pctSigned(dev)}
+    </span>
+  ) : null;
 
-  /* Попапы пометок получают payload готовым — ничего не считают сами.
-     Глоссарные фразы («что это вообще») ушли в легенду; note здесь —
-     только персональный комментарий разбора, когда он есть (Р4/слой 6). */
-  const spreadFraction = row.spread === null ? 0 : Math.min(row.spread / SPREAD_HIGH, 1);
+  const spreadFraction = row.spread === null
+    ? 0
+    : Math.min(row.spread / thresholds.spreadHigh, 1);
+
+  /* Монета запаса торга — пометка данных, от режима не зависит; сидит на
+     главной строке у её основания (правый верхний угол занят штампом «МИН»). */
+  const coinData: CellPopupData | null = mark.potential ? {
+    tone: 'info',
+    title: 'Заявленный запас торга',
+    fields: [{ label: 'Запас торга', value: `+${money(mark.potential * qty)}`, tone: true }],
+    ...(note ? { note } : {}),
+  } : null;
+
   const minData: CellPopupData | null = isMin ? {
     tone: 'success',
-    title: 'Минимальное значение',
+    title: 'Минимальная стоимость',
     fields: [
       {
-        label: 'Значение',
+        label: 'Стоимость',
         value: (
           <>
             {money(sum)}
@@ -163,95 +156,77 @@ export function BidCell({ row, contractor, view, bind, note, flash }: {
     ...(note ? { note } : {}),
   } : null;
 
-  const coinData: CellPopupData | null = mark.potential ? {
-    tone: 'info',
-    title: 'Заявленный запас торга',
-    fields: [{ label: 'Запас торга', value: `+${money(mark.potential * qty)}`, tone: true }],
-    ...(note ? { note } : {}),
-  } : null;
-
-  const medShown = mainMetric === 'price'
-    && !isMin && !anomaly
-    && dev !== null && dev > DEV_TOLERANCE;
-
+  /* У пары из данных причина есть обязательно (контракт CellMark); пара,
+     найденная только формулой k, объясняется стандартной фразой. */
   const anomalyData: CellPopupData = {
     tone: 'warning',
     title: 'Аномальная цена',
     fields: [
-      { label: 'Значение', value: money(sum) },
+      { label: 'Стоимость', value: money(sum) },
       { label: 'К медиане строки', value: dev === null ? '—' : pctSigned(dev) },
     ],
     meter: row.spread === null
       ? undefined
       : { label: 'Разброс строки', value: `${decimal(row.spread)} %`, fraction: spreadFraction },
-    /* Причина обязательна при аномалии и приходит ИЗ ДАННЫХ (контракт
-       CellMark): комментарий разбора её не подменяет. */
-    note: mark.anomaly ?? '',
+    note: mark.anomaly
+      ?? 'Цена выбивается из разброса остальных участников строки — запросить обоснование.',
+  };
+
+  /* Строки плана рендерятся как есть: порядок и состав меняет только модель. */
+  const renderLine = (line: CellLine): ReactNode => {
+    if (line.kind === 'rate') {
+      return (
+        <span key="rate" className={cx(tableCell.sub, s.rateLine)}>
+          ≈ {money(price)}/{position.unit}
+        </span>
+      );
+    }
+    if (line.kind === 'base') {
+      return (
+        <span key="base" className={s.baseLine}>
+          {money(sum)}
+          {plan.deviationOn === 'base' ? devSuffix : null}
+        </span>
+      );
+    }
+    const head = line.metric === 'cost'
+      ? money(sum)
+      : mark.potential ? moneyCompact(mark.potential * qty) : '—';
+    return (
+      <span key="main" className={s.priceLine}>
+        {/* .price держит position:relative для монеты; штамп «МИН» — прямой
+            ребёнок td, координаты берёт от ячейки. */}
+        <span className={s.price}>
+          {head}
+          {plan.deviationOn === 'main' ? devSuffix : null}
+          {coinData ? (
+            <button
+              type="button"
+              className={s.coin}
+              aria-label="Заявленный запас торга"
+              {...bind(coinData)}
+            >
+              <CoinMark />
+            </button>
+          ) : null}
+        </span>
+      </span>
+    );
   };
 
   /* Главное значение и все его устройства живут одной строкой; резерв справа
      держит .stack — общий всем ячейкам колонки, поэтому выравнивание не едет. */
-  const body = (
-    <span className={s.stack}>
-      <span className={s.priceLine}>
-        {mainMetric === 'price' ? (
-          <>
-            <span className={s.price}>
-              {head}
-              {/* Монета — у ОСНОВАНИЯ цены слева: правый верхний угол ячейки
-                  занят штампом «МИН». */}
-              {coinData ? (
-                <button
-                  type="button"
-                  className={s.coin}
-                  aria-label="Заявленный запас торга"
-                  {...bind(coinData)}
-                >
-                  <CoinMark />
-                </button>
-              ) : null}
-            </span>
-            {/* Леденец «дороже медианы» — только когда смысл не занят ценником
-                или штриховкой: второй глиф про то же был бы шумом. */}
-            {medShown ? (
-              <button
-                type="button"
-                className={s.medMark}
-                aria-label="Заметно дороже медианы"
-                {...bind({
-                  tone: 'neutral',
-                  title: 'Заметно дороже медианы',
-                  fields: [
-                    { label: 'Значение', value: money(sum) },
-                    { label: 'К медиане строки', value: dev === null ? '—' : pctSigned(dev) },
-                  ],
-                  ...(note ? { note } : {}),
-                })}
-              >
-                <MedMark />
-              </button>
-            ) : null}
-          </>
-        ) : head}
-      </span>
-      {subs}
-    </span>
-  );
+  const body = <span className={s.stack}>{plan.lines.map(renderLine)}</span>;
 
   if (!anomaly) {
     return (
-      /* Штамп «МИН» — ПРЯМОЙ ребёнок td: .price держит position:relative
-          для монеты и перехватил бы абсолют у отметки (она оказалась бы на
-          цене). Контейнер координат — td (.cell--min): угол ячейки, поверх
-          потока. Триггер попапа — сам штамп: «шлёп» и объяснение появляются,
-          только когда курсор на нём. */
       <td className={cx(tableCell.numeric, tableCell.roomy, isMin && s.cellMin, flash && s.cellFlash)}>
         {body}
         {isMin && minData ? (
           <button
             type="button"
             className={s.tag}
-            aria-label="Минимальное значение"
+            aria-label="Минимальная стоимость"
             {...bind(minData)}
           >
             МИН

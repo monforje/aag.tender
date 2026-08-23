@@ -1,5 +1,5 @@
 import { cx } from '@/shared/lib/cx';
-import { decimal, SPREAD_HIGH, type RowFacts } from '@/entities/tender';
+import { decimal, type CompareThresholds, type RowFacts } from '@/entities/tender';
 import type { CellPopupBind } from '@/shared/ui/CellPopup';
 import { tableCell } from '@/shared/ui/Table';
 import { SpreadMark } from './assets';
@@ -23,17 +23,24 @@ const SPREAD_TONE = {
  *
  * UX:     меньше двух расценок — прочерк, а не ноль: ноль означал бы согласие.
  *         У единственного КП подпись говорит, почему числа нет. Метка выведена
- *         из процента продуктовым порогом (metrics.md §7); маркер ставится
- *         только на «высоком» — тот же порог, что у фильтра ([R4]).
- *         Микрошкала ОБЩАЯ для всех строк (25 % = вся длина) — сравнивать бары
- *         между строками можно только на одной шкале.
+ *         из процента ПОРОГОМ ТЕНДЕРА (metrics.md §7); маркер ставится только
+ *         на «высоком» — тот же порог, что у фильтра ([R4]).
+ *         Микрошкала ОБЩАЯ для всех строк (высокий ярус = вся длина) —
+ *         сравнивать бары между строками можно только на одной шкале; шкала
+ *         едет вместе с порогом, иначе после правки настройки бар врал бы.
  * A11Y:   маркер — кнопка со своим именем; шкала aria-hidden, само число
  *         читается текстом.
  *
  * @example
- * <SpreadCell row={row} bind={popup.bind} />
+ * <SpreadCell row={row} bind={popup.bind} thresholds={thresholds} />
  */
-export function SpreadCell({ row, bind }: { row: RowFacts; bind: CellPopupBind }) {
+export function SpreadCell({ row, bind, thresholds }: {
+  row: RowFacts;
+  bind: CellPopupBind;
+  /** Пороги тендера: метка яруса, нормировка шкалы и текст причины делят
+      одни значения с фильтром «Высокий разброс». */
+  thresholds: CompareThresholds;
+}) {
   const { position, spread, spreadTag } = row;
 
   /* Меньше двух расценок — прочерк, а не ноль: ноль означал бы согласие. У
@@ -49,9 +56,6 @@ export function SpreadCell({ row, bind }: { row: RowFacts; bind: CellPopupBind }
     );
   }
 
-  /* Метка выведена из процента порогом (продуктовые ярусы metrics.md §7:
-     noticeable ≥ 15, high ≥ 40); маркер ставится только на «высоком» —
-     тот же порог, что у фильтра ([R4]). */
   const hot = spreadTag === 'high'
     ? (
       <button
@@ -62,7 +66,7 @@ export function SpreadCell({ row, bind }: { row: RowFacts; bind: CellPopupBind }
           tone: 'danger',
           title: 'Высокий разброс',
           fields: [{ label: 'Разброс строки', value: `${decimal(spread)} %`, tone: true }],
-          note: `Цены КП расходятся на ${SPREAD_HIGH} % и больше — сверяйте состав объёма, прежде чем сравнивать итоги.`,
+          note: `Цены КП расходятся на ${decimal(thresholds.spreadHigh)} % и больше — сверяйте состав объёма, прежде чем сравнивать итоги.`,
         })}
       >
         <SpreadMark />
@@ -77,7 +81,7 @@ export function SpreadCell({ row, bind }: { row: RowFacts; bind: CellPopupBind }
       {/* Микрошкала ОБЩАЯ для всех строк (высокий ярус = вся длина) —
           сравнивать бары между строками можно только на одной шкале. */}
       <span className={s.spreadBar} aria-hidden="true">
-        <i style={{ width: `${Math.min((spread / SPREAD_HIGH) * 100, 100)}%` }} />
+        <i style={{ width: `${Math.min((spread / thresholds.spreadHigh) * 100, 100)}%` }} />
       </span>
     </td>
   );

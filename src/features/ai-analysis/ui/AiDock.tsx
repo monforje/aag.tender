@@ -4,7 +4,7 @@ import { Icon } from '@/shared/ui/Icon';
 import { IconButton } from '@/shared/ui/IconButton';
 import { Popover } from '@/shared/ui/Popover';
 import { plural } from '@/shared/lib/plural';
-import type { Comparison } from '@/entities/tender';
+import { SYSTEM_THRESHOLDS, type Comparison } from '@/entities/tender';
 import { askAi, type AiAnswer } from '../model/askAi';
 import { SparkGlyph } from './assets/SparkGlyph';
 import { RichText } from './RichText';
@@ -277,7 +277,14 @@ export function AiDock({
        это чистая декорация, ждать её дважды не нужно. */
     const wait = reducedMotion() ? 350 : 550 + Math.random() * 250;
     thinkingTimer.current = window.setTimeout(() => {
-      const ctx = { groups: comparison.groups, contractors: comparison.contractors, starred };
+      /* NON-REALIZED: ответчик демо, пороги — системные; когда свободный
+         вопрос вернётся в контур, пороги придут из состояния тендера. */
+      const ctx = {
+        groups: comparison.groups,
+        contractors: comparison.contractors,
+        starred,
+        thresholds: SYSTEM_THRESHOLDS,
+      };
       const answer: AiAnswer = askAi(question, ctx);
 
       if (reducedMotion()) {

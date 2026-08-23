@@ -2,8 +2,8 @@ import { useState, type ReactNode } from 'react';
 import { IconButton } from '@/shared/ui/IconButton';
 import { Icon } from '@/shared/ui/Icon';
 import { Popover } from '@/shared/ui/Popover';
-import { DEV_TOLERANCE, SPREAD_HIGH, SPREAD_NOTICEABLE } from '@/entities/tender';
-import { AnomalyGlyph, CoinMark, KeyMark, MedMark } from './assets';
+import { decimal, type CompareThresholds } from '@/entities/tender';
+import { AnomalyGlyph, CoinMark, KeyMark } from './assets';
 import s from './CompareLegend.module.css';
 
 /**
@@ -18,15 +18,14 @@ import s from './CompareLegend.module.css';
  * UX:     ПОВЕРХНОСТЬ — <Popover>, а не окно: чтение справки не обязано гасить
  *         таблицу подложкой и запирать фокус; Escape и клик мимо достаются от
  *         платформы. Образцы — ТЕ ЖЕ компоненты глифов из ./assets, что красят
- *         ячейки: дрейф формы исключён реюзом, а не копией. Расположение
- *         пометки («слева от цены», «справа от названия») названо словами в
- *         пояснении, не позицией в образце. Разброс показан тремя ярусами
- *         шкалы с порогами — теми же числами, что живут в модели.
+ *         ячейки: дрейф формы исключён реюзом, а не копией. Ярусы разброса
+ *         подписаны ПОРОГАМИ ТЕНДЕРА — теми же числами, что живут в модели:
+ *         специалист сдвинул порог — легенда говорит новым значением.
  * A11Y:   триггер — <IconButton> с aria-expanded и aria-haspopup="dialog";
  *         имя панели даёт проп label Поповера, видимый заголовок дублирует его
  *         для зрячих. Контраст пояснений — secondary ([R1]).
  */
-export function CompareLegend() {
+export function CompareLegend({ thresholds }: { thresholds: CompareThresholds }) {
   const [at, setAt] = useState<DOMRect | null>(null);
 
   return (
@@ -51,13 +50,13 @@ export function CompareLegend() {
           />
           <Item
             sample={<span className={s.sampleTag}>МИН</span>}
-            name="Минимальная цена"
-            text="Лучшая цена без аномалий. Видна при показателе «Цена»."
+            name="Минимальная стоимость"
+            text="Лучшая цена без аномалий в строке. Стоит на одной и той же ячейке при любом режиме показа."
           />
           <Item
             sample={<CoinMark />}
             name="Запас торга"
-            text="Столько подрядчик готов уступить. Монета стоит слева от цены."
+            text="Столько подрядчик готов уступить. Монета стоит слева от главного числа."
           />
           <Item
             sample={<AnomalyGlyph />}
@@ -67,7 +66,7 @@ export function CompareLegend() {
           <Item
             sample={<KeyMark />}
             name="Ключевая позиция"
-            text="Сильнее других двигает итог. Ключ стоит справа от названия."
+            text="Ручная пометка закупщика или строка из «топа по весу». Ключ стоит справа от названия."
           />
           <Item
             sample={<span className={s.sampleMissing}>—</span>}
@@ -92,12 +91,7 @@ export function CompareLegend() {
           <Item
             name="Разброс строки"
             text="Расхождение цен внутри позиции по трём ярусам шкалы."
-            sample={spreadTiers()}
-          />
-          <Item
-            sample={<MedMark />}
-            name="Дороже медианы"
-            text={`Выше медианы более чем на ${DEV_TOLERANCE} % — тот же порог, что красит отклонение.`}
+            sample={spreadTiers(thresholds)}
           />
           <Item
             sample={<span className={s.shareTrack}><i style={{ width: '33%' }} /></span>}
@@ -110,15 +104,16 @@ export function CompareLegend() {
   );
 }
 
-/* Ярусы разброса подписываются ТЕМИ ЖЕ константами, что красят ячейки и
+/* Ярусы разброса подписываются ТЕМИ ЖЕ порогами тендера, что красят ячейки и
    фильтр ([R4]): разъехаться подписи и цвету неоткуда. */
-function spreadTiers(): ReactNode {
+function spreadTiers(thresholds: CompareThresholds): ReactNode {
+  const { spreadNoticeable: lo, spreadHigh: hi } = thresholds;
   return (
     <span className={s.spreadDemo}>
       {([
-        ['none', `< ${SPREAD_NOTICEABLE} %`],
-        ['noticeable', `${SPREAD_NOTICEABLE}–${SPREAD_HIGH} %`],
-        ['high', `≥ ${SPREAD_HIGH} %`],
+        ['none', `< ${decimal(lo)} %`],
+        ['noticeable', `${decimal(lo)}–${decimal(hi)} %`],
+        ['high', `≥ ${decimal(hi)} %`],
       ] as const).map(([tone, cap]) => (
         <span key={tone} className={s.spreadRow}>
           <span className={s.spreadTrack}><i data-tone={tone} /></span>

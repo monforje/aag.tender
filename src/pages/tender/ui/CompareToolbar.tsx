@@ -8,18 +8,21 @@ import {
 import { Icon } from '@/shared/ui/Icon';
 import { IconButton } from '@/shared/ui/IconButton';
 import { Segmented } from '@/shared/ui/Segmented';
+import { Switch } from '@/shared/ui/Switch';
 import {
-  METRIC_LABEL, PREDICATES, PRESET_LABEL, ROW_VIEW_LABEL,
+  METRIC_LABEL, PREDICATES, PRESET_LABEL, ROW_VIEW_LABEL, SATELLITE_LABEL,
   predicateCount,
-  type CompareMetricId, type CompareView, type PredicateId, type PresetId,
-  type RowFacts, type RowViewId,
+  type CompareMetricId, type CompareThresholds, type CompareView,
+  type PredicateId, type PresetId, type RowFacts, type RowViewId, type SatelliteId,
 } from '@/entities/tender';
 import { AnomalyGlyph, CoinMark, KeyMark, MedMark, SpreadMark } from './assets';
 import { CompareLegend } from './CompareLegend';
+import { CompareSettings } from './CompareSettings';
 import s from './CompareToolbar.module.css';
 
 const METRICS = Object.keys(METRIC_LABEL) as CompareMetricId[];
 const ROW_VIEWS = Object.keys(ROW_VIEW_LABEL) as RowViewId[];
+const SATELLITES = Object.keys(SATELLITE_LABEL) as SatelliteId[];
 
 /* Глиф предиката в меню фильтров — ТОТ ЖЕ маркер, что красит ячейки таблицы:
    один смысл — один глиф везде. Посажены на фиксированную колонку 26px,
@@ -34,6 +37,9 @@ const PREDICATE_GLYPH: Record<PredicateId, ReactElement> = {
 
 interface ToolbarProps {
   view: CompareView;
+  /** Пороги тендера — их читают счётчики фильтров и легенда, меняет окно настроек. */
+  thresholds: CompareThresholds;
+  onThresholds?: (thresholds: CompareThresholds) => void;
   /** Все строки среза БЕЗ фильтров: счётчик пункта показывает, сколько строк
    *  пропустит ЭТОТ предикат на всех данных (§4 аудита). */
   allRows: RowFacts[];
@@ -50,25 +56,28 @@ interface ToolbarProps {
 }
 
 /**
- * Полоса управления сравнением КП: один сегмент, два тихих дропдауна, один
- * поповер предикатов (Д.1 аудита).
+ * Полоса управления сравнением КП: пресеты и ТРИ секции модели — основной
+ * показатель (селект), спутники (свитчи), пороги (окно `⚙`) — плюс вид строк
+ * и предикаты (модель ячейки §2).
  *
- * КОГДА:  над таблицей сравнения — пресеты, показатель ячейки, вид строк и
- *         фильтры живут вместе, потому что пресет связывает все четыре оси.
+ * КОГДА:  над таблицей сравнения — секции независимы: переключение одной не
+ *         сбрасывает другие; пресет связывает их именованной комбинацией.
  * НЕ ДЛЯ: полосы реестра (см. RegistryFilters — там поиск и фасеты по полям).
  *
  * UX:     ЕДИНСТВЕННЫЙ кнопочный элемент полосы — сегмент пресетов: их ровно
  *         три, они взаимоисключающие и переключаются часто. Всё остальное —
- *         тихие триггеры «подпись · значение · шеврон»: значение видно всегда,
- *         раскрывать полосу ради статуса не нужно. Нативный <select> запрещён.
- *         Активные предикаты НЕ выносятся чипами в полосу — это снова забор:
- *         список виден в поповере, на полосе живёт одно число.
+ *         тихие триггеры «подпись · значение · шеврон»; нативный <select>
+ *         запрещён. СПУТНИКИ — <Switch> с подписью: настройка вида,
+ *         применяющаяся сразу; галочки НЕ зависят от селекта основного —
+ *         описывают стоимость, а она в ячейке есть всегда. Активные
+ *         предикаты НЕ выносятся чипами в полосу — список виден в поповере,
+ *         на полосе живёт одно число.
  * A11Y:   клавиатура меню — от <Dropdown> (стрелки, Home/End, Escape с
  *         возвратом фокуса на триггер); мультивыбор сериями —
- *         closeOnSelect={false}.
+ *         closeOnSelect={false}; у свитчей подпись видима и aria-label.
  */
 export function CompareToolbar({
-  view, allRows, modified, analysisApplied, onRestoreView, onPreset, onPatch,
+  view, thresholds, onThresholds, allRows, modified, analysisApplied, onRestoreView, onPreset, onPatch,
 }: ToolbarProps) {
   return (
     <DropdownGroup>
@@ -115,13 +124,41 @@ export function CompareToolbar({
 
         <span className={s.sep} />
 
+        {/* Секция 1: основной показатель. Подпись «Показано» — единая
+            формулировка режима из модели (§5): её дублирует caption таблицы. */}
         <QuietSelect
           slot="compare-metric"
-          cap="Показатель:"
+          cap="Показано:"
           value={view.mainMetric}
           options={METRICS.map((id) => ({ id, label: METRIC_LABEL[id] }))}
           onPick={(mainMetric) => onPatch({ mainMetric })}
         />
+
+        {/* Секция 2: спутники стоимости — постоянно видимы и независимы от
+            селекта. Мгновенное применение без формы — это <Switch>. */}
+        <div className={s.satellites} role="group" aria-label="Спутники стоимости">
+          {SATELLITES.map((id) => (
+            <label key={id} className={s.satellite}>
+              <Switch
+                checked={id === 'deviation' ? view.showDeviation : view.showRate}
+                onChange={(checked) => onPatch(
+                  id === 'deviation' ? { showDeviation: checked } : { showRate: checked },
+                )}
+                aria-label={`Показывать: ${SATELLITE_LABEL[id]}`}
+              />
+              {SATELLITE_LABEL[id]}
+            </label>
+          ))}
+        </div>
+
+        {/* Секция 3: пороги тендера — окно по значку ⚙. */}
+        {onThresholds ? (
+          <CompareSettings
+            thresholds={thresholds}
+            onChange={onThresholds}
+            allRows={allRows}
+          />
+        ) : null}
 
         <QuietSelect
           slot="compare-rows"
@@ -133,7 +170,7 @@ export function CompareToolbar({
         />
 
         <span className={s.spacer} />
-        <CompareLegend />
+        <CompareLegend thresholds={thresholds} />
         <FiltersMenu view={view} allRows={allRows} onPatch={onPatch} />
       </div>
     </DropdownGroup>

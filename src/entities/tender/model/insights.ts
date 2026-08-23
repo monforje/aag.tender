@@ -5,8 +5,8 @@
  *  захардкоженной цитатой; здесь каждое утверждение вычисляется
  *  `analyzeComparison()` из данных, поэтому таблица и анализ спорить друг с
  *  другом не могут в принципе: правка расценки меняет и колонку, и текст
- *  карточки одним движением. Пороги — те же константы сравнения
- *  (POTENTIAL_MIN, SPREAD_HIGH): фильтр и карточка делят один смысл ([R4]).
+ *  карточки одним движением. Пороги — настройки тендера, передаются явным
+ *  аргументом: фильтр, карточка и таблица делят одни значения ([R4]).
  *
  *  Тон карточки отвечает на вопрос «что с этим делать», а не «как новость»:
  *  факт — neutral, торг — warning, риск — danger. Это те же семантические
@@ -16,9 +16,9 @@
 import type { Tone } from '@/shared/ui/Badge';
 import { plural } from '@/shared/lib/plural';
 import {
-  analyzeComparison, cellMark, hasAnomaly, money, POTENTIAL_MIN,
+  analyzeComparison, cellMark, money, POTENTIAL_MIN,
   rankBids, sumOf,
-  type Contractor, type PositionGroup, type PresetId, type RowFacts,
+  type CompareThresholds, type Contractor, type PositionGroup, type PresetId, type RowFacts,
 } from './comparison';
 
 /** Сценарий — вопрос, на который блок отвечает набором карточек. Два из пяти
@@ -78,15 +78,18 @@ const who = (contractors: Contractor[], id: string): string =>
   contractors.find((c) => c.id === id)?.name ?? id;
 
 /** Все карточки всех сценариев одним проходом. Сценариев пять, позиций в
- *  срезе десятки — считать лениво или мемоизировать тут нечего. */
+ *  срезе десятки — считать лениво или мемоизировать тут нечего.
+ *  Пороги — текущие настройки тендера: метки разброса и аномалий каскадируют
+ *  в карточки так же, как в таблицу. */
 export function deriveInsights(
   groups: PositionGroup[],
   contractors: Contractor[],
   starred: string[],
+  thresholds: CompareThresholds,
 ): Insight[] {
   if (!groups.length || !contractors.length) return [];
 
-  const facts = analyzeComparison(groups, contractors);
+  const facts = analyzeComparison(groups, contractors, thresholds);
   const bids = rankBids(contractors, facts.rows.map((r) => r.position));
   const out: Insight[] = [];
 
@@ -147,16 +150,18 @@ export function deriveInsights(
 
   /* ── Риски и аномалии ───────────────────────────────────────────────────── */
 
-  // Аномальные расценки: каждая — отдельная карточка с причиной, потому что
-  // причина обязательна при пометке (контракт CellMark) и именно её читают.
+  // Аномальные расценки: каждая — отдельная карточка. Причина приходит из
+  // CellMark, когда внешний вердикт есть; у пары, найденной только формулой k,
+   // причина не существует — карточка говорит стандартной фразой.
   facts.rows.forEach((row: RowFacts) => {
     if (row.position.removed || !row.anomaly) return;
     contractors.forEach((c) => {
-      const mark = cellMark(c, row.position.id);
-      if (!hasAnomaly(mark)) return;
+      const bid = row.bids.find((b) => b.contractorId === c.id);
+      if (!bid?.anomaly) return;
+      const reason = cellMark(c, row.position.id).anomaly;
       out.push(insight('anomalies', out.length, 'risk',
         `Аномалия: «${row.position.title}» у ${who(contractors, c.id)}`,
-        mark.anomaly ?? 'Отклонение выходит за допуск — запросить обоснование.',
+        reason ?? 'Отклонение выбивается из разброса остальных — запросить обоснование.',
         row.position.id,
       ));
     });

@@ -10,7 +10,7 @@ import {
   buildAnalysis, snapshotRound,
   type AnalysisItem, type AnalysisRef,
   type AnalysisResult, type AnalysisSectionId, type AnalysisSubsectionId,
-  type AnalysisTransition, type Comparison,
+  type AnalysisTransition, type Comparison, type CompareThresholds,
 } from '@/entities/tender';
 import { AI_DOCK_ID, AiDock } from './AiDock';
 import { SparkGlyph } from './assets/SparkGlyph';
@@ -169,7 +169,7 @@ function RoundPicker({ value, options, onChange }: {
  *         объявляется через aria-live области результата.
  */
 export function AnalysisDock({
-  open, onClose, comparison, prevComparison, rev, revNote, onTransition, onResultChange,
+  open, onClose, comparison, prevComparison, thresholds, rev, revNote, onTransition, onResultChange,
 }: {
   open: boolean;
   onClose: () => void;
@@ -177,6 +177,8 @@ export function AnalysisDock({
   comparison: Comparison;
   /** Снимок предыдущего раунда — база секций сравнения кругов. */
   prevComparison?: Comparison | null;
+  /** Пороги тендера: разбор каскадирует в сводку и метки вместе с таблицей. */
+  thresholds: CompareThresholds;
   /** Ревизия данных: изменилась после запуска — разбор устарел. */
   rev: string;
   /** Причина последнего изменения данных для плашки («поставщик прислал новое КП»). */
@@ -232,7 +234,7 @@ export function AnalysisDock({
     /* ДЕМО-задержка вместо ответа модели: при reduced-motion короче. */
     runTimer.current = window.setTimeout(() => {
       try {
-        const result = buildAnalysis(comparison, prev);
+        const result = buildAnalysis(comparison, prev, thresholds);
         if (!result) {
           setFailed(true);
           onResultChange?.(null);
