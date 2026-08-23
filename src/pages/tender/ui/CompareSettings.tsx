@@ -1,10 +1,11 @@
-import { useState } from 'react';
-import { cx } from '@/shared/lib/cx';
+import {
+  cloneElement, isValidElement, useEffect, useId, useRef, useState,
+  type ReactElement, type ReactNode,
+} from 'react';
 import { Button } from '@/shared/ui/Button';
-import { Field } from '@/shared/ui/Field';
 import { Icon } from '@/shared/ui/Icon';
 import { IconButton } from '@/shared/ui/IconButton';
-import { Input } from '@/shared/ui/Input';
+import { NumberInput } from '@/shared/ui/NumberInput';
 import { Popover } from '@/shared/ui/Popover';
 import {
   clampThresholds, decimal, SYSTEM_THRESHOLDS, type CompareThresholds, type RowFacts,
@@ -17,14 +18,14 @@ import s from './CompareSettings.module.css';
 const PLAIN_ROWS = [
   {
     key: 'spreadNoticeable',
-    label: 'Разброс «заметный»',
+    label: 'Разброс «заметный», %',
     hint: 'Строка помечается как заметно расходящаяся.',
     min: 0,
     max: 100,
   },
   {
     key: 'spreadHigh',
-    label: 'Разброс «высокий»',
+    label: 'Разброс «высокий», %',
     hint: 'Строка получает тег и попадает в фильтр «Высокий разброс».',
     min: 1,
     max: 100,
@@ -66,7 +67,6 @@ export function CompareSettings({ thresholds, onChange, allRows }: {
   allRows: RowFacts[];
 }) {
   const [at, setAt] = useState<DOMRect | null>(null);
-  const [kOpen, setKOpen] = useState(false);
 
   const patch = (part: Partial<CompareThresholds>) =>
     onChange(clampThresholds({ ...thresholds, ...part }));
@@ -83,77 +83,65 @@ export function CompareSettings({ thresholds, onChange, allRows }: {
         title="Пороги аналитики этого тендера"
         aria-haspopup="dialog"
         aria-expanded={at !== null}
+        className={s.gear}
         onClick={(e) => setAt(e.currentTarget.getBoundingClientRect())}
       />
-      <Popover anchor={at} onClose={() => { setAt(null); setKOpen(false); }} label="Настройки таблицы">
+      <Popover anchor={at} onClose={() => setAt(null)} label="Параметры анализа">
         <div className={s.body}>
+          <h2 className={s.title}>Параметры анализа</h2>
+
           {PLAIN_ROWS.map((row) => (
-            <Field key={row.key} label={row.label} hint={row.hint} className={s.row}>
-              <Input
-                className={s.input}
-                type="number"
-                inputMode="numeric"
+            <Setting key={row.key} label={row.label} description={row.hint}>
+              <NumberInput
                 min={row.min}
                 max={row.max}
+                unit="%"
                 value={thresholds[row.key]}
-                onChange={(e) => patch({ [row.key]: Number(e.target.value) })}
+                onChange={(value) => patch({ [row.key]: value })}
               />
-            </Field>
+            </Setting>
           ))}
 
           {/* Коэффициент аномалии: единственный порог-КОЭФФИЦИЕНТ, без разбора
               читается произвольным числом — подсказка обязательна. */}
-          <div className={s.row}>
-            <div className={s.kHead}>
-              <Field label="Коэффициент аномалии k" className={s.kField}>
-                <Input
-                  className={s.input}
-                  type="number"
-                  inputMode="numeric"
-                  min={1}
-                  max={10}
-                  step={0.5}
-                  value={thresholds.anomalyK}
-                  onChange={(e) => patch({ anomalyK: Number(e.target.value) })}
-                />
-              </Field>
-              <button
-                type="button"
-                className={cx(s.kHelpToggle)}
-                aria-expanded={kOpen}
-                aria-label="Что такое коэффициент аномалии"
-                onClick={() => setKOpen((on) => !on)}
-              >
-                <Icon name={kOpen ? 'closeCircle' : 'questionCircle'} />
-              </button>
-            </div>
-            {kOpen ? <KHelp /> : null}
-          </div>
-
-          <Field
-            label="Доля ключевых работ"
-            className={s.row}
-            hint={`Состав ключевых и линия отсечки в виде «По весу». Превью на срезе: при ${decimal(thresholds.keyShare)} % — ${keysAt(allRows, thresholds.keyShare)}, при 90 % — ${keysAt(allRows, 90)}.`}
+          <Setting
+            label="Коэффициент аномалии"
+            description="Множитель, с которым отклонение считается аномальным."
+            hint={<KHint />}
           >
-            <Input
-              className={s.input}
-              type="number"
-              inputMode="numeric"
+            <NumberInput
+              min={1}
+              max={10}
+              step={0.5}
+              unit="×"
+              value={thresholds.anomalyK}
+              onChange={(anomalyK) => patch({ anomalyK })}
+            />
+          </Setting>
+
+          <Setting
+            label="Доля ключевых работ"
+            description={`Состав ключевых и линия отсечки в виде «По весу». Превью на срезе: при ${decimal(thresholds.keyShare)} % — ${keysAt(allRows, thresholds.keyShare)}, при 90 % — ${keysAt(allRows, 90)}.`}
+          >
+            <NumberInput
               min={1}
               max={100}
+              unit="%"
               value={thresholds.keyShare}
-              onChange={(e) => patch({ keyShare: Number(e.target.value) })}
+              onChange={(keyShare) => patch({ keyShare })}
             />
-          </Field>
+          </Setting>
 
-          <footer className={s.footer}>
-            <Button
-              variant="secondary"
-              onClick={() => onChange({ ...SYSTEM_THRESHOLDS })}
-            >
-              Вернуть системные значения
-            </Button>
-          </footer>
+          {/* Сброс — во всю ширину внизу: он относится ко ВСЕМ четырём
+              порогам сразу, а кнопка в углу читалась бы как действие
+              последней строки. */}
+          <Button
+            variant="secondary"
+            className={s.reset}
+            onClick={() => onChange({ ...SYSTEM_THRESHOLDS })}
+          >
+            Вернуть системные значения
+          </Button>
         </div>
       </Popover>
     </div>
@@ -176,12 +164,152 @@ function keysAt(rows: RowFacts[], share: number): string {
   return `${n} ${plural(n, 'работа', 'работы', 'работ')}`;
 }
 
+/**
+ * Строка окна настроек: подпись с пояснением слева, контрол справа.
+ *
+ * КОГДА:  панель параметров, где у каждой настройки есть последствие, которое
+ *         надо назвать словами. Настройка без объяснения последствия
+ *         заставляет крутить ручку наугад.
+ * НЕ ДЛЯ: формы ввода — там подпись стоит НАД полем (см. <Field>): в форме
+ *         читают сверху вниз одним столбцом, а здесь глаз идёт слева направо
+ *         «что настраиваю → чему равно», и колонка значений выстраивается по
+ *         правому краю сама.
+ *
+ * UX:     разделитель между строками, а не воздух: настроек четыре, они
+ *         однородные, и полоса даёт им ритм списка, не утяжеляя панель
+ *         рамками. У последней строки его нет — снизу и так край панели.
+ * A11Y:   подпись — настоящий <label for>, пояснение уходит в
+ *         aria-describedby. Оба id проставляются клонированием контрола: он
+ *         единственный ребёнок, и требовать их от каждого места вызова —
+ *         значит однажды забыть (тот же приём, что у <Tooltip>).
+ */
+function Setting({ label, description, hint, children }: {
+  label: string;
+  description: ReactNode;
+  /** Кнопка «?» рядом с подписью — только там, где смысл настройки не
+   *  умещается в пояснение (у нас это коэффициент аномалии). */
+  hint?: ReactNode;
+  children: ReactNode;
+}) {
+  const id = useId();
+  const descId = `${id}-desc`;
+
+  const control = isValidElement(children)
+    ? cloneElement(children as ReactElement<{ id?: string; 'aria-describedby'?: string }>, {
+      id, 'aria-describedby': descId,
+    })
+    : children;
+
+  return (
+    <div className={s.setting}>
+      <div className={s.settingInfo}>
+        <label className={s.settingLabel} htmlFor={id}>
+          {label}
+          {hint}
+        </label>
+        <p id={descId} className={s.settingDescription}>{description}</p>
+      </div>
+      {control}
+    </div>
+  );
+}
+
+/* Тайминги NN/g, те же, что у <CellPopup>: показ через 350мс после остановки
+   курсора — проход по панели не хлопает подсказкой; сокрытие через 500мс —
+   этого хватает, чтобы довести курсор с кнопки на сам слой. */
+const SHOW_DELAY = 350;
+const HIDE_DELAY = 500;
+
+/**
+ * Кнопка «?» у коэффициента k и слой разбора при ней.
+ *
+ * КОГДА:  только здесь. k — единственный порог-КОЭФФИЦИЕНТ в окне, и без
+ *         разбора он читается произвольным числом; подсказка обязательна.
+ * НЕ ДЛЯ: коротких расшифровок контрола (см. <Tooltip> — там ровно текст) и
+ *         пояснений к остальным трём порогам: у них смысл назван в `hint`
+ *         самого <Field>, второй слой там был бы шумом.
+ *
+ * UX:     ОТКРЫВАЕТСЯ ПО НАВЕДЕНИЮ — текст читают один раз, и клик за него
+ *         был лишним жестом. Клик оставлен для тача, где наведения нет вовсе,
+ *         и работает как переключатель.
+ *         СЛОЙ, А НЕ РАСКРЫТИЕ В ПОТОКЕ. <Popover> меряет свою высоту ровно
+ *         один раз — при открытии — и по замеру решает, откидываться ли
+ *         вверх; выросший позже контент он не перемеряет, и пять абзацев
+ *         увели бы низ панели вместе с кнопкой «Вернуть системные значения»
+ *         за нижний край экрана.
+ *         ИКОНКА ВСЕГДА «?», крестика нет. Крестик на кнопке подсказки внутри
+ *         окна настроек читается как «закрыть окно», а закрывать подсказку
+ *         есть чем и без него — см. A11Y.
+ * A11Y:   WCAG 1.4.13 целиком: dismissible — Escape гасит СНАЧАЛА подсказку и
+ *         только вторым нажатием окно (иначе один Escape уносит оба, и
+ *         человек теряет место); hoverable — мост курсора кнопка → слой живёт
+ *         HIDE_DELAY, и сам слой держит подсказку открытой, пока по нему
+ *         водят; persistent — автоскрытия по таймеру нет, слой висит, пока
+ *         его не увели курсором, фокусом или Escape. Фокус с клавиатуры
+ *         открывает ту же подсказку, кнопка несёт aria-expanded и
+ *         aria-describedby на слой.
+ */
+function KHint() {
+  const [open, setOpen] = useState(false);
+  const showTimer = useRef<number | undefined>(undefined);
+  const hideTimer = useRef<number | undefined>(undefined);
+  const id = useId();
+
+  useEffect(() => () => {
+    window.clearTimeout(showTimer.current);
+    window.clearTimeout(hideTimer.current);
+  }, []);
+
+  const cancelTimers = () => {
+    window.clearTimeout(showTimer.current);
+    window.clearTimeout(hideTimer.current);
+  };
+  /* Наведение — с задержкой; фокус и клик — немедленно: там намерение уже
+     выражено, ждать нечего. */
+  const openSoon = () => { cancelTimers(); showTimer.current = window.setTimeout(() => setOpen(true), SHOW_DELAY); };
+  const closeSoon = () => { cancelTimers(); hideTimer.current = window.setTimeout(() => setOpen(false), HIDE_DELAY); };
+  const openNow = () => { cancelTimers(); setOpen(true); };
+  const closeNow = () => { cancelTimers(); setOpen(false); };
+
+  return (
+    <span
+      className={s.kHint}
+      onMouseEnter={openSoon}
+      onMouseLeave={closeSoon}
+      /* Escape гасит подсказку и НЕ доходит до <dialog>: preventDefault
+         снимает штатное закрытие окна, stopPropagation — всплытие. Пока
+         подсказки нет, оба не вызываются, и Escape закрывает окно как обычно. */
+      onKeyDown={(e) => {
+        if (e.key !== 'Escape' || !open) return;
+        e.preventDefault();
+        e.stopPropagation();
+        closeNow();
+      }}
+      /* Фокус ушёл и с кнопки, и со слоя — гасим. */
+      onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) closeNow(); }}
+    >
+      <button
+        type="button"
+        className={s.kHelpToggle}
+        aria-expanded={open}
+        aria-describedby={open ? id : undefined}
+        aria-label="Что такое коэффициент аномалии"
+        onFocus={openNow}
+        onClick={() => (open ? closeNow() : openNow())}
+      >
+        <Icon name="questionCircle" />
+      </button>
+      {open ? <KHelp id={id} /> : null}
+    </span>
+  );
+}
+
 /** Подсказка у порога аномалии — ЦИТАТА канона метрики (`metrics.md` §9):
     формула, причина коэффициентности, разбор на числах, смысловая граница и
     границы применения. Своей терминологии здесь не заводим. */
-function KHelp() {
+function KHelp({ id }: { id: string }) {
   return (
-    <div className={s.kHelp}>
+    <div id={id} role="tooltip" className={s.kHelp}>
       <p className={s.kFormula}>dᵢ = |стоимостьᵢ / медиана − 1|;<br />
         аномалия, если dᵢ ≥ k × median(dᵢ остальных)</p>
       <p><b>Почему коэффициент.</b> Нормальный разброс у работ разный: где все

@@ -2,55 +2,142 @@
    таблица под ней живёт и перекрашивается вслед за ручкой порога. */
 
 /* Мост ширины панели: --pop-width читает <Popover> (наследование по DOM),
-   дефолт 232px тесен четырём полям с пояснениями. */
-.root{ --pop-width: 320px; }
+   дефолт 232px тесен строкам «подпись с пояснением слева, контрол справа». */
+.root{ --pop-width: 480px; }
 
-.body{
-  display: flex; flex-direction: column; gap: 12px;
+/* ── шестерня ⚙ ────────────────────────────────────────────────────────────
+   Каталог состояний, рецепт 11 (поворот глифа на месте). Крутится SVG внутри
+   кнопки, а не кнопка: у неё своя заливка-таблетка, и её поворот утащил бы фон.
+
+   УГОЛ НЕ ПРОИЗВОЛЬНЫЙ. У шестерни Solar шесть зубцов — точки её контура
+   собираются в шесть кластеров с шагом 60° (−150°, −90°, −30°, 30°, 90°, 150°).
+   Поворот кратный 60° сажает знак сам на себя; 45° или 90° оставили бы его
+   «косым», и глаз прочёл бы это как перекос иконки.
+
+   Повёрнутое положение держится и у ОТКРЫТОЙ панели: пока она висит, поворот
+   работает вторым каналом состояния рядом с заливкой кнопки.
+
+   Селектор через границу модуля НЕ идёт: .gear объявлен здесь и сюда же
+   приходит через className самого IconButton, а svg внутри — тег, он не
+   хэшируется. */
+.gear svg{
+  transition: transform var(--cu-duration-base) var(--cu-ease-standard);
+}
+.gear:hover svg,
+.gear:focus-visible svg,
+.gear[aria-expanded='true'] svg{ transform: rotate(60deg); }
+/* Своё правило, а не глобальное сжатие длительности: то оставляет конечное
+   состояние, и глиф ЩЁЛКНУЛ бы в повёрнутое. Здесь жеста нет вовсе. */
+@media (prefers-reduced-motion: reduce){
+  .gear:hover svg,
+  .gear:focus-visible svg,
+  .gear[aria-expanded='true'] svg{ transform: none; }
 }
 
-.row{ display: block; }
+.body{ padding: 10px; }
 
-.input{ text-align: right; }
+/* Заголовок панели. Она перестала быть безымянным набором полей: четыре
+   порога с последствиями — это раздел настроек, и он называется. */
+.title{
+  margin: 0 0 2px;
+  font-size: 15px; font-weight: 650;
+  color: var(--cu-content-primary);
+}
 
-/* Голова строки коэффициента: поле + кнопка подсказки на одной линии.
-   Кнопка прижата к правому краю подписи, не к полю — спрашивают про СМЫСЛ
-   порога, а не про значение в боксе. */
-.k-head{ display: flex; align-items: end; gap: 4px; }
-.k-field{ flex: 1; }
-.k-help-toggle{
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 28px; height: 28px; margin-bottom: 2px;
-  border-radius: var(--cu-radii-round);
+/* ── строка настройки ──────────────────────────────────────────────────────
+   Подпись с пояснением слева, контрол справа. Разделитель, а не воздух:
+   настройки однородные, полоса даёт им ритм списка, не утяжеляя панель
+   рамками вокруг каждой. У последней его нет — снизу и так край панели. */
+.setting{
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--cu-border-default);
+}
+.setting:first-of-type{ padding-top: 12px; }
+.setting:last-of-type{ padding-bottom: 14px; border-bottom: 0; }
+
+.setting-info{ min-width: 0; flex: 1; }
+
+.setting-label{
+  display: flex; align-items: center; gap: 7px;
+  margin-bottom: 4px;
+  font-size: var(--cu-text-base); line-height: 1.3;
+  font-weight: var(--cu-font-weight-semibold);
+  color: var(--cu-content-primary);
+  cursor: pointer;
+}
+
+/* Пояснение — что порог МЕНЯЕТ. Ограничено по ширине: строка длиннее ~290px
+   перестаёт читаться абзацем и начинает конкурировать с контролом справа. */
+.setting-description{
+  max-width: 290px; margin: 0;
+  font-size: var(--cu-text-sm); line-height: 1.45;
   color: var(--cu-content-tertiary);
 }
-.k-help-toggle:hover{ color: var(--cu-content-secondary); background: var(--cu-state-hover); }
-.k-help-toggle:focus-visible{ outline: var(--cu-focus-ring); outline-offset: 2px; }
-.k-help-toggle svg{ --icon-size: 16px; }
 
-/* Разбор коэффициента — цитата metrics.md §9: текст в потоке панели, не
-   hover-only, читается с клавиатуры и на таче. */
-.k-help{
-  display: flex; flex-direction: column; gap: 8px;
-  padding: 10px 12px;
+/* Сброс — во всю ширину: он относится ко ВСЕМ четырём порогам сразу, а кнопка
+   в углу читалась бы действием последней строки. */
+.reset{ width: 100%; height: 38px; margin-top: 4px; }
+
+/* Кнопка «?» у коэффициента и тултип при ней. Обёртка позиционируется:
+   тултип встаёт НАД кнопкой и правым краем по ней — это его якорь, а не
+   панель (в отличие от прошлой версии, где слой уезжал влево от всего окна). */
+.k-hint{ position: relative; display: inline-flex; }
+
+/* Кружок с вопросом. cursor:help, а не pointer: клик здесь — запасной путь для
+   тача, основной жест — наведение. */
+.k-help-toggle{
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; padding: 0;
   border: 1px solid var(--cu-border-default);
-  border-radius: var(--cu-radii-2);
-  background: var(--cu-fill-subtle);
-  font-size: var(--cu-text-xs); line-height: 17px;
-  color: var(--cu-content-secondary);
+  border-radius: var(--cu-radii-round);
+  background: var(--cu-background-main);
+  color: var(--cu-content-tertiary);
+  font-size: 12px; font-weight: var(--cu-font-weight-semibold); line-height: 1;
+  cursor: help;
+  transition: border-color var(--cu-duration-base) var(--cu-ease-standard),
+              color var(--cu-duration-base) var(--cu-ease-standard);
 }
-.k-help b{ font-weight: var(--cu-font-weight-medium); color: var(--cu-content-primary); }
+.k-help-toggle:hover,
+.k-help-toggle[aria-expanded='true']{
+  border-color: var(--cu-content-tertiary);
+  color: var(--cu-content-primary);
+}
+.k-help-toggle:focus-visible{ outline: var(--cu-focus-ring); outline-offset: 2px; }
+
+/* Разбор коэффициента — цитата metrics.md §9. Тёмная плашка над кнопкой:
+   тултип, а не панель, поэтому и выглядит инородно светлой поверхности —
+   это подсказка поверх интерфейса, а не его часть.
+
+   ШИРЕ ОБЫЧНОГО ТУЛТИПА (300px против 230): здесь не одна фраза, а цитата
+   канона метрики — формула, разбор, границы применения. Сокращать её нельзя,
+   канон один и интерфейс его цитирует.
+
+   Всплывает ВВЕРХ: строка коэффициента третья из четырёх, снизу под ней ещё
+   настройка и кнопка сброса — тултип накрыл бы их. */
+.k-help{
+  position: absolute; z-index: 10;
+  right: 0; bottom: calc(100% + 8px);
+  display: flex; flex-direction: column; gap: 7px;
+  width: 300px;
+  padding: 10px 12px;
+  border-radius: var(--cu-radii-4);
+  background: rgb(32,32,32); color: rgba(255,255,255,.82);
+  font-size: var(--cu-text-sm); line-height: 1.45;
+  box-shadow: 0 8px 24px rgba(0,0,0,.18);
+  animation: k-help-in var(--cu-duration-fast) var(--cu-ease-standard);
+}
+@keyframes k-help-in{
+  from{ opacity: 0; transform: translateY(3px); }
+}
+.k-help b{ font-weight: var(--cu-font-weight-semibold); color: #fff; }
 .k-formula{
   font-size: 11px; line-height: 16px;
   font-weight: var(--cu-font-weight-medium);
-  color: var(--cu-content-primary);
+  color: #fff;
 }
 .k-source{
-  color: var(--cu-content-tertiary);
+  color: rgba(255,255,255,.5);
   font-style: italic;
-}
-
-.footer{
-  display: flex; justify-content: flex-end;
-  padding-top: 2px;
 }

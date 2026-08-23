@@ -11,7 +11,16 @@
 /* Разделитель сегмента и тихих триггеров: тонкая вертикаль, а не воздух —
    слева режимы, справа прочтение одного и того же среза. */
 .sep{ width: 1px; height: 20px; background: var(--cu-border-default); }
-.spacer{ flex: 1 1 0; }
+
+/* Правый блок: чип сброса, легенда, фильтры. Прижат к правому краю через
+   margin-inline-start:auto, а НЕ распоркой flex:1 отдельным узлом — полоса
+   переносится, и распорка осталась бы на первой строке, а перенесённая
+   тройка снова ездила бы от появления чипа. Внутри nowrap: эти трое —
+   единое целое и разрываться между строками не должны. */
+.tail{
+  display: inline-flex; align-items: center; gap: 8px; flex-wrap: nowrap;
+  margin-inline-start: auto;
+}
 
 /* ── тихий триггер дропдауна: подпись · значение · шеврон ────────────────── */
 .trigger{
@@ -49,17 +58,29 @@
 }
 
 /* ── чип «Изменён · Сброс» (Д.2) ───────────────────────────────────────────
-   Состояние ушло от базы пресета — молча не теряем. Капсула тона info:
-   это факт о состоянии, а не тревога. */
+   Состояние ушло от базы пресета — молча не теряем. Капсула тона info: это
+   факт о состоянии, а не тревога, и в danger её красить не за что — сброс
+   ничего не разрушает.
+
+   Живёт ЗА РАСПОРКОЙ полосы (см. CompareToolbar.tsx): появляясь у сегмента
+   пресетов, чип толкал вправо всю левую половину контролов. */
 .modchip{
   display: inline-flex; align-items: center; gap: 5px;
   height: 24px; padding: 0 8px 0 7px;
   border-radius: var(--cu-radii-round);
   font-size: 12px; white-space: nowrap;
-  background: var(--cu-tone-info-fill); color: var(--cu-tone-info-ink);
-  transition: filter var(--cu-animation-duration) var(--cu-animation-timing);
+  background-color: var(--cu-tone-info-fill); color: var(--cu-tone-info-ink);
+  transition: background-image var(--cu-duration-base) var(--cu-ease-standard);
 }
-.modchip:hover{ filter: brightness(.96); }
+/* Ховер — ступень --cu-state-hover-strong, «поверх собственной заливки»: ради
+   таких контролов она и заведена. Но НЕ подменой фона, как у .btn.is-on: там
+   в покое нейтральный --cu-fill, а здесь тон, и подмена смыла бы info в серый.
+   Альфа кладётся ВТОРЫМ слоем градиентом-заливкой — тон остаётся под ней.
+   Прежний filter: brightness(.96) убран: единственное такое место в проекте,
+   в каталоге состояний его нет, и на тёмной теме он бы осветлял, а не темнил. */
+.modchip:hover{
+  background-image: linear-gradient(var(--cu-state-hover-strong), var(--cu-state-hover-strong));
+}
 .modchip:focus-visible{ outline: var(--cu-focus-ring); outline-offset: 1px; }
 .modchip__icon{ --icon-size: 13px; }
 

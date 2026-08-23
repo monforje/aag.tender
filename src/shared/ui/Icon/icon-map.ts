@@ -48,7 +48,9 @@ import { MenuDotsIcon } from '@solar-icons/react/linear/menu-dots';
 import { PipetteIcon } from '@solar-icons/react/linear/pipette';
 import { PulseIcon } from '@solar-icons/react/linear/pulse';
 import { QuestionCircleIcon } from '@solar-icons/react/linear/question-circle';
+import { History2Icon } from '@solar-icons/react/linear/history-2';
 import { ReplyIcon } from '@solar-icons/react/linear/reply';
+import { RestartIcon } from '@solar-icons/react/linear/restart';
 import { ScaleIcon } from '@solar-icons/react/linear/scale';
 import { ScannerIcon } from '@solar-icons/react/linear/scanner';
 import { SettingsIcon } from '@solar-icons/react/linear/settings';
@@ -82,6 +84,14 @@ export const ICONS = {
   calendarSm: CalendarMinimalisticIcon,
   inbox: InboxIcon,
   reply: ReplyIcon,
+  /* Два разных «назад» у чипов полосы сравнения, и путать их нельзя.
+     restart — вернуть В ИСХОДНОЕ: чип «Изменён · Сброс» возвращает базу
+     пресета. history-2 — вернуться К ПРОШЛОМУ СОСТОЯНИЮ: чип «Вернуть мой
+     вид» восстанавливает то, что было до перехода из разбора. Раньше на
+     обоих стоял reply — глиф «ответить на сообщение», который не значит ни
+     того, ни другого. refresh отвергнут: он обещает перезапрос данных. */
+  restart: RestartIcon,
+  history: History2Icon,
   assigned: ChatSquareArrowIcon,
   skill: MedalStarIcon,
   video: VideocameraIcon,

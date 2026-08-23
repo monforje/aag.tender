@@ -1,0 +1,104 @@
+/* ЧИСЛОВОЕ ПОЛЕ СО СВОИМ СТЕППЕРОМ.
+
+   ПОВЕРХНОСТЬ СВОЯ, а не от <Input>, и это отступление записано сознательно.
+   Обычное поле — 32px, белое, с хэйрлайн-тенью: оно рассчитано на НАБОР
+   текста. Здесь набирают редко, а подкручивают постоянно, поэтому контрол
+   крупнее (42px), лежит на приглушённой заливке и держит две зоны нажатия по
+   краям — форма следует за жестом. Пока это единственная такая пара в
+   проекте; появится вторая — общее уедет в токены, а не в copy-paste.
+
+   Заливка вместо белого ещё и разводит два контрола на одной строке: слева
+   подпись с описанием на холсте панели, справа — контрол, и граница между
+   ними читается без рамки-разделителя. */
+.field{
+  display: flex; align-items: center;
+  flex: 0 0 auto;
+  height: 42px;
+  border: 1px solid var(--cu-border-default);
+  border-radius: var(--cu-radii-4);
+  background: var(--cu-fill-subtle);
+  overflow: hidden;   /* заливка кнопок не должна вылезать за скругление */
+  transition: box-shadow var(--cu-duration-base) var(--cu-ease-standard),
+              border-color var(--cu-duration-base) var(--cu-ease-standard);
+}
+/* Кольцо рецепта 4 — на :focus-within, а не :focus-visible: фокус получает
+   поле ВНУТРИ обёртки, а рамку рисует обёртка. Без этого правила рамка на
+   фокус не отвечала бы вовсе. */
+.field:focus-within{
+  box-shadow: var(--cu-state-ring);
+}
+
+/* Кнопка шага. 42×42 — заведомо выше порога WCAG 2.2 SC 2.5.8 (минимум
+   24×24), ради которого всё и затевалось: у нативного спиннера, который она
+   заменяет, ширина была около восьми пикселей.
+
+   Знак крупнее подписи (17px против 13px): «−» и «+» — единственное, что у
+   кнопки есть, и в кегле текста они читались бы опечаткой. line-height:1
+   обязателен — иначе базовая линия глифа уводит знак вниз от центра. */
+.step{
+  display: flex; align-items: center; justify-content: center;
+  flex: 0 0 auto;
+  width: 42px; align-self: stretch;
+  font-size: 17px; line-height: 1;
+  color: var(--cu-content-tertiary);
+  transition: background-color var(--cu-duration-base) var(--cu-ease-standard),
+              color var(--cu-duration-base) var(--cu-ease-standard);
+}
+/* Рецепт 1, ступень «поверх собственной заливки»: контрол уже лежит на
+   --cu-fill-subtle, и слабая ступень на нём не читается. */
+.step:hover:not(:disabled){
+  background-color: var(--cu-state-hover);
+  color: var(--cu-content-primary);
+}
+/* Кольца фокуса у кнопок нет намеренно: они вне табуляции (tabIndex=-1), и
+   показывать фокус там, куда клавиатура не приводит, не на чем. */
+.step:disabled{
+  color: var(--cu-content-placeholder);
+  cursor: default;
+}
+
+/* Само значение. Фиксированная ширина, а не flex: число 3 и число 100 не
+   должны двигать кнопки — контрол обязан стоять на месте, пока его крутят.
+
+   НАТИВНЫЕ СТРЕЛКИ СНЯТЫ обоими способами сразу: appearance:textfield снимает
+   их в Firefox, ::-webkit-*-spin-button — в Chrome и Safari. Без второго
+   браузерный спиннер остался бы стоять рядом с нашей кнопкой «+». */
+.control{
+  flex: 0 0 auto;
+  width: 46px; height: 100%;
+  border: 0; background: none; box-shadow: none;
+  padding: 0;
+  font-family: inherit;
+  font-size: 15px; font-weight: var(--cu-font-weight-semibold);
+  color: var(--cu-content-primary);
+  text-align: center;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+.control::-webkit-outer-spin-button,
+.control::-webkit-inner-spin-button{
+  -webkit-appearance: none;
+  margin: 0;
+}
+.control:focus{ outline: none; }   /* кольцо рисует обёртка по :focus-within */
+
+/* Единица прижата к числу отрицательным отступом: «15 %» читается парой, а не
+   двумя отдельными значениями. Тоном тише — она постоянна, меняется число. */
+.unit{
+  margin-inline: -2px 10px;
+  font-size: var(--cu-text-base);
+  color: var(--cu-content-tertiary);
+}
+
+/* Ошибка перекрашивает КОЛЬЦО, а не рамку — тем же приёмом, что у <Input>:
+   рамка 1px слишком слабый канал для состояния, требующего реакции. */
+.is-invalid,
+.is-invalid:focus-within{
+  box-shadow: 0 0 0 1px var(--cu-tone-danger);
+}
+
+.is-disabled{
+  border-color: transparent;
+  box-shadow: none;
+  color: var(--cu-content-placeholder);
+}

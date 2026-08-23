@@ -50,6 +50,7 @@ export * from './shared/ui/Layout';
 export * from './shared/ui/Link';
 export * from './shared/ui/Micro';
 export * from './shared/ui/Modal';
+export * from './shared/ui/NumberInput';
 export * from './shared/ui/Page';
 export * from './shared/ui/Pagination';
 export * from './shared/ui/Popover';
