@@ -6,6 +6,10 @@
 .body{
   flex: 1 1 auto; min-height: 0;
   overflow-y: auto;
+  /* Ниже 900px панель — оверлей над таблицей, и без этого дочитанный до конца
+     разбор передаёт жест таблице под собой: пользователь прокручивает то,
+     чего не касался. Колонкой панель была соседом, и вопрос не стоял. */
+  overscroll-behavior: contain;
   display: flex; flex-direction: column; gap: var(--cu-size-4);
   padding: var(--cu-size-4) var(--cu-size-4) var(--cu-size-5);
 }
@@ -70,7 +74,13 @@
   font-weight: var(--cu-font-weight-medium);
   transition: background-color var(--cu-animation-duration) var(--cu-animation-timing);
 }
-.roundsTrigger:hover{ background: var(--cu-state-hover-subtle); }
+/* ГЕЙТ НА ТАЧ. На устройстве без курсора :hover залипает после тапа: контрол
+   остаётся подсвеченным, пока не тронут соседний, и читается выбранным.
+   Приём в проекте уже есть (global.css рецепт 10, TenderSummary) — сюда он
+   не доехал. */
+@media (hover: hover){
+  .roundsTrigger:hover{ background: var(--cu-state-hover-subtle); }
+}
 .roundsTrigger:focus-visible{ outline: var(--cu-focus-ring); outline-offset: 1px; }
 .roundsCaret{
   --icon-size: 14px;
@@ -82,40 +92,81 @@
   display: flex; flex-direction: column; gap: 2px;
   max-height: 264px;
   overflow-y: auto;
+  /* Список раундов живёт в нативном меню верхнего слоя — его край не должен
+     переливать жест на панель под ним. */
+  overscroll-behavior: contain;
 }
 
-/* ── сводка-якоря ────────────────────────────────────────────────────────── */
-.summary{ display: flex; flex-direction: column; gap: 4px; }
-.summaryItem{
-  /* Не center: пункт сводки переносится на две строки, и стрелка, выровненная
-     по всей высоте кнопки, повисала между ними. Она указывает НА ПУНКТ —
-     значит стоит на его первой строке. */
-  display: flex; align-items: flex-start; gap: var(--cu-size-2);
-  width: 100%;
-  padding: 8px 10px;
+/* ── бриф «сначала вывод» ─────────────────────────────────────────────────── */
+.brief{
+  display: flex; flex-direction: column; gap: 8px;
+}
+/* Вердикт — самое крупное слово панели после заголовка: его читают первым. */
+.brief-verdict{
+  font-size: 15px; line-height: var(--cu-leading-normal);
+  font-weight: var(--cu-font-weight-medium);
+  color: var(--cu-content-primary);
+}
+/* Подписи смысловых блоков — капитель 11px, тот же язык подписей, что у
+   показателей круга (.metaRow dt) и размера раздела таблицы. */
+.brief-label{
+  margin-top: 4px;
+  font-size: 11px; line-height: 14px;
+  font-weight: var(--cu-font-weight-medium);
+  text-transform: uppercase; letter-spacing: .06em;
+  color: var(--cu-content-tertiary);
+}
+.brief-list{ display: flex; flex-direction: column; gap: 2px; }
+
+/* Находка: вся строка — цель клика высотой ≥ 30px; без перехода курсор не
+   обещается и стрелки нет (обещание клика без клика хуже его отсутствия). */
+.finding{
+  display: flex; align-items: center; gap: 8px;
+  width: 100%; min-height: 30px; padding: 5px 6px 5px 0;
   border-radius: var(--cu-radii-3);
-  background: var(--cu-fill-subtle);
   font-size: var(--cu-text-sm); line-height: var(--cu-leading-normal);
   text-align: left;
   transition: background-color var(--cu-animation-duration) var(--cu-animation-timing);
 }
-.summaryItem:hover{ background: var(--cu-state-hover); }
-.summaryItem:focus-visible{ outline: var(--cu-focus-ring); outline-offset: -1px; }
-/* КЛАСС, А НЕ `.summaryItem > span`. Тот селектор — (0,1,1) и бил по
-   специфичности `.summaryIcon` (0,1,0), а <Icon> оборачивает глиф тем же
-   тегом <span>: `flex: none` у стрелки не применялся никогда, и она забирала
-   ПОЛОВИНУ строки, отчего казалась висящей в пустоте посередине. Тот самый
-   капкан «модификатор, сцепленный с тегом» из CLAUDE.md, только наоборот. */
-.summaryText{ flex: 1; min-width: 0; }
-.summaryIcon{
-  --icon-size: 12px;
-  flex: none;
-  /* Оптический центр стрелки — центр ПЕРВОЙ строки: (12 × 1,4 − 12) / 2.
-     Считается из тех же токенов, что кегль пункта, поэтому смена шкалы её
-     не роняет. */
-  margin-top: calc((var(--cu-text-sm) * var(--cu-leading-normal) - 12px) / 2);
+@media (hover: hover){
+  button.finding:hover{ background: var(--cu-state-hover-subtle); }
+}
+button.finding:focus-visible{ outline: var(--cu-focus-ring); outline-offset: -1px; }
+.finding-icon{ --icon-size: 14px; flex: none; }
+.f-key{ color: var(--cu-content-primary); }
+.f-saving{ color: var(--cu-tone-success); }
+.f-anomaly{ color: var(--cu-tone-warning); }
+.f-risk{ color: var(--cu-tone-danger); }
+.finding-text{ flex: 1; min-width: 0; color: var(--cu-content-primary); }
+.finding-go{
+  --icon-size: 12px; flex: none;
   color: var(--cu-content-tertiary);
 }
+
+/* «Почему это важно» — голос поверх фактов, вторым кеглем. */
+.brief-why{
+  font-size: var(--cu-text-xs); line-height: var(--cu-leading-normal);
+  color: var(--cu-content-secondary);
+}
+
+/* Карточка рекомендации: тихая заливка и СПЕКТРАЛЬНЫЙ рельс слева — та же
+   палитра --cu-ai-*, что у плитки шапки: рекомендация говорит голосом ИИ,
+   и поверхность это называет до чтения текста. */
+.rec{
+  position: relative;
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--cu-radii-3);
+  background: var(--cu-fill-subtle);
+  overflow: hidden;
+}
+.rec::before{
+  content: ''; position: absolute; top: 0; bottom: 0; left: 0;
+  width: 2px;
+  background: linear-gradient(180deg, var(--cu-ai-a), var(--cu-ai-b), var(--cu-ai-c));
+}
+.rec-text{ padding: 0; }
+.rec-actions{ display: flex; gap: 8px; }
 
 /* ── секции: свёрнуты по умолчанию (05 §4) ───────────────────────────────── */
 .sec{
@@ -130,6 +181,13 @@
   list-style: none;                        /* маркер свой, поворотный */
 }
 .secHead::-webkit-details-marker{ display: none; }
+/* Кольцо — проектным токеном, как у трёх соседних контролов этого же модуля
+   (.roundsTrigger, .summaryItem, .ref). Родное кольцо <summary> работало и
+   так, но рисовалось браузером: на одном экране получалось два разных
+   индикатора фокуса. Offset внутрь — заголовок идёт во всю ширину панели,
+   и наружное кольцо срезалось бы её краем. */
+.secHead:focus-visible,
+.subHead:focus-visible{ outline: var(--cu-focus-ring); outline-offset: -2px; }
 .secTitle{
   flex: 1; min-width: 0;
   font-size: 13px; line-height: 18px;
@@ -150,7 +208,9 @@
   transition: transform var(--cu-animation-duration) var(--cu-animation-timing);
 }
 .sec[open] > .secHead .secChevron{ transform: rotate(180deg); }
-.secHead:hover .secTitle{ color: inherit; }   /* заголовок не мигает серым */
+@media (hover: hover){
+  .secHead:hover .secTitle{ color: inherit; }   /* заголовок не мигает серым */
+}
 
 .list{
   display: flex; flex-direction: column; gap: var(--cu-size-4);
@@ -215,7 +275,9 @@
   cursor: pointer;
   transition: background-color var(--cu-animation-duration) var(--cu-animation-timing);
 }
-.ref:hover{ background: var(--cu-state-hover-subtle); }
+@media (hover: hover){
+  .ref:hover{ background: var(--cu-state-hover-subtle); }
+}
 .ref:focus-visible{
   outline: var(--cu-focus-ring); outline-offset: 1px;
   border-radius: var(--cu-radii-1);

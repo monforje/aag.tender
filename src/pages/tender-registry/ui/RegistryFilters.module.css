@@ -31,7 +31,7 @@
 /* Ширина — свойство СОДЕРЖИМОГО, поэтому живёт здесь, а не в <MenuPanel>.
    У панели периода своей ширины нет вовсе: её задаёт <RangeCalendar>. */
 .panel--narrow{ width: 210px; }
-.panel__body{ max-height: 320px; overflow-y: auto; }
+.panel__body{ max-height: 320px; overflow-y: auto; overscroll-behavior: contain; }
 
 /* ── индикаторы на кнопках без подписи ──────────────────────────────────── */
 /* Без них иконка молчит о том, что таблица показывает не всё. Цифру и точку
@@ -41,14 +41,14 @@
   position: absolute; top: -3px; right: -4px;
   display: flex; align-items: center; justify-content: center;
   min-width: 15px; height: 15px; padding-inline: 4px; border-radius: var(--cu-radii-round);
-  background: rgb(32,32,32); color: #fff;
+  background: var(--cu-surface-inverse); color: var(--cu-content-on-dark);
   font-size: 10px; font-weight: var(--cu-font-weight-semibold); line-height: 1;
   box-shadow: 0 0 0 2px var(--cu-global-sidebar-background);
 }
 /* У периода считать нечего — он либо задан, либо нет, поэтому точка. */
 .btn-dot{
   position: absolute; top: 4px; right: 4px; width: 6px; height: 6px; border-radius: 50%;
-  background: rgb(32,32,32); box-shadow: 0 0 0 2px var(--cu-background-main);
+  background: var(--cu-surface-inverse); box-shadow: 0 0 0 2px var(--cu-background-main);
 }
 
 /* ── хвост полосы ───────────────────────────────────────────────────────── */

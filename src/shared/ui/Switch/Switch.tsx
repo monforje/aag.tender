@@ -32,12 +32,20 @@ export interface SwitchProps {
  * <Switch checked={showArchive} onChange={setShowArchive}
  *         aria-label="Показывать архивные тендеры" />
  */
-export function Switch({ checked, onChange, disabled, className }: SwitchProps) {
+export function Switch({
+  checked, onChange, disabled, className, 'aria-label': ariaLabel,
+}: SwitchProps) {
   return (
     <button
       type="button"
       role="switch"
       aria-checked={checked}
+      /* Подпись ОБЯЗАНА доехать до DOM. Проп был объявлен обязательным в
+         SwitchProps и потерян в деструктуризации: TypeScript такую потерю не
+         видит — объявленный и не использованный проп для него норма, — и
+         свитч уезжал в интерфейс безымянным, объявляясь «переключатель,
+         выключено». */
+      aria-label={ariaLabel}
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={cx(s.switch, checked && s.isChecked, className)}

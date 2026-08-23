@@ -8,3 +8,6 @@ ds-dist/
 .design-sync/.cache/
 .design-sync/learnings/
 .design-sync/node_modules
+
+# сессионный кэш инструмента impeccable (локальные пути, id сессий)
+.impeccable/hook.cache.json

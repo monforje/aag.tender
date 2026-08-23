@@ -126,7 +126,7 @@
   width: 300px;
   padding: 10px 12px;
   border-radius: var(--cu-radii-4);
-  background: rgb(32,32,32); color: rgba(255,255,255,.82);
+  background: var(--cu-surface-inverse); color: var(--cu-content-on-dark-secondary);
   font-size: var(--cu-text-sm); line-height: 1.45;
   box-shadow: 0 8px 24px rgba(0,0,0,.18);
   animation: k-help-in var(--cu-duration-fast) var(--cu-ease-standard);
@@ -134,14 +134,14 @@
 @keyframes k-help-in{
   from{ opacity: 0; transform: translateY(3px); }
 }
-.k-help b{ font-weight: var(--cu-font-weight-semibold); color: #fff; }
+.k-help b{ font-weight: var(--cu-font-weight-semibold); color: var(--cu-content-on-dark); }
 .k-formula{
   font-size: 11px; line-height: 16px;
   font-weight: var(--cu-font-weight-medium);
-  color: #fff;
+  color: var(--cu-content-on-dark);
 }
 .k-source{
-  color: rgba(255,255,255,.5);
+  color: var(--cu-content-on-dark-muted);
   font-style: italic;
 }
 
@@ -158,7 +158,7 @@
   position: absolute; top: -3px; right: -4px;
   display: flex; align-items: center; justify-content: center;
   min-width: 15px; height: 15px; padding-inline: 4px; border-radius: var(--cu-radii-round);
-  background: rgb(32,32,32); color: #fff;
+  background: var(--cu-surface-inverse); color: var(--cu-content-on-dark);
   font-size: 10px; font-weight: var(--cu-font-weight-semibold); line-height: 1;
   box-shadow: 0 0 0 2px var(--cu-global-sidebar-background);
 }
@@ -197,6 +197,31 @@
 /* Пустой предикат честно тусклый, но кликабельный: ноль — тоже ответ. */
 .predicate--empty .predicate__label,
 .predicate--empty .predicate__glyph{ opacity: .45; }
+
+/* ── микроанимации глифов-образцов (второй канал) ─────────────────────────
+   Словарь оживает под курсором: у каждого маркера — своё движение, то же,
+   что у живой пометки в таблице. «Дороже медианы» подскакивает над уровнем,
+   аномалия мигает штриховкой — сигнал, а не украшение. Проигрывается один
+   раз на вход курсора в строку; селектор по атрибуту внутри svg законен:
+   data-mk не хэшируется, границы модуля он не пересекает. */
+@keyframes med-rise{
+  0% { transform: translateY(0); }
+  45% { transform: translateY(-1.5px); }
+  100% { transform: translateY(0); }
+}
+@keyframes anomaly-blink{
+  0%, 100% { opacity: 1; }
+  30% { opacity: .25; }
+  55% { opacity: 1; }
+  75% { opacity: .45; }
+}
+.predicate:hover [data-mk='rise']{ animation: med-rise .5s var(--cu-ease-standard); }
+.predicate:hover [data-mk='hatch']{ animation: anomaly-blink .6s linear; }
+
+@media (prefers-reduced-motion: reduce){
+  .predicate [data-mk='rise'],
+  .predicate [data-mk='hatch']{ animation: none; }
+}
 
 /* Галочка выбора — тем же приёмом, что у <MenuItem>: слот всегда на месте,
    видна только отмеченной (иначе строки прыгали бы). */

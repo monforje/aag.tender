@@ -1,0 +1,14 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "bounce-easing",
+        "value": "cubic-bezier(.34, 1.4, .64, 1)",
+        "createdAt": "2026-08-23T17:24:53.227Z",
+        "reason": "Claude, audit 2026-08-23: caliper glyph jaws (.spread-mark), amplitude 1.15px over .55s, gated by prefers-reduced-motion. Overshoot is literal domain motion — a caliper flexes open — not a bouncing UI element; at 1.15px no bounce is perceivable. Verified in context twice."
+      }
+    ]
+  }
+}

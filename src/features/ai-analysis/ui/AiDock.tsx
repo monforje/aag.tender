@@ -10,11 +10,12 @@ import { askAi, type AiAnswer } from '../model/askAi';
 import { SparkGlyph } from './assets/SparkGlyph';
 import { RichText } from './RichText';
 import s from './AiDock.module.css';
+import { AI_DOCK_ID } from './dockId';
 
 /* Стабильные id связки «триггер ↔ панель»: триггер рендерит страница (якорем
    у линии main header'а), панель — она же, и встретиться им суждено только
    здесь. Тот же приём, что TITLE_ID у сводки. */
-export const AI_DOCK_ID = 'ai-analysis-dock';
+
 
 /* Потолок заголовка сессии: первые слова первого вопроса пользователя. */
 const TITLE_MAX = 32;
@@ -462,7 +463,7 @@ export function AiDock({
               ) : (
                 <div key={m.id} className={s.botRow}>
                   <span className={s.avatar}>
-                    <SparkGlyph size={13} />
+                    <SparkGlyph size={13} flat />
                   </span>
                   <div className={s.botBody}>
                     <RichText text={m.text} />
@@ -483,7 +484,7 @@ export function AiDock({
             {phase === 'thinking' && (
               <div className={s.botRow}>
                 <span className={s.avatar}>
-                  <SparkGlyph size={13} />
+                  <SparkGlyph size={13} flat />
                 </span>
                 <div className={s.dots} aria-label="Анализ думает">
                   <span /><span /><span />

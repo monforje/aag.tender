@@ -9,6 +9,7 @@
   display: flex; flex-direction: column;
   max-height: min(480px, calc(100dvh - 120px));
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 /* Строка словаря: образец в фиксированной колонке — названия стоят на одной
@@ -110,3 +111,27 @@
   background: var(--cu-state-hover); overflow: hidden;
 }
 .share-track i{ display: block; height: 100%; border-radius: inherit; background: var(--cu-tone-success); }
+
+/* ── микроанимации образцов (второй канал) ─────────────────────────────────
+   Словарь оживает под курсором ровно тем же движением, что и живая пометка
+   в таблице: «дороже медианы» подскакивает, аномалия мигает штриховкой.
+   Кейфреймы повторяют CompareSettings — модули хэшируются независимо,
+   общего файла ради двух строк заводить не стали. */
+@keyframes med-rise{
+  0% { transform: translateY(0); }
+  45% { transform: translateY(-1.5px); }
+  100% { transform: translateY(0); }
+}
+@keyframes anomaly-blink{
+  0%, 100% { opacity: 1; }
+  30% { opacity: .25; }
+  55% { opacity: 1; }
+  75% { opacity: .45; }
+}
+.item:hover [data-mk='rise']{ animation: med-rise .5s var(--cu-ease-standard); }
+.item:hover [data-mk='hatch']{ animation: anomaly-blink .6s linear; }
+
+@media (prefers-reduced-motion: reduce){
+  .item [data-mk='rise'],
+  .item [data-mk='hatch']{ animation: none; }
+}

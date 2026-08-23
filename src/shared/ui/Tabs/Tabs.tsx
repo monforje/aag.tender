@@ -1,6 +1,7 @@
 import { useRef } from 'react';
-import type { KeyboardEvent, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { cx } from '@/shared/lib/cx';
+import { rovingTabsKeyDown } from '@/shared/lib/roving';
 import s from './Tabs.module.css';
 
 export interface TabItem {
@@ -45,30 +46,13 @@ export interface TabsProps {
 export function Tabs({ items, value, onChange, className, 'aria-label': ariaLabel }: TabsProps) {
   const listRef = useRef<HTMLDivElement>(null);
 
-  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
-    e.preventDefault();
-    const buttons = [...(listRef.current?.querySelectorAll<HTMLButtonElement>('[role="tab"]') ?? [])];
-    if (!buttons.length) return;
-    const i = buttons.indexOf(document.activeElement as HTMLButtonElement);
-    const next = e.key === 'ArrowRight' ? buttons[(i + 1) % buttons.length]
-      : e.key === 'ArrowLeft' ? buttons[(i - 1 + buttons.length) % buttons.length]
-        : e.key === 'Home' ? buttons[0]
-          : buttons[buttons.length - 1];
-    next?.focus();
-    /* Автоматическая активация: вкладка, на которую пришёл фокус, сразу
-       включается — отдельный Enter здесь лишний жест. */
-    const id = next?.dataset.id;
-    if (id && id !== value) onChange(id);
-  };
-
   return (
     <div
       ref={listRef}
       role="tablist"
       aria-label={ariaLabel}
       className={cx(s.tablist, className)}
-      onKeyDown={onKeyDown}
+      onKeyDown={(e) => rovingTabsKeyDown(e, listRef.current, value, onChange)}
     >
       {items.map((tab) => {
         const active = tab.id === value;

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   applyTransition, PRESETS, SYSTEM_THRESHOLDS,
   type CompareThresholds, type CompareView, type PresetId,
@@ -79,8 +79,16 @@ export function useCompareScreen() {
         : [...list, contractorId]
     ));
 
-  const applyAnalysis = (transition: AnalysisTransition) => {
-    if (!analysisApplied) savedView.current = view;
+  /* Свежие значения перехода — через ref: колбэк обязан быть СТАБИЛЬНЫМ,
+     иначе memo-пункты панели «Анализ ИИ» перерисовывались бы на каждом
+     движении страницы (звезда, порог, фокус), ничего не изменив в себе. */
+  const viewRef = useRef(view);
+  viewRef.current = view;
+  const appliedRef = useRef(analysisApplied);
+  appliedRef.current = analysisApplied;
+
+  const applyAnalysis = useCallback((transition: AnalysisTransition) => {
+    if (!appliedRef.current) savedView.current = viewRef.current;
     setAnalysisApplied(true);
     setView((current) => applyTransition(current, transition));
 
@@ -95,7 +103,22 @@ export function useCompareScreen() {
     setFlash({ cells, cols, rowId: focus.positionId ?? null });
     window.clearTimeout(flashTimer.current);
     flashTimer.current = window.setTimeout(() => setFlash(null), FLASH_MS);
-  };
+  }, []);
+
+  /* Колбэк уходит пропом в КАЖДУЮ строку таблицы, и пересоздание на рендере
+     отменяло бы memo у <CompareRow>: строки перерисовывались бы от любого
+     чужого движения (ширина ленты, звезда, фокус).
+     Зависимость — САМ РАЗБОР, а не пустой список и не реф. Через реф колбэк
+     был бы стабилен ВСЕГДА, и в этом ловушка: комментарий читается в момент
+     ОТРИСОВКИ ячейки, а не в момент попапа, так что после прихода разбора
+     memo-строки остались бы со старым (пустым) комментарием до первого
+     постороннего повода перерисоваться. Разбор приходит раз в сеанс —
+     стабильности это не мешает. */
+  const noteFor = useCallback(
+    (contractorId: string, positionId: string): string | undefined =>
+      analysisResult?.popupNotes[`${contractorId}:${positionId}`],
+    [analysisResult],
+  );
 
   const restoreView = () => {
     if (savedView.current) setView(savedView.current);
@@ -115,7 +138,6 @@ export function useCompareScreen() {
     analysisApplied, applyAnalysis, restoreView,
     analysisResult, setAnalysisResult,
     /** Комментарий разбора к ячейке или ничего — до запуска пусто у всех. */
-    noteFor: (contractorId: string, positionId: string): string | undefined =>
-      analysisResult?.popupNotes[`${contractorId}:${positionId}`],
+    noteFor,
   };
 }

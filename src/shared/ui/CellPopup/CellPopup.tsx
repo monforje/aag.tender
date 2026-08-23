@@ -130,8 +130,14 @@ export function useCellPopup() {
     }, HIDE_DELAY);
   };
 
-  /* Контейнер целей делегирует события; логика одна на всех целях. */
-  const bind: CellPopupBind = (data) => ({
+  /* Контейнер целей делегирует события; логика одна на всех целях.
+     ССЫЛОЧНО СТАБИЛЕН (useCallback без зависимостей): `bind` уходит пропом в
+     КАЖДУЮ строку таблицы, и пересоздание на рендере лишало бы смысла memo у
+     потребителя — строки перерисовывались бы от любого чужого движения
+     (ширина ленты, звезда, перекраска колонки). Внутри он читает только
+     рефы и setState, поэтому зависимостей у него нет по-настоящему, а не
+     «отключены комментарием». */
+  const bind: CellPopupBind = useCallback((data: CellPopupData) => ({
     onMouseEnter: (e) => {
       const el = e.currentTarget;
       clearTimers();
@@ -144,7 +150,8 @@ export function useCellPopup() {
     },
     onFocus: (e) => show(e.currentTarget, data),
     onBlur: () => close(),
-  });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), []);
 
   /* Escape снимает подсказку (dismissible): у немодального <dialog> платформа
      события cancel не шлёт. Скролл закрывает немедленно, на любом уровне. */

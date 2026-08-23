@@ -1,5 +1,5 @@
 import {
-  useEffect, useState,
+  useEffect, useLayoutEffect, useMemo, useRef, useState,
   type CSSProperties,
 } from 'react';
 import { cx } from '@/shared/lib/cx';
@@ -10,9 +10,12 @@ import { ScreenPlaceholder } from '@/shared/ui/Page';
 import { Table, tableCell } from '@/shared/ui/Table';
 import { plural } from '@/shared/lib/plural';
 import {
-  analyzeComparison, filterRows, flatten, isModifiedView, METRIC_LABEL, rankBids, ROW_VIEW_LABEL, type Bid, type CompareThresholds, type CompareView, type Comparison, type PositionGroup, type PresetId, type RowFacts,
+  analyzeComparison, filterRows, flatten, isModifiedView, METRIC_LABEL, metricTotals, rankBids, ROW_VIEW_LABEL, type Bid, type CompareThresholds, type CompareView, type Comparison, type PositionGroup, type PresetId, type RowFacts,
 } from '@/entities/comparison';
 import { choose, resolveTone } from '../model/compareFormat';
+import { computeColumnLayout } from '../model/columns';
+import { useBandMaxHeight } from '../model/useBandMaxHeight';
+import { useBandWidth } from '../model/useBandWidth';
 import { useTableDock } from '../model/useTableDock';
 import { CompareToolbar } from './CompareToolbar';
 import { ColumnPainter } from './ColumnPainter';
@@ -21,6 +24,22 @@ import { ContractorCard } from './ContractorCard';
 import { DossierModal } from './DossierModal';
 import { TotalRow } from './TotalRow';
 import s from './TenderCompare.module.css';
+
+/* Хром шапки карточки ВОКРУГ имени: паддинги (12×2), слоты звезды и стрелки
+   (--cu-size-6 по 24), гэпы сетки шапки (6×2) и зазор на округление вверх.
+   Прибавляется к замеренной ширине текста, образуя пол ширины колонки. */
+const NAME_CHROME = 24 * 3 + 6 * 2 + 2;
+/* Медаль лидера с её отступом — добавляется только колонке первого места. */
+const LEADER_CHROME = 14 + 5;
+
+const sameFloors = (a: Record<string, number>, b: Record<string, number>): boolean => {
+  const ka = Object.keys(a);
+  return ka.length === Object.keys(b).length && ka.every((k) => a[k] === b[k]);
+};
+
+/** Ширина на <col> инлайном; undefined — кадр до первого замера. */
+const pxStyle = (w?: number): { width: string } | undefined =>
+  w == null ? undefined : { width: `${w}px` };
 
 /**
  * Сравнение коммерческих предложений: позиции сметы строками, подрядчики —
@@ -51,17 +70,25 @@ import s from './TenderCompare.module.css';
  *         ЦВЕТ КОЛОНКИ — ПОДСКАЗКА, А НЕ ВЕРДИКТ: базово его ставит ранжир,
  *         перекрашивается рукой через <ColumnPainter>; смысловые тона пометок
  *         при этом рукой не трогаются никогда.
- *         ШАПКА И САЙДБАР: шапка таблицы прилипает под шапкой экрана
+ *         СКРОЛЛ ЖИВЁТ В БЛОКЕ (.band), а не на странице: горизонталь нужна
+ *         шести колонкам подрядчиков, но панорамировать весь экран ради неё
+ *         нельзя — уезжала бы сводка с вкладками, а док «Анализ ИИ» справа
+ *         переставал бы совпадать с содержимым. Потолок высоты блока ставит
+ *         useBandMaxHeight, липкая шапка и автосайдбар — useTableDock.
+ *         ШИРИНЫ СЧИТАЕТ АЛГОРИТМ (model/columns.ts): пол каждой колонки
+ *         подрядчика — её полное имя (замерщик .measure); равная доля в
+ *         вилке пол/потолок остаётся базой, длинное имя раздвигает свою
+ *         колонку, теснота жмёт левый блок и название, дно — панорама.
+ *         ШАПКА И САЙДБАР: шапка таблицы прилипает к верхней кромке блока
  *         нативным sticky (<Table stickyHead>) — без JS в прокрутке; движение
- *         скролла вниз прячет сайдбар в рейл. Вся механика — в хуке
+ *         скролла ленты вниз прячет сайдбар в рейл. Механика — в хуке
  *         useTableDock, здесь остаётся только точка замера.
- *         История решения (почему не JS-док) — у блока «липкая шапка» в
- *         model/useTableDock.ts и в Части XII DESIGN-NOTES.md.
  * A11Y:   каждая пометка — кнопка со своим именем; активной цели ставится
  *         aria-describedby на попап. Счётчики над таблицей считаются по всему
  *         датасету и продублированы текстом в caption. Снятая строка остаётся
  *         в DOM — это история сметы. Ширины колонок — контракт <colgroup>
- *         при layout="fixed", содержимое на них не влияет.
+ *         при layout="fixed", содержимое на них не влияет; блок ленты
+ *         фокусируем (role="region"), чтобы прокручивать с клавиатуры.
  *
  * @example
  * <TenderCompare {...comparison} view={view} onPreset={applyPreset}
@@ -112,10 +139,20 @@ export function TenderCompare({
 }) {
   /* Плоский список позиций и ранжир ВЫВОДЯТСЯ из пришедшего, а не приходят
       полями: два перечня одних и тех же строк разъехались бы на первой правке.
-      Пересчёт — тринадцать позиций на три КП, мемоизировать тут нечего. */
-  const positions = flatten(groups);
-  const bids = rankBids(contractors, positions);
-  const facts = analyzeComparison(groups, contractors, thresholds);
+      МЕМОИЗИРОВАНЫ ПО ДАННЫМ, а не по рендеру: пересчёт трогает медианы,
+      разбросы, аномалии и веса по всем ячейкам сразу, а поводов перерисоваться
+      у экрана полно и без смены данных — открытие панели «Анализ ИИ» двигает
+      ширину ленты КАЖДЫЙ кадр анимации, за ним resize окна, звезда, перекраска
+      колонки, попап. Замер (puppeteer, 428 строк × 6 КП): скрипт на открытие
+      панели 208 → 30 мс, на прокрутку окна 396 → 26 мс. Ссылочная
+      стабильность `bids` — ещё и условие memo у <CompareRow>. */
+  const positions = useMemo(() => flatten(groups), [groups]);
+  const bids = useMemo(() => rankBids(contractors, positions), [contractors, positions]);
+  const facts = useMemo(
+    () => analyzeComparison(groups, contractors, thresholds),
+    [groups, contractors, thresholds],
+  );
+  const totals = useMemo(() => metricTotals(facts.rows, bids), [facts, bids]);
 
   const modified = isModifiedView(view);
 
@@ -123,6 +160,17 @@ export function TenderCompare({
       по одной. Разделы сворачиваются ПООДИНОЧКЕ. Цвет колонки — CSS-строка,
       отсутствие ключа значит «по ранжиру». */
   const [collapsed, setCollapsed] = useState(false);
+  /* ЗАКРЕПЛЕНИЕ КОЛОНКИ-ЯКОРЯ — ВЫКЛЮЧЕНО ПО УМОЛЧАНИЮ (решение владельца
+     23.08.2026) и живёт ЗДЕСЬ, а не в CompareView, хотя выглядит как ещё одна
+     ось вида. Причины две, и обе про поведение соседних контролов.
+     Первая: `isModifiedView` поднял бы чип «Изменён · Сброс» на закрепление —
+     а оно не уводит от базы пресета, срез данных остаётся тем же.
+     Вторая: пресет присваивает оси ЦЕЛИКОМ, и переключение «Обзор → Торги»
+     сбрасывало бы закрепление ровно в тот момент, когда таблица становится
+     шире и якорь нужнее всего.
+     Это эргономика ЧТЕНИЯ — того же рода, что `folded` и `collapsed` рядом:
+     переживает смену пресета, не переживает уход со страницы. */
+  const [pinned, setPinned] = useState(false);
   const [folded, setFolded] = useState<Record<string, boolean>>({});
   const [tint, setTint] = useState<Record<string, string>>({});
   const [dossier, setDossier] = useState<Bid | null>(null);
@@ -144,11 +192,73 @@ export function TenderCompare({
      автосайдбара и история решения — в JSDoc хука. */
   const { dockRef } = useTableDock({ focusRowId, onHeadStuckChange });
 
+  /* Потолок высоты блока: остаток экрана под вводными полосами. Страница
+     доскролливает сводку с вкладками и останавливается — дальше едет
+     только содержимое ленты (механика — в JSDoc хука). */
+  const active = groups.length > 0 && contractors.length > 0;
+  const bandMaxH = useBandMaxHeight(dockRef, active);
+  const bandWidth = useBandWidth(dockRef, active);
+
+  /* ШИРИНА КОЛОНКИ ОТ ПОЛНОГО ИМЕНИ. Имя подрядчика — то, по чему колонку
+     опознают, поэтому пол каждой колонки — её собственное имя целиком:
+     скрытая копия шапки (ниже, .measure с тем же классом имени) меряет
+     тексты, и пол уезжает в расчётчик ширин. Пересчёт — при смене состава
+     или имён, смене лидера (медаль добавляет хром) и после догрузки
+     шрифтов; равные результаты состояние не двигают, иначе замер зациклил
+     бы перерендер. */
+  const nameNodes = useRef(new Map<string, HTMLSpanElement>());
+  const [nameFloors, setNameFloors] = useState<Record<string, number>>({});
+  /* В ключе — и состав имён, и текущий лидер: медаль добавляет колонке
+     первого места свой хром, и её переезд обязан пересчитать полы. */
+  const leaderId = bids.find((bid) => bid.rank === 1)?.contractor.id;
+  const namesKey =
+    contractors.map((c) => `${c.id}:${c.name}`).join('|') + '#' + String(leaderId);
+  /* Layout-эффект: полы обязаны встать до первой отрисовки, иначе колонки
+     на кадр рождаются равными долями и едут у пользователя на глазах.
+     document.fonts.ready — асинхронная доводка после подгрузки шрифтов. */
+  useLayoutEffect(() => {
+    let cancelled = false;
+    const measure = () => {
+      if (cancelled) return;
+      const floors: Record<string, number> = {};
+      for (const bid of bids) {
+        const node = nameNodes.current.get(bid.contractor.id);
+        if (!node) continue;
+        floors[bid.contractor.id] =
+          Math.ceil(node.offsetWidth) + NAME_CHROME + (bid.rank === 1 ? LEADER_CHROME : 0);
+      }
+      setNameFloors((prev) => (sameFloors(prev, floors) ? prev : floors));
+    };
+    measure();
+    document.fonts?.ready.then(measure);
+    return () => { cancelled = true; };
+    // Зависимость — состав имён: сам перечень bids пересоздаётся каждым
+    // рендером, и эффект по нему повторялся бы на любом постороннем движении.
+  }, [namesKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* РАСЧЁТ ШИРИН КОЛОНОК: чистая функция от видимой ширины и полов имён
+     (механика и три режима — в model/columns.ts). Пересобирается только
+     при смене ширины блока или полов; null — кадр до первого замера. */
+  const bidFloors = useMemo(
+    () => contractors.map((c) => ({ id: c.id, floor: nameFloors[c.id] ?? 0 })),
+    [contractors, nameFloors],
+  );
+  const layout = useMemo(
+    () => (bandWidth == null ? null : computeColumnLayout({ available: bandWidth, bids: bidFloors })),
+    [bandWidth, bidFloors],
+  );
+  /* Закреплять имеет смысл ТОЛЬКО в панораме: в двух других режимах columns.ts
+     раскладывает колонки ровно в ширину ленты, горизонтального хода нет вовсе,
+     и закреплённая колонка ничем не отличалась бы от обычной. `pan` — это и
+     есть «сумма полов больше доступного места», единственный режим с
+     прокруткой. */
+  const pannable = layout?.pan ?? false;
+
   /* Строки, прошедшие ВСЕ предикаты; разделы собирают свои из них же.
      Для ПОДЫТОГОВ узла нужен полный набор его позиций: фильтр прячет строки,
      но суммы не двигает. */
-  const visible = filterRows(facts.rows, view.filters);
-  const visibleIds = new Set(visible.map((r) => r.position.id));
+  const visible = useMemo(() => filterRows(facts.rows, view.filters), [facts, view.filters]);
+  const visibleIds = useMemo(() => new Set(visible.map((r) => r.position.id)), [visible]);
   const byIdOf = (p: { id: string }): RowFacts | undefined => facts.byId.get(p.id);
   const rowsOfGroup = (group: PositionGroup): RowFacts[] =>
     group.positions.map(byIdOf).filter((r): r is RowFacts => !!r && visibleIds.has(r.position.id));
@@ -180,6 +290,7 @@ export function TenderCompare({
           thresholds={thresholds}
           onThresholds={onThresholds}
           allRows={facts.rows}
+          totals={totals}
           modified={modified}
           analysisApplied={analysisApplied}
           onRestoreView={onRestoreView}
@@ -188,22 +299,30 @@ export function TenderCompare({
         />
       </div>
 
-      {/* Точка замера порога сайдбара: верх этого блока = верх ленты. Сама
-          липкость шапки живёт в <Table stickyHead> и CSS, не здесь. Клик по
-          таблице снимает подсветку строки из «Анализа»: пользователь уже
-          смотрит сам, чужая метка больше не нужна.
+      {/* Точка замера порога сайдбара и СКРОЛЛБЛОК ленты: обе прокрутки —
+          здесь, не на странице (разбор — в .module.css и JSDoc). Потолок
+          высоты ставит useBandMaxHeight инлайном. Клик по таблице снимает
+          подсветку строки из «Анализа»: пользователь уже смотрит сам, чужая
+          метка больше не нужна.
           БЛОК — КОНТЕЙНЕР ПЛОТНОСТИ (.band): по его фактической ширине
           лестница в .module.css ступенями ужесточает контракт колонок,
           паддинги и зум ленты — от любой причины сжатия (панель «Анализ
-          ИИ», узкое окно), а не только от одной конкретной. */}
+          ИИ», узкое окно), а не только от одной конкретной.
+          tabIndex + region: прокручиваемый блок доступен с клавиатуры —
+          стрелки панорамируют его, когда фокус стоит на рамке. */}
       <div
         ref={dockRef}
         className={s.band}
+        style={{ '--band-max-h': bandMaxH != null ? `${bandMaxH}px` : undefined } as CSSProperties}
+        role="region"
+        aria-label={`Сравнение КП: ${contractors.length} подрядчиков`}
+        tabIndex={0}
         onClick={() => { if (focusRowId) onFocusClear(); }}
       >
         <div className={s.density}>
         <Table
           stickyHead
+          stickyCol={pinned}
           layout="fixed"
           caption={[
             `Показано ${visible.length} из ${facts.rows.length} позиций`,
@@ -216,23 +335,52 @@ export function TenderCompare({
         >
           {/* Цвет колонки — на <col>, а не на каждой ячейке: фон колонки рисуется
               НИЖЕ фона строки, поэтому ховер продолжает читаться поверх заливки.
-              ШИРИНА исполняется только при layout="fixed" (контракт .cols). */}
-          <colgroup className={s.cols} style={{ '--bids': bids.length } as CSSProperties}>
-            <col className={cx(s.colTitle, s.colRule)} />
-            <col className={cx(s.colQty, s.colRule)} />
-            <col className={cx(s.colUnit, s.colRule)} />
-            <col className={cx(s.colSpread, s.colRule)} />
+              ШИРИНЫ ставит расчётчик (model/columns.ts) инлайном: до первого
+              замера кадр живёт без них, дальше ширина есть у каждого <col>. */}
+          <colgroup className={s.cols}>
+            <col className={s.colRule} style={pxStyle(layout?.title)} />
+            <col className={s.colRule} style={pxStyle(layout?.qty)} />
+            <col className={s.colRule} style={pxStyle(layout?.unit)} />
+            <col className={s.colRule} style={pxStyle(layout?.spread)} />
             {bids.map((bid, i) => (
               <col
                 key={bid.contractor.id}
-                className={cx(s.colBid, s.colTint, i < bids.length - 1 && s.colRule)}
-                style={{ '--col': choose(tint, bid) } as CSSProperties}
+                className={cx(s.colTint, i < bids.length - 1 && s.colRule)}
+                style={{
+                  ...pxStyle(layout?.bids[bid.contractor.id]),
+                  '--col': choose(tint, bid),
+                } as CSSProperties}
               />
             ))}
           </colgroup>
           <thead>
             <tr>
-              <th scope="col">Позиция</th>
+              {/* Кнопка закрепления живёт В ШАПКЕ САМОЙ КОЛОНКИ, а не в полосе
+                  контролов: полоса уже отказала седьмому контролу (см.
+                  CompareToolbar), а «закрепить» относится к ОДНОЙ конкретной
+                  колонке — у её заголовка оно и объясняет себя без подписи.
+                  Показывается только когда есть что закреплять: лента шире
+                  своей видимой области. Иначе кнопка обещала бы эффект,
+                  которого при полностью влезающей таблице не существует. */}
+              <th scope="col">
+                Позиция
+                {pannable ? (
+                  <button
+                    type="button"
+                    className={cx(s.pin, pinned && s.pinOn)}
+                    aria-pressed={pinned}
+                    title={pinned
+                      ? 'Открепить колонку — она снова будет уезжать при прокрутке'
+                      : 'Закрепить колонку — останется на месте при прокрутке вправо'}
+                    onClick={() => setPinned((on) => !on)}
+                  >
+                    <Icon name={pinned ? 'pinFilled' : 'pin'} />
+                    <span className="visually-hidden">
+                      {pinned ? 'Открепить колонку «Позиция»' : 'Закрепить колонку «Позиция»'}
+                    </span>
+                  </button>
+                ) : null}
+              </th>
               <th scope="col" className={tableCell.numeric}>Количество</th>
               <th scope="col">Единица</th>
               <th scope="col" className={tableCell.numeric}>Разброс</th>
@@ -281,9 +429,12 @@ export function TenderCompare({
               return (
                 <tbody key={group.id}>
                   <tr className={s.groupRow}>
-                    {/* Шапка раздела — <th scope="colgroup">: заголовок для строк
-                        под ним, а не ячейка со значением. */}
-                    <th scope="colgroup" className={cx(tableCell.card, s.groupHead)}>
+                    {/* Шапка раздела — <th scope="rowgroup">: заголовок для СТРОК
+                        под ним, а не ячейка со значением. Ровно это и говорил
+                        комментарий здесь всегда, а стоял `colgroup` — то есть
+                        «заголовок для группы КОЛОНОК», чем раздел сметы не
+                        является ни в каком приближении. */}
+                    <th scope="rowgroup" className={cx(tableCell.card, s.groupHead)}>
                       <button
                         type="button"
                         className={s.groupToggle}
@@ -307,11 +458,15 @@ export function TenderCompare({
                     {bids.map((bid) => <td key={bid.contractor.id} />)}
                   </tr>
 
-                  {/* Итог остаётся и у свёрнутого раздела: ради него и сворачивают. */}
-                  {open ? rows.map((row) => (
+                  {/* Итог остаётся и у свёрнутого раздела: ради него и сворачивают.
+                      Строки въезжают каскадом по индексу — раскрытие подтверждается
+                      появлением содержимого, а не мгновенной подменой (высоту строк
+                      <table> честно не анимировать, решение 23.08.2026). */}
+                  {open ? rows.map((row, i) => (
                     <CompareRow
                       key={row.position.id}
                       row={row}
+                      enterIndex={i}
                       view={view}
                       thresholds={thresholds}
                       bids={bids}
@@ -364,6 +519,27 @@ export function TenderCompare({
 
       {/* Один попап на таблицу: содержимое подставляется, элемент не меняется. */}
       {popup.view}
+
+      {/* Замерщик имён: копии шапок вне таблицы, тем же классом имени и с
+          медалью у лидера — ширина снимается ровно та, что встанет в
+          колонку. Сиблинг .band: скроллблок обрезал бы измеряемый текст. */}
+      <div className={s.measure} aria-hidden="true">
+        {bids.map((bid) => (
+          <span
+            key={bid.contractor.id}
+            className={s.cardName}
+            ref={(el) => {
+              if (el) nameNodes.current.set(bid.contractor.id, el);
+              else nameNodes.current.delete(bid.contractor.id);
+            }}
+          >
+            {bid.rank === 1 && (
+              <span className={s.leader}><Icon name="skill" /></span>
+            )}
+            {bid.contractor.name}
+          </span>
+        ))}
+      </div>
 
       {/* Досье подрядчика. */}
       <DossierModal bid={dossier} total={positions.length} onClose={() => setDossier(null)} />

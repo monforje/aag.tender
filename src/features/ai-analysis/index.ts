@@ -1,7 +1,10 @@
 /* Публичный API фичи «Анализ». Внутрь слайса не заходить — всё, чем фича
    делится, перечислено здесь. */
 export { AnalysisDock } from './ui/AnalysisDock';
-export { AiDock, AI_DOCK_ID } from './ui/AiDock';
+/* AiDock наружу больше не реэкспортируется: единственный его потребитель —
+   сама панель, и она грузит его lazy. Реэкспорт вернул бы чат в главный чанк
+   через barrel. Наружу идёт только адрес панели. */
+export { AI_DOCK_ID } from './ui/dockId';
 export { AiTrigger, AI_TRIGGER_ID } from './ui/AiTrigger';
 
 /* Контракт разбора. Живёт в ФИЧЕ, а не в entities, и это переезд, а не

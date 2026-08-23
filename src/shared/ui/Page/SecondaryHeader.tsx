@@ -1,4 +1,6 @@
+import { useRef } from 'react';
 import { cx } from '@/shared/lib/cx';
+import { rovingTabsKeyDown } from '@/shared/lib/roving';
 import s from './Page.module.css';
 
 export interface SecondaryTab {
@@ -25,7 +27,12 @@ export interface SecondaryTab {
  *         Вариант — это ПОВЕРХНОСТЬ, а не набор чисел: снаружи ни высота, ни
  *         кегль не задаются, иначе второй такой таблист приедет со своими
  *         значениями и разъедется с этим.
- * A11Y:   role="tablist" на списке, role="tab"/aria-selected на кнопках.
+ * A11Y:   role="tablist" на списке, role="tab"/aria-selected на кнопках плюс
+ *         клавиатура APG: роющий tabindex (активной 0, прочим −1) и стрелки
+ *         с Home/End через общий rovingTabsKeyDown. Правило делится с
+ *         <Tabs> — второй таблист проекта; раньше клавиатура была только
+ *         там, а здесь те же роли стояли без неё, и семь вкладок карточки
+ *         тендера обходились Tab'ом поштучно при молчащих стрелках.
  *
  * @example
  * <PageHeader withSecondary><PageTitle>Replies</PageTitle></PageHeader>
@@ -41,9 +48,16 @@ export function SecondaryHeader({ tabs, activeId, onChange, variant = 'header' }
   /** header — второй слот шапки экрана; canvas — полоса в теле страницы. */
   variant?: 'header' | 'canvas';
 }) {
+  const listRef = useRef<HTMLDivElement>(null);
+
   return (
     <div className={cx(s.mainSecondaryHeader, variant === 'canvas' && s.mainSecondaryHeaderCanvas)}>
-      <div className={s.tablist} role="tablist">
+      <div
+        ref={listRef}
+        className={s.tablist}
+        role="tablist"
+        onKeyDown={(e) => rovingTabsKeyDown(e, listRef.current, activeId, onChange)}
+      >
         {tabs.map((tab) => {
           const active = tab.id === activeId;
           return (
@@ -51,7 +65,9 @@ export function SecondaryHeader({ tabs, activeId, onChange, variant = 'header' }
               key={tab.id}
               type="button"
               role="tab"
+              data-id={tab.id}
               aria-selected={active}
+              tabIndex={active ? 0 : -1}
               className={cx(s.tab, active && s.isActive)}
               onClick={() => onChange(tab.id)}
             >

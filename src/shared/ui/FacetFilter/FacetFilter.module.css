@@ -14,6 +14,7 @@
 .fp__facets{
   flex: 0 0 180px; display: flex; flex-direction: column; gap: 2px;
   padding-right: 6px; margin-right: 6px; overflow-y: auto;
+  overscroll-behavior: contain;
   border-right: 1px solid var(--cu-border-default);
 }
 /* Критерий — крупная поверхность (строка во всю колонку), поэтому ховер .05.
@@ -49,7 +50,8 @@
 }
 .fp__clear:hover{ background: var(--cu-state-hover); color: var(--cu-content-primary); }
 .fp__clear:focus-visible{ outline: var(--cu-focus-ring); outline-offset: 1px; }
-.fp__list{ flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-right: 2px; }
+.fp__list{ flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-right: 2px;
+  overscroll-behavior: contain; }
 /* Черта между закреплённым выбранным и остальным списком: без неё после
    первого же символа в поиске непонятно, почему сверху лежит что-то,
    не совпадающее с запросом. */

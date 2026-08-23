@@ -48,6 +48,8 @@ import { MenuDotsIcon } from '@solar-icons/react/linear/menu-dots';
 import { PipetteIcon } from '@solar-icons/react/linear/pipette';
 import { PulseIcon } from '@solar-icons/react/linear/pulse';
 import { QuestionCircleIcon } from '@solar-icons/react/linear/question-circle';
+import { PinIcon } from '@solar-icons/react/linear/pin';
+import { PinIcon as PinBoldIcon } from '@solar-icons/react/bold/pin';
 import { History2Icon } from '@solar-icons/react/linear/history-2';
 import { ReplyIcon } from '@solar-icons/react/linear/reply';
 import { RestartIcon } from '@solar-icons/react/linear/restart';
@@ -104,6 +106,16 @@ export const ICONS = {
      (статус «Отменён», очистка поиска, «Сбросить всё») и всякий раз требовал
      объяснения. */
   closeCircle: CloseCircleIcon,
+  /* Канцелярская кнопка — «приколоть на месте». Взята вместо замка
+     (lock-keyhole): замок обещает ЗАПРЕТ — «нельзя править», — а колонка
+     остаётся полностью рабочей, у неё меняется только поведение при
+     прокрутке. Того же основания, что у closeCircle: в спрайте эталона
+     булавки нет, но экраны вне эталона рисуются Solar напрямую.
+     ПАРА контур/заливка — как у star/starFilled ниже: отмеченное состояние
+     отличает ФОРМА, и переключатель закрепления повторяет ровно тот приём,
+     что звезда «в избранное» в шапке этой же таблицы. */
+  pin: PinIcon,
+  pinFilled: PinBoldIcon,
   filter: FilterIcon,
   list: ListIcon,
   sparkleChat: ChatRoundIcon,

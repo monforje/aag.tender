@@ -42,7 +42,12 @@ interface WorkspaceState {
 
 export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   activeId: 'home',
-  sidebarOpen: true,
+  /* СТАРТОВОЕ значение зависит от ширины окна, дальше — нет. На узком экране
+     сайдбар всплывает НАД содержимым (Workspace.module.css, порог 900px), и
+     открытый по умолчанию он встречал бы пользователя, закрывая собой всю
+     страницу. Слушателя на resize намеренно нет: пересечение порога не должно
+     отменять то, что человек переключил руками. */
+  sidebarOpen: !window.matchMedia('(max-width: 900px)').matches,
   aiPanelOpen: false,
 
   syncFromRoute: ({ activeId }) =>

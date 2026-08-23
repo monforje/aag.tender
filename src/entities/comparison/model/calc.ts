@@ -7,7 +7,7 @@
  *  таблица, фильтры, счётчики и попап читают одни и те же числа. */
 
 import type { Tone } from '@/shared/ui/Badge';
-import type { CompareThresholds } from './thresholds';
+import { POTENTIAL_MIN, type CompareThresholds } from './thresholds';
 import {
   cellMark, hasAnomaly,
   type ComparePosition, type Contractor, type PositionGroup,
@@ -247,4 +247,31 @@ export function analyzeComparison(
   }
 
   return { rows, byId: new Map(rows.map((r) => [r.position.id, r])), sumWeight };
+}
+
+/* ═══════════════════ ИТОГИ УРОВНЯ ТЕНДЕРА ═══════════════════ */
+
+export interface MetricTotals {
+  /** Итог ЛУЧШЕГО КП по закрытым позициям — «текущая стоимость» тендера.
+   *  Ни одного предложения — null: тире, а не ноль (ноль означал бы согласие). */
+  best: number | null;
+  /** Σ заявленного запаса по строкам торга — «потенциал стоимости». */
+  potential: number;
+}
+
+/** Пара «стоимость → потенциал» одним проходом. Читатели — меню основного
+ *  показателя и его шкала соотношения.
+ *
+ *  ФОРМУЛА ПОТЕНЦИАЛА ТА ЖЕ, что у точек торгов разбора (`analysis.ts`):
+ *  строки с запасом от POTENTIAL_MIN и живой конкуренцией (две закрытые
+ *  расценки). Две реализации одной величины разъехались бы при первой правке
+ *  порога, поэтому отбор живёт здесь, а не у каждого читателя свой. */
+export function metricTotals(rows: RowFacts[], bids: Bid[]): MetricTotals {
+  return {
+    best: bids[0]?.sum ?? null,
+    potential: rows.reduce(
+      (acc, r) => acc + (r.maxPot >= POTENTIAL_MIN && r.bids.length >= 2 ? r.maxPot : 0),
+      0,
+    ),
+  };
 }

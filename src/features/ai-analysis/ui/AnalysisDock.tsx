@@ -1,29 +1,43 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import {
+  lazy, memo, Suspense, useEffect, useRef, useState, type ReactNode,
+} from 'react';
 import { cx } from '@/shared/lib/cx';
 import { plural } from '@/shared/lib/plural';
 import { Button } from '@/shared/ui/Button';
 import { Dropdown, MenuItem } from '@/shared/ui/Dropdown';
 import { ErrorState } from '@/shared/ui/ErrorState';
-import { Icon } from '@/shared/ui/Icon';
+import { Icon, type IconName } from '@/shared/ui/Icon';
 import { IconButton } from '@/shared/ui/IconButton';
 import { Skeleton } from '@/shared/ui/Skeleton';
 import { reducedMotion } from '@/shared/lib/reducedMotion';
 import type { CompareThresholds, Comparison } from '@/entities/comparison';
 import type {
-  AnalysisItem, AnalysisRef, AnalysisResult, AnalysisSection,
-  AnalysisSectionId, AnalysisSubsectionId, AnalysisTransition,
+  AnalysisFindingKind, AnalysisItem, AnalysisRef, AnalysisResult,
+  AnalysisSection, AnalysisSectionId, AnalysisSubsectionId, AnalysisTransition,
 } from '../model/analysis';
 import { useAnalysisRuns } from '../model/useAnalysisRuns';
-import { AI_DOCK_ID, AiDock } from './AiDock';
+import { AI_DOCK_ID } from './dockId';
 import { SparkGlyph } from './assets/SparkGlyph';
 /* Оболочка панели (геометрия, спектральная линия, плитка ИИ) — ОДНА на оба
    режима: импорт того же CSS-модуля даёт те же хэши классов без копии правил. */
 import base from './AiDock.module.css';
+
+/* Заглушка чата грузится ПО КЛИКУ. Свободный вопрос вынесен за контур
+   (05 §10), витрина «скоро будет реализовано» открывается редко и вручную —
+   а тянула за собой ответчик, историю, стриминг и правила подсказок: 58 КБ
+   исходника в главном чанке ради экрана, который почти никто не откроет.
+   Оболочка (CSS-модуль) остаётся статической: её делят оба режима, и её
+   отложенная загрузка дала бы панель без геометрии. */
+const AiDock = lazy(() => import('./AiDock').then((m) => ({ default: m.AiDock })));
 import s from './AnalysisDock.module.css';
 
 /** Слова-сущности внутри серверной строки: пунктир и мягкий красный видны без
  *  наведения (05 §6); переход ведёт только то, у чего есть валидный переход. */
-function withRefs(text: string, refs: AnalysisRef[], onPick: () => void): ReactNode {
+function withRefs(
+  text: string,
+  refs: AnalysisRef[],
+  onPick: (ref: AnalysisRef) => void,
+): ReactNode {
   const marks = refs
     .map((ref) => ({ ref, at: text.indexOf(ref.label) }))
     .filter(({ ref, at }) => at >= 0 && ref.label.length > 0)
@@ -44,7 +58,7 @@ function withRefs(text: string, refs: AnalysisRef[], onPick: () => void): ReactN
         title={ref.kind === 'work'
           ? 'Показать эту работу в сравнении'
           : 'Показать этого подрядчика в сравнении'}
-        onClick={onPick}
+        onClick={() => onPick(ref)}
       >
         {text.slice(at, at + ref.label.length)}
       </button>,
@@ -55,9 +69,124 @@ function withRefs(text: string, refs: AnalysisRef[], onPick: () => void): ReactN
   return nodes;
 }
 
+/** Переход ПОД ТУ СУЩНОСТЬ, ПО КОТОРОЙ КЛИКНУЛИ. Общий `item.transition`
+ *  несёт фокус, выбранный сервером для пункта целиком (у «Изменений» — самый
+ *  крупный шаг), и на всех словах он один. Тогда клик по второму шагу уводил
+ *  к первому, а подсказка обещала «показать ЭТУ работу» — переход обязан
+ *  соответствовать слову, иначе он врёт (05 §6). Заменяется ровно то поле,
+ *  чей это вид: работа правит позицию, подрядчик — колонку. */
+const transitionFor = (item: AnalysisItem, ref: AnalysisRef): AnalysisTransition => ({
+  ...item.transition!,
+  focus: ref.kind === 'work'
+    ? { ...item.transition!.focus, positionId: ref.id }
+    : { ...item.transition!.focus, contractorId: ref.id },
+});
+
+/** Глиф и цвет находки брифа. Тон — из пяти тонов проекта; «вывод» нейтрален
+ *  сознательно: главный вывод — не оценка, красить его значило бы спорить
+ *  с находками ниже. */
+const FINDING_VIEW: Record<AnalysisFindingKind, { icon: IconName; cls: string }> = {
+  key: { icon: 'star', cls: s.fKey },
+  saving: { icon: 'graphUp', cls: s.fSaving },
+  anomaly: { icon: 'flag', cls: s.fAnomaly },
+  risk: { icon: 'closeCircle', cls: s.fRisk },
+};
+
+/** Находка «Что обнаружено»: вся строка — цель клика (≥ 30px), переход ведёт
+ *  в таблицу тем же механизмом, что слова-сущности. Без перехода строка
+ *  статична и не обещает клика. */
+function Finding({ finding, onTransition }: {
+  finding: AnalysisResult['brief']['findings'][number];
+  onTransition: (t: AnalysisTransition) => void;
+}) {
+  const view = FINDING_VIEW[finding.kind];
+  const body = (
+    <>
+      <Icon name={view.icon} className={cx(s.findingIcon, view.cls)} />
+      <span className={s.findingText}>{finding.title}</span>
+      {finding.transition ? <Icon name="arrowRightUp" className={s.findingGo} /> : null}
+    </>
+  );
+  return finding.transition ? (
+    <button
+      type="button"
+      className={s.finding}
+      title="Показать в сравнении"
+      onClick={() => onTransition(finding.transition!)}
+    >
+      {body}
+    </button>
+  ) : (
+    <div className={s.finding}>{body}</div>
+  );
+}
+
+/**
+ * Бриф разбора — верхний блок «сначала вывод»: вердикт → находки → почему →
+ * рекомендация с действиями. Секции ниже остаются свёрнутыми подробностями.
+ *
+ * КОГДА:  у готового результата. НЕ ДЛЯ: пустых состояний запуска.
+ *
+ * UX:     пользователь обязан понимать результат ДО раскрытия секций
+ *         (решение владельца 23.08.2026): сплошной текст вынуждал выуживать
+ *         вывод самому. Находка без перехода не рисует стрелку и не ловит
+ *         курсор — обещание клика без клика хуже его отсутствия.
+ *         [Применить] ведёт в таблицу переходом пресета; [Подробнее]
+ *         раскрывает базовый разбор и доскролливает к нему.
+ * A11Y:   секция озаглавлена; кнопки находок — обычные <button> с текстом.
+ */
+function Brief({ brief, onTransition, onMore }: {
+  brief: AnalysisResult['brief'];
+  onTransition: (t: AnalysisTransition) => void;
+  onMore: () => void;
+}) {
+  return (
+    <section className={s.brief} aria-label="Краткий вывод">
+      <p className={s.briefVerdict}>{brief.verdict}</p>
+
+      {brief.findings.length ? (
+        <>
+          <h3 className={s.briefLabel}>Что обнаружено</h3>
+          <div className={s.briefList}>
+            {brief.findings.map((f) => (
+              <Finding key={f.kind} finding={f} onTransition={onTransition} />
+            ))}
+          </div>
+        </>
+      ) : null}
+
+      <h3 className={s.briefLabel}>Почему это важно</h3>
+      <p className={s.briefWhy}>{brief.why}</p>
+
+      <h3 className={s.briefLabel}>Рекомендация ИИ</h3>
+      <div className={s.rec}>
+        <p className={cx(s.itemNote, s.recText)}>
+          <SparkGlyph size={11} flat className={s.noteSpark} />
+          {brief.recommendation.text}
+        </p>
+        <div className={s.recActions}>
+          {/* Один primary на панель: у результата он ровно здесь — действие,
+              ради которого разбор и запускали. */}
+          {brief.recommendation.transition ? (
+            <Button
+              variant="primary"
+              onClick={() => onTransition(brief.recommendation.transition!)}
+            >
+              Применить
+            </Button>
+          ) : null}
+          <Button variant="secondary" onClick={onMore}>Подробнее</Button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 /** Пункт разбора: серверные факты, затем слот модели. У «ещё не подал» и
- *  полноты слот пуст всегда (`mute`) — заметки просто нет. */
-function Item({ item, onTransition }: {
+ *  полноты слот пуст всегда (`mute`) — заметки просто нет.
+ *  memo: пункты стабильны между сменами раскрытости секций, и переезд
+ *  `<details>` не обязан перерисовывать весь их список. */
+const Item = memo(function Item({ item, onTransition }: {
   item: AnalysisItem;
   onTransition: (t: AnalysisTransition) => void;
 }) {
@@ -66,21 +195,34 @@ function Item({ item, onTransition }: {
     <li className={s.item}>
       <p className={s.itemTitle}>
         {interactive
-          ? withRefs(item.title, item.refs, () => onTransition(item.transition!))
+          ? withRefs(item.title, item.refs, (ref) => onTransition(transitionFor(item, ref)))
           : item.title}
       </p>
+      {/* СУЩНОСТИ ЖИВУТ И В ФАКТАХ, а не только в заголовке. Самые крупные
+          шаги поставщика за круг названы именно здесь, и до этого они были
+          мёртвым текстом: переход по §6 обязан висеть на именах работ и
+          подрядчиков ВНУТРИ разбора, а отдельной команды под пунктом нет.
+          Каждое слово ведёт к СВОЕЙ сущности — см. transitionFor. */}
       {item.details?.map((line) => (
-        <p key={line} className={s.itemDetail}>{line}</p>
+        <p key={line} className={s.itemDetail}>
+          {interactive
+            ? withRefs(line, item.refs, (ref) => onTransition(transitionFor(item, ref)))
+            : line}
+        </p>
       ))}
       {item.note ? (
         <p className={s.itemNote}>
-          <SparkGlyph size={11} className={s.noteSpark} />
+          <SparkGlyph size={11} flat className={s.noteSpark} />
           {item.note}
         </p>
       ) : null}
     </li>
   );
-}
+});
+
+/** Счётчик пунктов С ЕДИНИЦЕЙ. Голое число рядом с заголовком читается как
+ *  номер или индекс, а в озвучке даёт «Картина по тендеру три». */
+const items = (n: number): string => `${n} ${plural(n, 'пункт', 'пункта', 'пунктов')}`;
 
 /** Сколько внутри — чтобы свёрнутая секция говорила, стоит ли её открывать.
  *  У «Общей картины» счётчика нет: там фиксированный набор показателей, и
@@ -91,7 +233,7 @@ function secHint(section: AnalysisSection): string | null {
     return `${n} ${plural(n, 'раздел', 'раздела', 'разделов')}`;
   }
   const n = section.items?.length ?? 0;
-  return n ? `${n} ${plural(n, 'пункт', 'пункта', 'пунктов')}` : null;
+  return n ? items(n) : null;
 }
 
 /**
@@ -172,10 +314,13 @@ function RoundPicker({ value, options, onChange }: {
  *
  * UX:     до запуска панель объясняет это и держит единственную кнопку; без
  *         единого КП кнопки нет вовсе, а причина названа текстом.
- *         Результат: сводка ≤ 3 якорей → ТРИ главные секции нативными
+ *         Результат читается СВЕРХУ ВНИЗ по нарастанию подробностей (решение
+ *         владельца 23.08.2026): бриф «сначала вывод» — вердикт в 1–2
+ *         предложениях → находки с переходами в таблицу → почему это важно →
+ *         рекомендация с [Применить]; затем ТРИ главные секции нативными
  *         <details>, свёрнутые, порядок фиксированный; подсекции базового
- *         разбора вложены В НЕГО. Якорь сводки раскрывает оба уровня — иначе
- *         переход уходит в свёрнутую секцию, то есть в никуда.
+ *         разбора вложены В НЕГО. [Подробнее] из рекомендации раскрывает оба
+ *         уровня и доскролливает — переход не уходит в свёрнутую секцию.
  *         Плашка устаревания появляется ТОЛЬКО у текущего раунда, называет
  *         причину и различает две степени (§8.2): «частично» — уехали пороги,
  *         «устарел» — уехали данные. Снимок прошлого круга не устаревает.
@@ -234,19 +379,32 @@ export function AnalysisDock({
     if (e.key === 'Escape') onClose();
   };
 
+  /* Что объявить голосом: одно предложение на состояние. Пустая строка —
+     штатное «сказать нечего», а не пропуск. */
+  const sectionCount = entry?.result.sections.length ?? 0;
+  const liveStatus = running ? 'Разбор считается'
+    : failed ? 'Анализ не выполнен'
+      : entry?.result
+        ? `Разбор готов, ${sectionCount} ${plural(sectionCount, 'секция', 'секции', 'секций')}`
+        : '';
+
   /* Чат остаётся доступным одной кнопкой — под пометкой «скоро будет
      реализовано» (свободный вопрос вне контура, 05 §10). */
   if (chatMode) {
     return (
-      <AiDock
-        open={open}
-        onClose={() => { setChatMode(false); onClose(); }}
-        comparison={comparison}
-        starred={[]}
-        onFocusRow={() => {}}
-        stub
-        onBackToAnalysis={() => setChatMode(false)}
-      />
+      /* Пустой fallback намеренно: панель уже на экране, и подменять её
+         скелетоном на время локального чанка — мигание вместо загрузки. */
+      <Suspense fallback={null}>
+        <AiDock
+          open={open}
+          onClose={() => { setChatMode(false); onClose(); }}
+          comparison={comparison}
+          starred={[]}
+          onFocusRow={() => {}}
+          stub
+          onBackToAnalysis={() => setChatMode(false)}
+        />
+      </Suspense>
     );
   }
 
@@ -260,7 +418,7 @@ export function AnalysisDock({
     >
       <header className={base.head}>
         <span className={cx(base.aiTile, running && base.aiTileLive)}>
-          <SparkGlyph size={15} />
+          <SparkGlyph size={15} state={running ? 'processing' : 'idle'} />
         </span>
         <h2 ref={headingRef} id={`${AI_DOCK_ID}-title`} tabIndex={-1} className={base.headTitle}>
           Анализ ИИ
@@ -284,7 +442,14 @@ export function AnalysisDock({
         </div>
       </header>
 
-      <div className={s.body} aria-live="polite" aria-busy={running}>
+      {/* ЖИВОЙ РЕГИОН — ОТДЕЛЬНАЯ КОРОТКАЯ СТРОКА, А НЕ ВСЁ ТЕЛО ПАНЕЛИ.
+          Раньше `aria-live` висел на прокручиваемом теле, и по готовности
+          скринридер зачитывал разбор целиком — замерено 3955 символов. Регион
+          рендерится ВСЕГДА и пустым: polite-обновления объявляются только из
+          области, которая была в дереве до появления текста. */}
+      <p className="visually-hidden" role="status">{liveStatus}</p>
+
+      <div className={s.body} aria-busy={running}>
         {/* ── ни разу не запускали ── */}
         {!entry && !running && !failed ? (
           isDataRound ? (
@@ -317,13 +482,16 @@ export function AnalysisDock({
 
         {/* ── выполняется: таблица не блокируется ── */}
         {running ? (
+          /* Контур повторяет форму брифа: две строки вердикта, три находки,
+             карточка рекомендации — готовый результат садится в те же габариты,
+             и содержимое не прыгает в момент прихода. */
           <div className={s.loading}>
-            <Skeleton height={14} width="70%" />
-            <Skeleton height={14} width="90%" />
-            <Skeleton height={14} width="55%" />
-            <Skeleton height={38} radius={6} />
-            <Skeleton height={38} radius={6} />
-            <Skeleton height={38} radius={6} />
+            <Skeleton height={15} width="88%" />
+            <Skeleton height={15} width="62%" />
+            <Skeleton height={30} radius={4} />
+            <Skeleton height={30} radius={4} />
+            <Skeleton height={30} radius={4} />
+            <Skeleton height={96} radius={6} />
           </div>
         ) : null}
 
@@ -363,20 +531,13 @@ export function AnalysisDock({
               <p className={s.snapshotNote}>Раунд завершён · это снимок прошлого круга</p>
             ) : null}
 
-            {/* Сводка ≤ 3 пунктов, каждый — якорь к своей секции. */}
-            <nav className={s.summary} aria-label="Сводка разбора">
-              {entry.result.summary.map((point) => (
-                <button
-                  key={point.text}
-                  type="button"
-                  className={s.summaryItem}
-                  onClick={() => goto(point.section, point.subsection)}
-                >
-                  <span className={s.summaryText}>{point.text}</span>
-                  <Icon name="arrowRightUp" className={s.summaryIcon} />
-                </button>
-              ))}
-            </nav>
+            {/* Бриф «сначала вывод»: вердикт, находки с переходами в таблицу,
+                рекомендация. Секции ниже — подробности по [Подробнее]. */}
+            <Brief
+              brief={entry.result.brief}
+              onTransition={onTransition}
+              onMore={() => goto('base_review', 'tender_overview')}
+            />
 
             {/* ТРИ ГЛАВНЫЕ СЕКЦИИ, порядок фиксирован (05 §4): изменения
                 поставщиков → общая картина круга → базовый разбор. Подсекции
@@ -415,7 +576,7 @@ export function AnalysisDock({
                   ) : null}
                   {section.note ? (
                     <p className={cx(s.itemNote, s.secNote)}>
-                      <SparkGlyph size={11} className={s.noteSpark} />
+                      <SparkGlyph size={11} flat className={s.noteSpark} />
                       {section.note}
                     </p>
                   ) : null}
@@ -441,7 +602,7 @@ export function AnalysisDock({
                     >
                       <summary className={s.subHead}>
                         <h4 className={s.subTitle}>{sub.title}</h4>
-                        <span className={s.secHint}>{sub.items.length}</span>
+                        <span className={s.secHint}>{items(sub.items.length)}</span>
                         <Icon name="chevronDown" className={s.secChevron} />
                       </summary>
                       <ul className={s.list}>

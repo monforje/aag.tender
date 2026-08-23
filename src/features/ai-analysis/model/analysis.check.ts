@@ -7,7 +7,7 @@
  *  чужой текст обязан пройти проверку id, `mute` и чисел.
  *  Запуск: bun src/features/ai-analysis/model/analysis.check.ts */
 import { strict as assert } from 'node:assert';
-import { applyTransition, SYSTEM_THRESHOLDS, type CompareView, type Comparison } from '@/entities/comparison';
+import { applyTransition, SYSTEM_THRESHOLDS, money, type CompareView, type Comparison } from '@/entities/comparison';
 /* Снимки берутся ЧЕРЕЗ ДВЕРЬ слайса, а не импортом фикстуры: проверка ходит
    за данными тем же путём, что экран, — и ловит расхождение между лентой
    подач и тем, что отдаёт запрос по номеру раунда. */
@@ -52,6 +52,10 @@ for (const section of rawBuild.result.sections) {
   assert.equal(section.note, undefined, `сборка не пишет фраз о секции: ${section.id}`);
 }
 assert.ok(rawBuild.draft.insights!.length > 0, 'заготовка модели не пуста');
+/* Тексты брифа — серверная композиция чисел (как заголовки пунктов), поэтому
+   в сырой сборке они ЕСТЬ. Если бриф переедет к живой модели, этот инвариант
+   переписывается вместе с границей — молча он меняться не имеет права. */
+assert.ok(rawBuild.result.brief.verdict.length > 0, 'вердикт брифа собирается без модели');
 
 /* ── раунд 1: только базовый разбор ──────────────────────────────────────── */
 
@@ -83,19 +87,20 @@ assert.equal(points[0].refs[0].id, 'w3');
 assert.ok(Number(points[0].evidence.find((e) => e.metric === 'max_potential')!.value)
   >= Number(points[1].evidence.find((e) => e.metric === 'max_potential')!.value));
 
-/* Аномалии ≤ 5: при системном k = 3 их три — швы и вязка СтройМонтажа
-   (формула) и арматура МетСнаба (данные); порядок по величине отклонения,
-   у каждой есть слот модели. */
+/* Аномалии ≤ 5: при системном k = 3 их три — швы ДорСтройИнжиниринга и вязка
+   СтройМонтажа (формула, обе в строках высокого разброса) и арматура
+   МетСнаба (внешний вердикт); порядок по величине отклонения, у каждой есть
+   слот модели. */
 const anomalies = subOf('anomalies');
 assert.ok(anomalies.length <= ANALYSIS_LIMITS.anomalies);
 assert.equal(anomalies.length, 3);
-assert.match(anomalies[0].title, /швов.*СтройМонтаж/);
-assert.match(anomalies[1].title, /Вязка.*СтройМонтаж/);
-assert.match(anomalies[2].title, /Арматура.*МетСнаб/);
+assert.match(anomalies[0].title, /швов.*СибирьМонолитДомостройИнжиниринг/u);
+assert.match(anomalies[1].title, /Вязка.*СтройМонтаж/u);
+assert.match(anomalies[2].title, /Арматура.*МетСнаб/u);
 for (const item of anomalies) assert.ok(item.note.length > 0, 'у аномалии есть слот модели');
-/* Три участника — штатный режим: оговорки о слабой статистике нет. */
+/* Шестеро — штатный режим: оговорки о слабой статистике нет. */
 for (const item of anomalies) {
-  assert.ok(!item.details?.some((d) => d.includes('Мало данных')), 'на трёх КП поле не считается слабым');
+  assert.ok(!item.details?.some((d) => d.includes('Мало данных')), 'на шести КП поле не считается слабым');
 }
 
 /* Полнота всегда, без лимита, без модели (05 §4.3.4): у ig/sm дыры, у sm отказ. */
@@ -110,10 +115,44 @@ assert.ok(completeness.some((i) => i.title.includes('отказ')));
 /* Сводка ≤ 3 якорей. */
 assert.ok(r1.summary.length > 0 && r1.summary.length <= ANALYSIS_LIMITS.summary);
 
+/* ── бриф «сначала вывод» (решение владельца 23.08.2026) ──────────────────────
+   Вердикт называет лидера; находки идут фиксированным порядком значимости
+   (вывод → экономия → аномалия → риск) и не длиннее лимита; у находок-действий
+   есть переходы к сущностям таблицы. Числа в текстах обязаны совпадать с
+   числами пунктов секций — иначе бриф спорит со своим же разбором. */
+assert.match(r1.brief.verdict, /Лидер — .*МетСнаб/u);
+assert.ok(r1.brief.verdict.includes(money(r1.sections[0].subsections![0].items[0]
+  .evidence.find((e) => e.metric === 'total')!.value)),
+'сумма лидера в вердикте = сумме из «Картины по тендеру»');
+const kinds = r1.brief.findings.map((f) => f.kind);
+assert.deepEqual(kinds, ['key', 'saving', 'anomaly', 'risk'],
+  'порядок находок: вывод → экономия → аномалия → риск');
+assert.ok(r1.brief.findings.length <= ANALYSIS_LIMITS.findings);
+assert.equal(r1.brief.findings[0].transition?.focus?.contractorId,
+  r1.sections[0].subsections![0].items[0].refs[0].id,
+  'переход находки-лидера ведёт к тому же КП, что пункт разбора');
+assert.equal(r1.brief.findings[1].transition?.focus?.positionId, points[0].refs[0].id,
+  'экономия брифа — та же строка, что первая точка торгов');
+assert.equal(r1.brief.findings[2].transition?.focus?.positionId,
+  subOf('anomalies')[0].transition?.focus?.positionId,
+  'аномалия брифа — сильнейшая пара разбора');
+assert.match(r1.brief.why, /Аномальные цены|запас|Отрыв/u);
+assert.match(r1.brief.recommendation.text, /Начать торг/u);
+assert.equal(r1.brief.recommendation.transition?.focus?.positionId, 'w3');
+
 /* ── одно КП: сравнивать не с чем, остаётся только полнота (05 §4) ───────── */
 
-const ONE_BID: Comparison = { ...R1, contractors: [R1.contractors[1]] };
+const ONE_BID: Comparison = {
+  ...R1,
+  contractors: [R1.contractors.find((c) => c.id === 'sm')!],
+};
 const solo = analyze(ONE_BID);
+/* Одно КП: бриф честно говорит «сравнивать не с чем». Единственная возможная
+   находка — риск по пробелам данных (полнота при одном КП показывается
+   всегда), ни вывода, ни экономики здесь взять неоткуда. */
+assert.match(solo.brief.verdict, /не с чем/u);
+assert.deepEqual(solo.brief.findings.map((f) => f.kind), ['risk']);
+assert.match(solo.brief.recommendation.text, /Дождаться/u);
 const soloSubs = solo.sections[0].subsections!;
 assert.deepEqual(soloSubs.map((x) => x.id), ['completeness'],
   'пустые подсекции скрываются, полнота показывается всегда');
@@ -133,11 +172,12 @@ assert.deepEqual(
 );
 assert.equal(p2.sections.length, 3, 'главных секций ровно три');
 
-/* «Ещё не подал» существует как пункт, модель в нём молчит (05 §4.1). */
+/* «Ещё не подал» существует как пункт, модель в нём молчит (05 §4.1).
+   Шестеро приглашены, переподал один — пунктов молчания пять. */
 const scItems = p2.sections[0].items!;
-assert.equal(scItems.length, 3);
+assert.equal(scItems.length, 6);
 const notSubmitted = scItems.filter((i) => i.title.includes('ещё не подал'));
-assert.equal(notSubmitted.length, 2, 'МетСнаб и СтройМонтаж держат старые КП');
+assert.equal(notSubmitted.length, 5, 'переподал только ИнженерГрупп');
 for (const item of notSubmitted) {
   assert.equal(item.note, '');
   assert.equal(item.mute, true);
@@ -157,7 +197,7 @@ assert.match(p2.popupNotes['ig:m2'], /крупный шаг/u);
 
 /* Фиксированный набор показателей круга. */
 const meta = Object.fromEntries(p2.sections[1].meta!.map((m) => [m.label, m.value]));
-assert.equal(meta['Подали'], '1 из 3');
+assert.equal(meta['Подали'], '1 из 6');
 assert.equal(meta['Переподали'], '1');
 assert.equal(meta['Позиций изменено'], '10');
 assert.match(meta['Лидер'], /удержал/);
@@ -194,7 +234,7 @@ const sm = fItems.find((i) => i.id === 'sc:sm')!;
 
 /* Итог вырос из-за закрытых пробелов (плёнка + гидроизоляция), а не из-за цен:
    модель обязана назвать состав причиной роста (граничный случай 05 §4.2). */
-assert.match(sm.title, /СтройМонтаж» — дороже на 746\s830\s₽/u);
+assert.match(sm.title, /СтройМонтаж» — дороже на 734\s230\s₽/u);
 assert.match(sm.note, /Рост дал состав/u);
 assert.match(sm.details![0], /^Гидроизоляция обмазочная, 2 слоя \+996\s960\s₽$/u);
 assert.ok(sm.details!.includes('закрыл пробелов: 2'));
@@ -203,10 +243,10 @@ assert.ok(sm.details!.some((d) => d.startsWith('и ещё 8 ')));
 assert.ok(fItems.some((i) => i.id === 'sc:ms' && i.title.includes('ещё не подал')));
 
 const metaFull = Object.fromEntries(f2.sections[1].meta!.map((m) => [m.label, m.value]));
-assert.equal(metaFull['Подали'], '2 из 3');
+assert.equal(metaFull['Подали'], '2 из 6');
 assert.equal(metaFull['Переподали'], '2');
 assert.equal(metaFull['Позиций изменено'], '11', 'объединение позиций обоих поставщиков');
-assert.match(metaFull['Изменение'], /\+267\s800/u);
+assert.match(metaFull['Изменение'], /255\s200/u);
 /* Фраза об итоге круга приходит от модели и садится НА СЕКЦИЮ. */
 assert.match(f2.sections[1].note!, /Подали не все/u);
 

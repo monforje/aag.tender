@@ -41,21 +41,99 @@
 }
 .trigger__icon,
 .trigger__caret{ color: var(--cu-content-tertiary); --icon-size: 14px; }
+/* Каретка отвечает за открытость поворотом (рецепт 11: глиф крутится на
+   месте, второй канал); угол кратен её симметрии. Тайминг — общий со всеми
+   стрелками-состояниями экрана (.fold таблицы, тоггл дерева): один язык
+   раскрытия. */
+.trigger__caret{
+  transition: transform var(--cu-animation-duration) var(--cu-animation-timing);
+}
+.trigger[aria-expanded='true'] .trigger__caret{ transform: rotate(180deg); }
+
+/* ── шкала «стоимость → потенциал» в меню показателя ───────────────────────
+   Дорожка = лучшая цена тендера, заливка = доля заявленного запаса в ней.
+   Стоит под пунктами и действием не является. */
+.ratio{
+  display: grid; gap: 5px;
+  margin-top: 4px; padding: 8px 10px 6px;
+  border-top: 1px solid var(--cu-border-default);
+}
+.ratio-track{
+  height: 4px; border-radius: var(--cu-radii-round);
+  background: var(--cu-state-hover-strong);
+  overflow: hidden;
+}
+/* Заливка едет emphasized, как всякое «объект в пути»: при смене среза число
+   меняется под курсором — движение подтверждает пересчёт. */
+.ratio-fill{
+  height: 100%; border-radius: inherit;
+  background: var(--cu-tone-success);
+  transition: width var(--cu-duration-slow) var(--cu-ease-emphasized);
+}
+.ratio-cap{ font-size: 12px; color: var(--cu-content-tertiary); }
 
 /* ── секция спутников стоимости ────────────────────────────────────────────
-   Две пары «свитч + подпись» одной группой: постоянно видимы, от селекта
-   основного не зависят (описывают стоимость, а она в ячейке есть всегда). */
+   Тихий трек-контейнер В РОДСТВЕ с сегментом пресетов: та же подложка, те же
+   2px и концентрика — управление аналитикой читается семьёй контролов, а не
+   россыпью. Включённый чип белеет капсулой на треке: слой показа нейтрален,
+   цветом его не красят — отклонение в таблице бывает обоих знаков, один тон
+   врал бы. */
 .satellites{
-  display: inline-flex; align-items: center; gap: 12px;
-  height: 28px; padding: 0 10px;
-  border-radius: var(--cu-radii-3);
+  display: inline-flex; align-items: center; gap: 2px;
+  height: 30px; padding: 0 2px;
+  border-radius: var(--cu-radii-4);
+  background: var(--cu-fill-subtle);
 }
 .satellite{
   display: inline-flex; align-items: center; gap: 6px;
-  cursor: pointer;
+  height: 26px; padding: 0 8px 0 6px;
+  border-radius: var(--cu-radii-3);
   font-size: 13px; white-space: nowrap;
   color: var(--cu-content-secondary);
+  transition:
+    background-color var(--cu-animation-duration) var(--cu-animation-timing),
+    color var(--cu-animation-duration) var(--cu-animation-timing);
 }
+/* Рецепт 1: крупная поверхность — слабая ступень. */
+.satellite:hover{ background: var(--cu-state-hover-subtle); color: var(--cu-content-primary); }
+/* Правило после :hover — при равной специфичности решает порядок, серая
+   ступень не проступает сквозь белую капсулу. Гашение — как у пилюли
+   сегмента: brightness(.96) темнит и на тёмной теме (капсула светлая). */
+.satellite.is-on{
+  background: var(--cu-background-main);
+  color: var(--cu-content-primary);
+}
+.satellite.is-on:hover{ filter: brightness(.96); }
+/* Отклик на нажатие — микросжатие содержимого: жест подтверждён. */
+.satellite:active{ transform: scale(.97); }
+.satellite:focus-visible{ outline: var(--cu-focus-ring); outline-offset: 1px; }
+
+/* Мини-тумблер — точная копия <Switch> (трек 28×16, бегунок 12): один
+   контрол — одна геометрия на всём экране. Бегунок едет translate'ом:
+   свойство композитится само и не спорит с будущими трансформациями. */
+.satellite-track{
+  position: relative; flex: 0 0 auto;
+  width: 28px; height: 16px;
+  border-radius: var(--cu-radii-round);
+  border: 1px solid var(--cu-border-default);
+  background: var(--cu-fill-subtle);
+  transition:
+    background-color var(--cu-duration-fast) var(--cu-ease-standard),
+    border-color var(--cu-duration-fast) var(--cu-ease-standard);
+}
+.satellite-knob{
+  position: absolute; top: 1px; left: 1px;
+  width: 12px; height: 12px;
+  border-radius: inherit;
+  background: var(--cu-background-main);
+  box-shadow: var(--cu-elevation-1);
+  transition: translate var(--cu-duration-fast) var(--cu-ease-standard);
+}
+.satellite.is-on .satellite-track{
+  border-color: var(--cu-content-primary);
+  background: var(--cu-content-primary);
+}
+.satellite.is-on .satellite-knob{ translate: 14px 0; }
 
 /* ── чип «Изменён · Сброс» (Д.2) ───────────────────────────────────────────
    Состояние ушло от базы пресета — молча не теряем. Капсула тона info: это

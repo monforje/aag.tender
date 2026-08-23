@@ -35,7 +35,13 @@ export function TotalRow({ label, rows, bids, metric }: {
 }) {
   return (
     <tr className={s.totalRow}>
-      <td colSpan={4} className={s.totalLabel}>{label}</td>
+      {/* Подпись занимает ТОЛЬКО колонку-якорь, а не colSpan={4} на весь левый
+          блок. Липкая первая ячейка (<Table stickyCol>) застывает во всю свою
+          ширину: на четырёх колонках она накрывала 533px вместо 270 и
+          прокрученной строкой съедала итог первого подрядчика. Пустые
+          колонки объёма добираются отдельным colSpan={3}. */}
+      <th scope="row" className={s.totalLabel}>{label}</th>
+      <td colSpan={3} />
       {bids.map((bid) => {
         const sum = rows.reduce(
           (acc, r) => acc + cellValue(bid.contractor, r, metric),

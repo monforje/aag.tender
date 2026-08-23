@@ -1,13 +1,15 @@
+import type { ReactNode } from 'react';
+import { cx } from '@/shared/lib/cx';
 import {
   Dropdown, DropdownGroup, MenuItem, useDropdownSlot,
 } from '@/shared/ui/Dropdown';
 import { Icon } from '@/shared/ui/Icon';
 import { Segmented } from '@/shared/ui/Segmented';
-import { Switch } from '@/shared/ui/Switch';
 import {
   METRIC_LABEL, PRESET_LABEL, ROW_VIEW_LABEL, SATELLITE_LABEL,
+  moneyCompact,
   type CompareMetricId, type CompareThresholds, type CompareView,
-  type PresetId, type RowFacts, type RowViewId, type SatelliteId,
+  type MetricTotals, type PresetId, type RowFacts, type RowViewId, type SatelliteId,
 } from '@/entities/comparison';
 import { CompareLegend } from './CompareLegend';
 import { CompareSettings } from './CompareSettings';
@@ -25,6 +27,10 @@ interface ToolbarProps {
   /** Все строки среза БЕЗ фильтров: счётчик пункта показывает, сколько строк
    *  пропустит ЭТОТ предикат на всех данных (§4 аудита). */
   allRows: RowFacts[];
+  /** Пара «стоимость → потенциал» уровня тендера: числа в меню показателя и
+   *  его шкала соотношения. Считает `metricTotals` — та же формула, что у
+   *  точек торгов разбора. */
+  totals: MetricTotals;
   modified: boolean;
   /** Вид перестроен переходом «анализ → таблица»: чип с ВОЗВРАТОМ полного
    *  пользовательского вида (05 §7). Старый «Изменён · Сброс» при этом молчит:
@@ -59,7 +65,7 @@ interface ToolbarProps {
  *         closeOnSelect={false}; у свитчей подпись видима и aria-label.
  */
 export function CompareToolbar({
-  view, thresholds, onThresholds, allRows, modified, analysisApplied, onRestoreView, onPreset, onPatch,
+  view, thresholds, onThresholds, allRows, totals, modified, analysisApplied, onRestoreView, onPreset, onPatch,
 }: ToolbarProps) {
   return (
     <DropdownGroup>
@@ -81,40 +87,43 @@ export function CompareToolbar({
         <span className={s.sep} />
 
         {/* Секция 1: основной показатель. Подпись «Показано» — единая
-            формулировка режима из модели (§5): её дублирует caption таблицы. */}
+            формулировка режима из модели (§5): её дублирует caption таблицы.
+            Пункты меню несут СВОЁ число уровня тендера, под ними — шкала
+            соотношения «сколько запаса сидит в лучшей цене». */}
         <QuietSelect
           slot="compare-metric"
           cap="Показано:"
           value={view.mainMetric}
-          options={METRICS.map((id) => ({ id, label: METRIC_LABEL[id] }))}
+          options={METRICS.map((id) => ({
+            id,
+            label: METRIC_LABEL[id],
+            hint: id === 'cost'
+              ? (totals.best ? moneyCompact(totals.best) : '—')
+              : (totals.potential ? `+${moneyCompact(totals.potential)}` : '—'),
+          }))}
           onPick={(mainMetric) => onPatch({ mainMetric })}
+          footer={<MetricRatio totals={totals} />}
         />
 
         {/* Секция 2: спутники стоимости — постоянно видимы и независимы от
-            селекта. Мгновенное применение без формы — это <Switch>.
-            Обёртка — span с охранённым кликом, а НЕ <label>: кнопка не является
-            labelable-элементом, и лейбл молча не делегировал бы ей щелчок по
-            тексту. Охрана по цели события исключает двойной тоггл, когда попали
-            в сам свитч. */}
+            селекта (описывают стоимость, а она в ячейке есть всегда). Чип —
+            ОДНА кнопка: кликабельны и тумблер, и подпись, состояние несёт
+            aria-pressed; прежняя обвязка «span с охранённым кликом вокруг
+            <Switch>» упразднена вместе с проблемой делегирования щелчка.
+            Мини-тумблер повторяет геометрию <Switch> 28×16/12: один контрол —
+            одна геометрия на всём экране. */}
         <div className={s.satellites} role="group" aria-label="Спутники стоимости">
           {SATELLITES.map((id) => {
             const checked = id === 'deviation' ? view.showDeviation : view.showRate;
-            const flip = () => onPatch(
-              id === 'deviation' ? { showDeviation: !checked } : { showRate: !checked },
-            );
             return (
-              <span
+              <SatelliteToggle
                 key={id}
-                className={s.satellite}
-                onClick={(e) => { if (e.target === e.currentTarget) flip(); }}
-              >
-                <Switch
-                  checked={checked}
-                  onChange={flip}
-                  aria-label={`Показывать: ${SATELLITE_LABEL[id]}`}
-                />
-                {SATELLITE_LABEL[id]}
-              </span>
+                checked={checked}
+                label={SATELLITE_LABEL[id]}
+                onToggle={() => onPatch(
+                  id === 'deviation' ? { showDeviation: !checked } : { showRate: !checked },
+                )}
+              />
             );
           })}
         </div>
@@ -196,14 +205,19 @@ export function CompareToolbar({
 }
 
 /** Тихий триггер одиночного выбора: подпись secondary, значение medium,
- *  шеврон. Одиночный выбор закрывает меню — выбрал и ушёл. */
-function QuietSelect<T extends string>({ slot, cap, icon, value, options, onPick }: {
+ *  шеврон. Одиночный выбор закрывает меню — выбрал и ушёл. Каретка вращается
+ *  на открытости (рецепт 11: поворот глифа на месте, второй канал) —
+ *  aria-expanded приходит от <Dropdown> на кнопку триггера. */
+function QuietSelect<T extends string>({ slot, cap, icon, value, options, onPick, footer }: {
   slot: string;
   cap: string;
   icon?: 'list';
   value: T;
-  options: ReadonlyArray<{ id: T; label: string }>;
+  options: ReadonlyArray<{ id: T; label: string; hint?: string }>;
   onPick: (value: T) => void;
+  /** Небольшой информационный блок под пунктами: не действие, из клавиатурного
+   *  обхода меню выпадает штатно — он и так обходит только пункты. */
+  footer?: ReactNode;
 }) {
   const control = useDropdownSlot(slot);
   const current = options.find((o) => o.id === value);
@@ -215,11 +229,13 @@ function QuietSelect<T extends string>({ slot, cap, icon, value, options, onPick
           <MenuItem
             key={option.id}
             checked={option.id === value}
+            hint={option.hint}
             onSelect={() => onPick(option.id)}
           >
             {option.label}
           </MenuItem>
         ))}
+        {footer}
       </>
     )}
     >
@@ -232,5 +248,64 @@ function QuietSelect<T extends string>({ slot, cap, icon, value, options, onPick
         </button>
       )}
     </Dropdown>
+  );
+}
+
+/** Спутник стоимости — чип-тумблер: одна кнопка «мини-свитч + подпись».
+ *
+ *  КОГДА:  показ слоя таблицы, применяющийся сразу, без формы.
+ *  НЕ ДЛЯ: взаимоисключающих режимов (см. <Segmented>) и отметки в форме
+ *          (см. <Checkbox>).
+ *
+ *  UX:     кликабельна ВСЯ площадь чипа высотой полосы — промахнуться мимо
+ *          нельзя. Включённость — заливкой мини-трека и положением бегунка;
+ *          его короткий ход (.12s, как у <Switch>) и есть анимация отклика.
+ *  A11Y:   aria-pressed — переключатель-кнопка по ARIA APG; имя читается из
+ *          видимой подписи, отдельного aria-label не нужно. Мини-трек
+ *          aria-hidden — состояние объявляет сама кнопка.
+ */
+function SatelliteToggle({ checked, label, onToggle }: {
+  checked: boolean;
+  label: string;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={cx(s.satellite, checked && s.isOn)}
+      aria-pressed={checked}
+      onClick={onToggle}
+    >
+      <span className={s.satelliteTrack} aria-hidden="true">
+        <span className={s.satelliteKnob} />
+      </span>
+      {label}
+    </button>
+  );
+}
+
+/** Шкала «сколько запаса сидит в лучшей цене» под пунктами меню показателя.
+ *
+ *  КОГДА:  рядом с выбором «Стоимость | Потенциал», когда есть хоть одно КП.
+ *  НЕ ДЛЯ: точных чтений — точные числа живут в таблице и в строке итога;
+ *          шкала отвечает на один вопрос «есть ли вообще за чем идти».
+ *
+ *  UX:     дорожка = лучшая цена, заливка = доля потенциала в ней. Проценты
+ *          подписаны словами — цвет и длина не единственные носители. Потенциал
+ *          больше цены — заливка упирается в полный размер: арифметика честная,
+ *          шкала не обязана уезжать за край.
+ * A11Y:   обычный поток, читается как текст «Запас торга · N %». */
+function MetricRatio({ totals }: { totals: MetricTotals }) {
+  if (!totals.best && !totals.potential) return null;
+  const share = totals.best
+    ? Math.min(100, Math.round((totals.potential / totals.best) * 100))
+    : 100;
+  return (
+    <div className={s.ratio}>
+      <div className={s.ratioTrack} aria-hidden="true">
+        <div className={s.ratioFill} style={{ width: `${share}%` }} />
+      </div>
+      <span className={s.ratioCap}>Запас торга · {share}&nbsp;% от лучшей цены</span>
+    </div>
   );
 }

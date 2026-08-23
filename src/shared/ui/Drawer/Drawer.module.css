@@ -49,6 +49,7 @@
   height: 100%;
   padding: var(--cu-size-4);
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .drawer__head {

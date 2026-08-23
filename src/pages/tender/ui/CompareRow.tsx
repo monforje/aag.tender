@@ -1,3 +1,4 @@
+import { memo, type CSSProperties } from 'react';
 import { cx } from '@/shared/lib/cx';
 import {
   decimal, money, type Bid, type CompareThresholds, type CompareView, type RowFacts,
@@ -36,7 +37,7 @@ import s from './TenderCompare.module.css';
  * <CompareRow row={row} view={view} bids={bids} sumWeight={facts.sumWeight}
  *             bind={popup.bind} focused={focusRowId === row.position.id} />
  */
-export function CompareRow({ row, view, thresholds, bids, sumWeight, bind, focused, noteFor, flashCells }: {
+function CompareRowImpl({ row, view, thresholds, bids, sumWeight, bind, focused, noteFor, flashCells, enterIndex }: {
   row: RowFacts;
   view: CompareView;
   /** Пороги тендера: метки разброса и аномальность делят их с фильтрами. */
@@ -51,6 +52,9 @@ export function CompareRow({ row, view, thresholds, bids, sumWeight, bind, focus
   noteFor?: (contractorId: string, positionId: string) => string | undefined;
   /** Ячейки с обводкой перехода: ключи тех же пар. Живут ~5 секунд. */
   flashCells?: ReadonlySet<string>;
+  /** Порядковый номер при каскадном въезде раскрытого раздела: строка получает
+   *  задержку анимации. Не передаётся в плоских видах — там въезд не играет. */
+  enterIndex?: number;
 }) {
   const { position } = row;
   const removed = position.removed === true;
@@ -61,11 +65,17 @@ export function CompareRow({ row, view, thresholds, bids, sumWeight, bind, focus
   return (
     <tr
       data-row-id={position.id}
-      className={cx(removed && s.rowRemoved, focused && s.rowFocused)}
+      className={cx(removed && s.rowRemoved, focused && s.rowFocused, enterIndex !== undefined && s.rowEnter)}
+      style={enterIndex !== undefined ? ({ '--row-in': enterIndex } as CSSProperties) : undefined}
     >
-      {/* Колонка-якорь: title обязателен — ширина задана контрактом, длинное
-          название уходит в многоточие, и прочитать его целиком должно чем. */}
-      <td className={tableCell.strong} title={position.title}>
+      {/* Колонка-якорь: <th scope="row">, а не <td>. Ячейка цены сама по себе
+          не значит ничего — её читают на пересечении «позиция × подрядчик», и
+          без заголовка СТРОКИ скринридер объявляет только колонку: подрядчика
+          называет, позицию нет. Тот же якорь держит горизонтальную прокрутку
+          (<Table stickyCol>), так что потеря была бы сразу в двух каналах.
+          title обязателен — ширина задана контрактом, длинное название уходит
+          в многоточие, и прочитать его целиком должно чем. */}
+      <th scope="row" className={tableCell.strong} title={position.title}>
         {removed ? <s>{position.title}</s> : position.title}
 
         {/* Ключ — в ПРАВОЙ части имени: левый край всех строк остаётся единым.
@@ -97,7 +107,7 @@ export function CompareRow({ row, view, thresholds, bids, sumWeight, bind, focus
             {decimal(share)} % веса среза
           </span>
         ) : null}
-      </td>
+      </th>
 
       {/* Корректировка объёма — парой значений: старое зачёркнуто третичным,
           новое рядом. Молчаливая подмена врала бы историю сметы. */}
@@ -131,3 +141,15 @@ export function CompareRow({ row, view, thresholds, bids, sumWeight, bind, focus
     </tr>
   );
 }
+
+/* MEMO ПО ССЫЛКАМ ПРОПОВ. Строка — самый тиражируемый компонент экрана
+   (позиций × колонок КП), и перерисовывалась она от ЛЮБОГО движения родителя:
+   ширина ленты меняется каждый кадр анимации панели «Анализ ИИ» и на каждом
+   шаге resize окна, туда же звезда, перекраска колонки, попап. Ни одно из
+   этих движений строку не меняет.
+   Условие работы memo — ссылочная стабильность пропов, и она обеспечена
+   адресно: `bids` мемоизирован в <TenderCompare>, `bind` — useCallback в
+   <useCellPopup>, `noteFor` — useCallback через реф в useCompareScreen.
+   Замер (puppeteer, 428 строк × 6 КП, prod-сборка): скрипт на открытие
+   панели 208 → 30 мс, на прокрутку окна 396 → 26 мс. */
+export const CompareRow = memo(CompareRowImpl);

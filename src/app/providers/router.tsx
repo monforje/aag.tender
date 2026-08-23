@@ -1,12 +1,32 @@
-import { useLayoutEffect } from 'react';
+import { lazy, Suspense, useLayoutEffect, type ReactNode } from 'react';
 import {
   createBrowserRouter, Navigate, RouterProvider, useLocation,
 } from 'react-router-dom';
 import type { SectionId } from '@/entities/section';
 import { useWorkspaceStore } from '@/entities/workspace';
+import { Spinner } from '@/shared/ui/Spinner';
 import { Workspace } from '@/widgets/workspace';
-import { TenderRegistryPage } from '@/pages/tender-registry';
-import { TenderPage } from '@/pages/tender';
+
+/* СТРАНИЦЫ — ОТДЕЛЬНЫМИ ЧАНКАМИ. До этого сборка давала один файл на всё
+   приложение: заходя в реестр, пользователь скачивал и карточку тендера
+   целиком — сравнительную таблицу, календари, панель разбора. Каркас
+   (рейл, сайдбар, топбар) остаётся статическим: он нужен на первом кадре
+   любого маршрута, и его отложенная загрузка дала бы пустой экран. */
+const TenderRegistryPage = lazy(() => import('@/pages/tender-registry')
+  .then((m) => ({ default: m.TenderRegistryPage })));
+const TenderPage = lazy(() => import('@/pages/tender')
+  .then((m) => ({ default: m.TenderPage })));
+
+/* Заглушка ПОЯВЛЯЕТСЯ НЕ СРАЗУ: .route-fallback держит её невидимой первые
+   200мс (global.css). Локальный чанк успевает приехать раньше — мигания нет;
+   на медленной сети пользователь видит, что идёт загрузка, а не пустую
+   карточку. У самих страниц состояние загрузки своё — оно про ДАННЫЕ и
+   появится следом. */
+const Page = ({ children }: { children: ReactNode }) => (
+  <Suspense fallback={<div className="route-fallback"><Spinner /></div>}>
+    {children}
+  </Suspense>
+);
 
 /** Раздел рейла выводится из первого сегмента пути. Всё, что не живёт под
  *  одним из четырёх разделов с собственным сегментом, — home. */
@@ -50,8 +70,8 @@ const router = createBrowserRouter([
     element: <Shell />,
     children: [
       { index: true, element: <Navigate to="/tenders/registry" replace /> },
-      { path: 'tenders/registry', element: <TenderRegistryPage /> },
-      { path: 'tenders/registry/:id', element: <TenderPage /> },
+      { path: 'tenders/registry', element: <Page><TenderRegistryPage /></Page> },
+      { path: 'tenders/registry/:id', element: <Page><TenderPage /></Page> },
       { path: '*', element: <Navigate to="/tenders/registry" replace /> },
     ],
   },

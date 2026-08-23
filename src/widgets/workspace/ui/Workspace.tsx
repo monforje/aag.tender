@@ -41,7 +41,12 @@ export function Workspace() {
       <div className={s.workspace}>
         <Rail />
         <div className={s.body}>
-          <div className={s.bodyWrapper}>
+          {/* Модификатор нужен ТОЛЬКО узкому экрану (см. @media в модуле):
+              там сайдбар всплывает над содержимым и в закрытом состоянии
+              уезжает за левый край целиком. На широком экране класс висит
+              без последствий — правило под ним живёт внутри медиазапроса, а
+              колонкой сайдбар по-прежнему распоряжается сам. */}
+          <div className={cx(s.bodyWrapper, !sidebarOpen && s.bodyWrapperSidebarAway)}>
             <Sidebar />
             <main className={s.main}>
               <Outlet />

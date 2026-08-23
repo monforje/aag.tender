@@ -98,6 +98,7 @@
 .log{
   flex: 1 1 auto; min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
   display: flex; flex-direction: column; gap: var(--cu-size-4);
   padding: var(--cu-size-4) var(--cu-size-4) var(--cu-size-5);
 }
@@ -168,9 +169,13 @@
   transition: background-color var(--cu-animation-duration) var(--cu-animation-timing),
               color var(--cu-animation-duration) var(--cu-animation-timing);
 }
-.rowAction:hover{
-  background: var(--cu-state-hover-subtle);
-  color: var(--cu-content-primary);
+/* Гейт на тач — тот же, что в AnalysisDock: без курсора :hover залипает
+   после тапа и контрол читается выбранным. */
+@media (hover: hover){
+  .rowAction:hover{
+    background: var(--cu-state-hover-subtle);
+    color: var(--cu-content-primary);
+  }
 }
 .rowAction:focus-visible{
   outline: var(--cu-focus-ring);
@@ -238,11 +243,13 @@
    ведёт К модели, и его hover принадлежит тому же языку, что шапка. Свечение —
    производные --cu-ai-b через color-mix, нового цвета нет; переход состояния,
    а не движение, поэтому отдельной reduced-motion ветки не нужно. */
-.chip:hover{
-  box-shadow:
-    var(--cu-elevation-border-1),
-    0 0 0 1px color-mix(in srgb, var(--cu-ai-b) 30%, transparent),
-    0 0 10px color-mix(in srgb, var(--cu-ai-b) 14%, transparent);
+@media (hover: hover){
+  .chip:hover{
+    box-shadow:
+      var(--cu-elevation-border-1),
+      0 0 0 1px color-mix(in srgb, var(--cu-ai-b) 30%, transparent),
+      0 0 10px color-mix(in srgb, var(--cu-ai-b) 14%, transparent);
+  }
 }
 .chip:focus-visible{
   outline: var(--cu-focus-ring);
@@ -259,6 +266,8 @@
   display: flex; flex-direction: column; gap: 2px;
   max-height: 288px;    /* ~10 строк по 29px — дальше список прокручивается */
   overflow-y: auto;
+  /* Край списка истории не переливает жест на панель под меню. */
+  overscroll-behavior: contain;
 }
 .historyItem{
   display: flex; align-items: center; gap: var(--cu-size-2);
@@ -270,9 +279,11 @@
   transition: background-color var(--cu-animation-duration) var(--cu-animation-timing),
               color var(--cu-animation-duration) var(--cu-animation-timing);
 }
-.historyItem:hover{
-  background: var(--cu-state-hover-subtle);
-  color: var(--cu-content-primary);
+@media (hover: hover){
+  .historyItem:hover{
+    background: var(--cu-state-hover-subtle);
+    color: var(--cu-content-primary);
+  }
 }
 .historyItem:focus-visible{
   outline: var(--cu-focus-ring);
@@ -282,7 +293,9 @@
    на ступень выше по правилу каталога «контрол с собственной заливкой».
    Вес подписи medium — второй, неколористический признак текущего. */
 .historyItemActive{ background: var(--cu-fill-subtle); color: var(--cu-content-primary); }
-.historyItemActive:hover{ background: var(--cu-state-hover); }
+@media (hover: hover){
+  .historyItemActive:hover{ background: var(--cu-state-hover); }
+}
 .historyTitle{
   flex: 1; min-width: 0;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -372,7 +385,9 @@
 /* Глифы — над спектральным слоем: абсолютный ::before иначе рисуется поверх
    нестолвленных соседей. */
 .sendIcon, .stopSquare{ position: relative; z-index: 1; }
-.send:hover:not(:disabled){ opacity: .85; }
+@media (hover: hover){
+  .send:hover:not(:disabled){ opacity: .85; }
+}
 .send:focus-visible{
   outline: var(--cu-focus-ring);
   outline-offset: 2px;

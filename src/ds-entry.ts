@@ -82,6 +82,12 @@ export * from './entities/workspace';
 
 /* --- features --- */
 export * from './features/ai-analysis';
+/* AiDock — ПРЯМЫМ путём, мимо публичной точки слайса. Из barrel он убран
+   намеренно: там его реэкспорт возвращал заглушку чата в главный чанк
+   приложения через любой импорт фичи (панель грузит его lazy). Дизайн-системе
+   он по-прежнему нужен — этот файл приложение не импортирует, и на его вес
+   не влияет. */
+export { AiDock } from './features/ai-analysis/ui/AiDock';
 export * from './features/flyout';
 
 /* --- widgets --- */

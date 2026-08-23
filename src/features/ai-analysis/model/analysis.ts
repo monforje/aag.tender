@@ -10,10 +10,13 @@
  *
  *  Порядок секций фиксированный (05 §4): изменения поставщиков → общая картина
  *  раунда → базовый разбор. Первые две появляются ТОЛЬКО с предыдущим раундом;
- *  их отсутствие в первом круге — норма, а не пустая секция. Лимиты: картина
- *  по тендеру ≤ 3, точки торгов ≤ 7, аномалии ≤ 5 (+ хвост «и ещё N»),
- *  полнота — без лимита и всегда. У «ещё не подал» модель молчит (05 §4.1),
- *  в полноте модели нет вовсе (§4.3.4) — там note пустая строка.
+ *  их отсутствие в первом круге — норма, а не пустая секция. Лимиты: находки
+ *  брифа ≤ 4, картина по тендеру ≤ 3, точки торгов ≤ 7, аномалии ≤ 5
+ *  (+ хвост «и ещё N»), полнота — без лимита и всегда. У «ещё не подал» модель
+ *  молчит (05 §4.1), в полноте модели нет вовсе (§4.3.4) — там note пустая
+ *  строка. Над секциями живёт БРИФ «сначала вывод» (verdict/findings/why/
+ *  recommendation) — его тексты серверные, как заголовки пунктов; граница
+ *  «сервер / модель» не сдвигается.
  *
  *  Отклонения считаются ОТ МЕДИАНЫ строки/поля (эталонной цены в контракте
  *  нет), поэтому все тексты говорят «дороже, чем у большинства», никогда —
@@ -93,11 +96,45 @@ export interface AnalysisSection {
   subsections?: Array<{ id: AnalysisSubsectionId; title: string; items: AnalysisItem[] }>;
 }
 
+/** Род находки брифа — то, каким глазом её читают: вывод, деньги торга,
+ *  подозрение или пробел данных. Тон и глиф панели выводятся из него. */
+export type AnalysisFindingKind = 'key' | 'saving' | 'anomaly' | 'risk';
+
+/** Верхний блок разбора «сначала вывод»: вердикт → находки → почему → что
+ *  делать (решение владельца 23.08.2026 — пользователь обязан понимать результат
+ *  до раскрытия секций).
+ *
+ *  ВСЕ ТЕКСТЫ ЗДЕСЬ СЕРВЕРНЫЕ, как заголовки пунктов: это композиция ЧИСЕЛ,
+ *  посчитанных ниже, а не интерпретация модели. Слоты `note` при этом остаются
+ *  при своих пунктах — граница «сервер / модель» не сдвигается. Когда выводы
+ *  переедут к живой модели, они пойдут через `draft` тем же путём, что и
+ *  заметки, — структура брифа не изменится. */
+export interface AnalysisBrief {
+  /** Вердикт в одно-два предложения: что за тендер передо мной. */
+  verdict: string;
+  /** ≤ ANALYSIS_LIMITS.findings находок в порядке значимости. */
+  findings: Array<{
+    kind: AnalysisFindingKind;
+    title: string;
+    ref?: AnalysisRef;
+    transition?: AnalysisTransition;
+  }>;
+  /** Почему это важно — одна фраза о главном сигнале. */
+  why: string;
+  /** Конкретное действие и, если оно есть, переход в таблицу. */
+  recommendation: {
+    text: string;
+    transition?: AnalysisTransition;
+  };
+}
+
 export interface AnalysisResult {
   roundNumber: number;
   createdAt: number;
   /** ≤ 3 пунктов, каждый — якорь к секции (05 §3). */
   summary: Array<{ text: string; section: AnalysisSectionId; subsection?: AnalysisSubsectionId }>;
+  /** Верхний блок «сначала вывод» — над секциями. */
+  brief: AnalysisBrief;
   sections: AnalysisSection[];
   /** Комментарии разбора к ячейкам таблицы: ключ `${contractorId}:${positionId}`.
    *  До запуска разбора карта пуста — попапы показывают одни числа (Р4). */
@@ -106,7 +143,7 @@ export interface AnalysisResult {
 
 /** Лимиты выводов — константой, чтобы check-скрипт сверял структуру против
  *  того же числа, что режет списки. */
-export const ANALYSIS_LIMITS = { summary: 3, overview: 3, points: 7, anomalies: 5 } as const;
+export const ANALYSIS_LIMITS = { summary: 3, findings: 4, overview: 3, points: 7, anomalies: 5 } as const;
 
 /** Итог сборки: структура с ПУСТЫМИ слотами модели плюс заготовка фраз в той
  *  же форме, в какой их пришлёт живая модель (06 §5). Разделение — не поза:
@@ -425,6 +462,13 @@ export function buildAnalysis(
 
   const comparable = bids.length >= 2;
 
+  /* Характер поля считается РАЗ и читается дважды: пунктом «Картины» и
+     вердиктом брифа — два вида одного числа спорить не имеют права. */
+  const totalsSpreadPct = comparable
+    ? (bids[bids.length - 1].sum - bids[0].sum) / (bids[0].sum || 1) * 100
+    : null;
+  const denseField = totalsSpreadPct !== null && totalsSpreadPct < thresholds.spreadNoticeable;
+
   /* Картина по тендеру: лидер, выбивающийся, характер поля. */
   const overview: AnalysisItem[] = [];
   if (comparable) {
@@ -475,23 +519,34 @@ export function buildAnalysis(
       });
     }
 
-    const spreadTotals = (bids[bids.length - 1].sum - bids[0].sum) / (bids[0].sum || 1) * 100;
-    const dense = spreadTotals < thresholds.spreadNoticeable;
+    const spreadTotals = totalsSpreadPct!;
     overview.push({
       id: 'to:field', section: 'base_review', subsection: 'tender_overview',
-      title: `Поле ${dense ? 'плотное' : 'раздёрнуто'}: итоги расходятся на ${Math.round(spreadTotals)} %`,
+      title: `Поле ${denseField ? 'плотное' : 'раздёрнуто'}: итоги расходятся на ${Math.round(spreadTotals)} %`,
       note: '',
       refs: [],
       evidence: [{ metric: 'totals_spread_percent', value: spreadTotals }],
     });
     draft.push({
       id: 'to:field',
-      reason: dense
+      reason: denseField
         ? 'Итоги близко — двигают цену детали состава и условия, а не разница уровней.'
         : 'КП расходятся сильнее, чем позиции внутри.',
-      next_action: dense ? undefined : 'Итоги сравнивать осторожно.',
+      next_action: denseField ? undefined : 'Итоги сравнивать осторожно.',
     });
   }
+
+  /* Держатель максимального заявленного запаса строки — один на строку.
+     Читается точками торгов и брифом (находка «экономия»). */
+  const potentialHolder = (row: RowFacts): Contractor | undefined => {
+    let holder: Contractor | undefined;
+    let bestPot = 0;
+    for (const c of contractors) {
+      const pot = cellMark(c, row.position.id).potential ?? 0;
+      if (pot > bestPot) { bestPot = pot; holder = c; }
+    }
+    return holder;
+  };
 
   /* Точки торгов: пары работа × подрядчик по абсолютному отыгрышу (05 §4.3.2). */
   const tradeRows = facts.rows
@@ -503,12 +558,7 @@ export function buildAnalysis(
     .slice(0, ANALYSIS_LIMITS.points);
 
   const points: AnalysisItem[] = comparable ? tradeRows.map((row) => {
-    let holder: Contractor | undefined;
-    let bestPot = 0;
-    for (const c of contractors) {
-      const pot = cellMark(c, row.position.id).potential ?? 0;
-      if (pot > bestPot) { bestPot = pot; holder = c; }
-    }
+    const holder = potentialHolder(row);
     const share = facts.sumWeight ? Math.round((row.weight / facts.sumWeight) * 100) : 0;
     const spreadPart = row.spread !== null
       ? `, предложения расходятся на ${Math.round(row.spread)} %`
@@ -639,6 +689,8 @@ export function buildAnalysis(
      ровно обратное: «все КП сопоставимы, пропусков нет» там, где сравнивать
      не с чем вовсе. */
   const completeness: AnalysisItem[] = [];
+  /* Σ незакрытых позиций по всем КП — читается брифом (находка «риск»). */
+  let holesTotal = 0;
   {
     for (const id of invitedIds) {
       if (!byId.has(id)) continue;
@@ -657,6 +709,7 @@ export function buildAnalysis(
         && c.prices[r.position.id] === undefined
         && cellMark(c, r.position.id).declined !== true);
       if (!holes.length) continue;
+      holesTotal += holes.length;
       const names = holes.slice(0, 3).map((r) => r.position.title);
       const rest = holes.length - names.length;
       completeness.push({
@@ -719,6 +772,113 @@ export function buildAnalysis(
   ].filter((sub) => sub.items.length > 0 || sub.id === 'completeness');
   sections.push({ id: 'base_review', title: 'Базовый разбор', subsections: baseSubsections });
 
+  /* ── 4. Бриф «сначала вывод» (решение владельца 23.08.2026) ───────────────
+     Порядок находок фиксированный и по значимости: вывод → экономия →
+     аномалия → риск. Каждый пункт несёт переход той же природы, что у
+     пунктов секций: клик ведёт к сущности в таблице. Аномалии читаются
+     только у сопоставимого поля — тот же гейт, что прячет подсекцию:
+     при одном КП отклонение от единственной цены не имеет смысла. */
+  /* Молчуны считаются только среди ПРИСУТСТВУЮЩИХ в данных КП — тот же
+     гейт, что у полноты: срез без чужих подрядчиков не должен рассказывать
+     про тех, кого в нём нет. */
+  const invitedPresent = invitedIds.filter((id) => byId.has(id));
+  const notSubmittedCount = invitedPresent.filter((id) => !submittedNow(id)).length;
+  const potTotal = tradeRows.reduce((acc, r) => acc + r.maxPot, 0);
+  const leader = bids[0];
+  const briefAnomalies = comparable ? anomalyPairs : [];
+
+  const findings: AnalysisBrief['findings'] = [];
+  if (comparable && leader && bids[1]) {
+    findings.push({
+      kind: 'key',
+      title: `${leader.contractor.name} — ${money(leader.sum)}, отрыв от второго места ${money(bids[1].sum - leader.sum)}`,
+      ref: cref(leader.contractor),
+      transition: { preset: 'overview', requiredMetrics: ['price'], focus: { contractorId: leader.contractor.id } },
+    });
+  }
+  if (tradeRows[0]) {
+    const row = tradeRows[0];
+    findings.push({
+      kind: 'saving',
+      title: `Точка торгов: «${row.position.title}», запас ${money(row.maxPot)} (${potentialHolder(row)?.name ?? 'запас не привязан к КП'})`,
+      ref: wref(row.position),
+      transition: {
+        preset: 'bidding', requiredMetrics: ['potential'],
+        focus: { positionId: row.position.id, contractorId: potentialHolder(row)?.id },
+      },
+    });
+  }
+  if (briefAnomalies[0]) {
+    const { row, c, dev } = briefAnomalies[0];
+    findings.push({
+      kind: 'anomaly',
+      title: `Аномалия: «${row.position.title}» · ${c.name} — ${signedPct(dev)} к середине поля`,
+      transition: {
+        preset: 'anomalies', requiredMetrics: ['price', 'deviation'],
+        focus: { positionId: row.position.id, contractorId: c.id },
+      },
+    });
+  }
+  if (notSubmittedCount > 0) {
+    findings.push({
+      kind: 'risk',
+      title: `Подали не все: ${invitedPresent.length - notSubmittedCount} из ${invitedPresent.length} — итог может сместиться`,
+    });
+  } else if (holesTotal > 0) {
+    findings.push({
+      kind: 'risk',
+      title: `Пробелы данных: ${holesTotal} ${plural(holesTotal, 'позиция', 'позиции', 'позиций')} не закрыты в поданных КП`,
+    });
+  }
+
+  const verdict = comparable && leader
+    ? [
+      `Лидер — ${leader.contractor.name}: ${money(leader.sum)}.`,
+      totalsSpreadPct !== null
+        ? (denseField ? 'Поле плотное.' : `Итоги расходятся на ${Math.round(totalsSpreadPct)} %.`)
+        : '',
+      ...(briefAnomalies.length
+        ? [`До выбора проверить ${briefAnomalies.length} ${plural(briefAnomalies.length, 'аномалию', 'аномалии', 'аномалий')}.`]
+        : []),
+    ].filter(Boolean).join(' ')
+    : 'Сопоставимое поле ещё не собралось — сравнивать пока не с чем.';
+
+  const why = briefAnomalies.length
+    ? 'Аномальные цены искажают ранжир: корректное сравнение возможно только после запроса обоснований.'
+    : potTotal > 0 && leader
+      ? `Заявленный запас покрывает до ${Math.min(100, Math.round((potTotal / leader.sum) * 100))} % лучшей цены — итог раунда ещё движим торгом.`
+      : denseField
+        ? 'Отрыв невелик: решают состав КП и условия, а не уровень цен.'
+        : 'Поле раздёрнуто — сравнивайте итоги осторожно.';
+
+  const recommendation: AnalysisBrief['recommendation'] =
+    tradeRows[0] && comparable
+      ? {
+        text: `Начать торг со строки «${tradeRows[0].position.title}»: заявленный запас ${money(tradeRows[0].maxPot)}.`,
+        transition: {
+          preset: 'bidding', requiredMetrics: ['potential'],
+          focus: { positionId: tradeRows[0].position.id, contractorId: potentialHolder(tradeRows[0])?.id },
+        },
+      }
+      : briefAnomalies.length
+        ? {
+          text: 'Запросить обоснования по аномальным ценам до сравнения итогов.',
+          transition: { preset: 'anomalies', requiredMetrics: ['price', 'deviation'] },
+        }
+        : comparable && leader
+          ? {
+            text: 'Сверить состав лучшего КП со сметой и фиксировать условия сделки.',
+            transition: { preset: 'overview', requiredMetrics: ['price'], focus: { contractorId: leader.contractor.id } },
+          }
+          : { text: 'Дождаться остальных КП: сравнение преждевременно.' };
+
+  const brief: AnalysisBrief = {
+    verdict,
+    findings: findings.slice(0, ANALYSIS_LIMITS.findings),
+    why,
+    recommendation,
+  };
+
   /* Сводка ≤ 3 пунктов, каждый — якорь к секции (05 §3). */
   const summary: AnalysisResult['summary'] = [];
   if (bids.length) {
@@ -728,7 +888,6 @@ export function buildAnalysis(
     });
   }
   if (points.length) {
-    const potTotal = tradeRows.reduce((acc, r) => acc + r.maxPot, 0);
     summary.push({
       text: `Точки торгов: ${money(potTotal)} в ${tradeRows.length} ${plural(tradeRows.length, 'позиции', 'позициях', 'позициях')}`,
       section: 'base_review', subsection: 'negotiation_points',
@@ -752,6 +911,7 @@ export function buildAnalysis(
       roundNumber,
       createdAt: Date.now(),
       summary: summary.slice(0, ANALYSIS_LIMITS.summary),
+      brief,
       sections,
       popupNotes,
     },

@@ -20,3 +20,12 @@
 .stopA{ stop-color: var(--cu-ai-a); }
 .stopB{ stop-color: var(--cu-ai-b); }
 .stopC{ stop-color: var(--cu-ai-c); }
+
+/* ── плоские состояния семейства ────────────────────────────────────────────
+   Силуэт одним тоном: рабочие состояния несут ФИРМЕННЫЙ --cu-ai-b (спектр в
+   11px всё равно не читается), результат — семантическим тоном. Градиентная
+   механика в этих вариантах не рендерится вовсе (см. SparkGlyph.tsx). */
+.solid-mark{ fill: var(--cu-ai-b); }
+.solid-success{ fill: var(--cu-tone-success); }
+.solid-warning{ fill: var(--cu-tone-warning); }
+.solid-muted{ fill: var(--cu-content-tertiary); }
