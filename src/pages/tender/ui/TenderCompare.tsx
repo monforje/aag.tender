@@ -355,8 +355,12 @@ export function TenderCompare({
           )}
 
           {/* Полный итог КП — единственное число: фильтром и свёрткой не
-              пересчитывается (§3 модели), потому складывается из всех позиций. */}
-          <TotalRow label="Итого" rows={facts.rows} bids={bids} metric={view.mainMetric} />
+              пересчитывается (§3 модели), потому складывается из всех позиций.
+              Обёртка в tbody обязательна: голый tr на уровне таблицы браузер
+              пере-вешивает в собственный tbody, и React честно ругается. */}
+          <tbody>
+            <TotalRow label="Итого" rows={facts.rows} bids={bids} metric={view.mainMetric} />
+          </tbody>
         </Table>
         </div>
       </div>

@@ -1,9 +1,12 @@
 /* Окно настроек сравнения (пороги аналитики тендера). Панель <Popover> —
    таблица под ней живёт и перекрашивается вслед за ручкой порога. */
 
+/* Мост ширины панели: --pop-width читает <Popover> (наследование по DOM),
+   дефолт 232px тесен четырём полям с пояснениями. */
+.root{ --pop-width: 320px; }
+
 .body{
   display: flex; flex-direction: column; gap: 12px;
-  width: 300px;
 }
 
 .row{ display: block; }
@@ -17,7 +20,7 @@
 .k-field{ flex: 1; }
 .k-help-toggle{
   display: inline-flex; align-items: center; justify-content: center;
-  width: 24px; height: 24px; margin-bottom: 4px;
+  width: 28px; height: 28px; margin-bottom: 2px;
   border-radius: var(--cu-radii-round);
   color: var(--cu-content-tertiary);
 }

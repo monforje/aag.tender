@@ -73,7 +73,10 @@ export function CompareSettings({ thresholds, onChange, allRows }: {
     onChange(clampThresholds({ ...thresholds, ...part }));
 
   return (
-    <>
+    /* Корень несёт --pop-width: её читает <Popover>, а ширина по умолчанию
+       (232px) тесна для четырёх полей с пояснениями — без моста контент
+       обрезается краем диалога (тот же приём, что у легенды). */
+    <div className={s.root}>
       <IconButton
         variant="topbar"
         icon="settings"
@@ -154,7 +157,7 @@ export function CompareSettings({ thresholds, onChange, allRows }: {
           </footer>
         </div>
       </Popover>
-    </>
+    </div>
   );
 }
 

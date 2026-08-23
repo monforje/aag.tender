@@ -8,6 +8,7 @@ import {
 import type { CellPopupBind, CellPopupData } from '@/shared/ui/CellPopup';
 import { tableCell } from '@/shared/ui/Table';
 import { Icon } from '@/shared/ui/Icon';
+import { VisuallyHidden } from '@/shared/ui/VisuallyHidden';
 import { pctSigned } from '../model/compareFormat';
 import { CoinMark } from './assets';
 import s from './TenderCompare.module.css';
@@ -112,10 +113,13 @@ export function BidCell({ row, contractor, view, thresholds, bind, note, flash }
      на ту же ячейку, селектом не управляется (§3 источника). */
   const isMin = row.bestId === contractor.id;
 
-  /* Суффикс отклонения живёт на строке стоимости — главной или базовой. */
+  /* Суффикс отклонения живёт на строке стоимости — главной или базовой.
+     Правилу «подписей словами нет» подчиняется ВИЗУАЛ: скрытым текстом
+     скринридер получает базу, иначе суффикс читается голым процентом. */
   const devSuffix = plan.deviationOn !== null && dev !== null ? (
-    <span className={s.devSuffix} title="Отклонение от медианы строки">
+    <span className={s.devSuffix}>
       {pctSigned(dev)}
+      <VisuallyHidden> к медиане строки</VisuallyHidden>
     </span>
   ) : null;
 
@@ -157,12 +161,17 @@ export function BidCell({ row, contractor, view, thresholds, bind, note, flash }
   } : null;
 
   /* У пары из данных причина есть обязательно (контракт CellMark); пара,
-     найденная только формулой k, объясняется стандартной фразой. */
+     найденная только формулой k, объясняется стандартной фразой. Запас торга
+     дублируется полем: монета в аномальной ячейке НЕ рендерится — она кнопка,
+     а кнопка внутри триггера-кнопки запрещена и валидатором, и фокусом. */
   const anomalyData: CellPopupData = {
     tone: 'warning',
     title: 'Аномальная цена',
     fields: [
       { label: 'Стоимость', value: money(sum) },
+      ...(mark.potential
+        ? [{ label: 'Запас торга', value: `+${money(mark.potential * qty)}`, tone: true }]
+        : []),
       { label: 'К медиане строки', value: dev === null ? '—' : pctSigned(dev) },
     ],
     meter: row.spread === null
@@ -199,7 +208,7 @@ export function BidCell({ row, contractor, view, thresholds, bind, note, flash }
         <span className={s.price}>
           {head}
           {plan.deviationOn === 'main' ? devSuffix : null}
-          {coinData ? (
+          {!anomaly && coinData ? (
             <button
               type="button"
               className={s.coin}

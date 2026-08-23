@@ -160,7 +160,7 @@ export function AiTrigger({
           состояниях. */}
       <span ref={bodyRef} className={s.body}>
         <span className={s.glyph} aria-hidden="true">
-          <SparkGlyph size={16} />
+          <SparkGlyph size={18} />
         </span>
         {/* Колейка подписи (рецепт 10 каталога): внешняя — анимируемая сетка
             1fr → 0fr, внутренняя прячет текст под overflow. */}

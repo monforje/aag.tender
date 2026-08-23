@@ -135,20 +135,32 @@ export function CompareToolbar({
         />
 
         {/* Секция 2: спутники стоимости — постоянно видимы и независимы от
-            селекта. Мгновенное применение без формы — это <Switch>. */}
+            селекта. Мгновенное применение без формы — это <Switch>.
+            Обёртка — span с охранённым кликом, а НЕ <label>: кнопка не является
+            labelable-элементом, и лейбл молча не делегировал бы ей щелчок по
+            тексту. Охрана по цели события исключает двойной тоггл, когда попали
+            в сам свитч. */}
         <div className={s.satellites} role="group" aria-label="Спутники стоимости">
-          {SATELLITES.map((id) => (
-            <label key={id} className={s.satellite}>
-              <Switch
-                checked={id === 'deviation' ? view.showDeviation : view.showRate}
-                onChange={(checked) => onPatch(
-                  id === 'deviation' ? { showDeviation: checked } : { showRate: checked },
-                )}
-                aria-label={`Показывать: ${SATELLITE_LABEL[id]}`}
-              />
-              {SATELLITE_LABEL[id]}
-            </label>
-          ))}
+          {SATELLITES.map((id) => {
+            const checked = id === 'deviation' ? view.showDeviation : view.showRate;
+            const flip = () => onPatch(
+              id === 'deviation' ? { showDeviation: !checked } : { showRate: !checked },
+            );
+            return (
+              <span
+                key={id}
+                className={s.satellite}
+                onClick={(e) => { if (e.target === e.currentTarget) flip(); }}
+              >
+                <Switch
+                  checked={checked}
+                  onChange={flip}
+                  aria-label={`Показывать: ${SATELLITE_LABEL[id]}`}
+                />
+                {SATELLITE_LABEL[id]}
+              </span>
+            );
+          })}
         </div>
 
         {/* Секция 3: пороги тендера — окно по значку ⚙. */}
