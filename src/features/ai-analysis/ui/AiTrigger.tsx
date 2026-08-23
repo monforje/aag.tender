@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { cx } from '@/shared/lib/cx';
+import { reducedMotion } from '@/shared/lib/reducedMotion';
 import { SparkGlyph } from './assets/SparkGlyph';
 import s from './AiTrigger.module.css';
 
@@ -106,9 +107,7 @@ export function AiTrigger({
       setSlim(false);
       return;
     }
-    const reduced = typeof window !== 'undefined'
-      && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (reduced) {
+    if (reducedMotion()) {
       setSlim(true);
       return;
     }

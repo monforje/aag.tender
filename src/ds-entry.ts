@@ -76,6 +76,7 @@ export * from './shared/ui/VisuallyHidden';
 /* --- entities --- */
 export * from './entities/section';
 export * from './entities/tender';
+export * from './entities/comparison';
 export * from './entities/workspace';
 
 /* --- features --- */
@@ -91,6 +92,15 @@ export * from './widgets/workspace';
 /* --- pages --- */
 export * from './pages/tender';
 export * from './pages/tender-registry';
+
+/* --- демо-данные для превью -------------------------------------------------
+   Фикстуры реэкспортируются ЗДЕСЬ и только здесь. Публичные точки слайсов их
+   не отдают намеренно: экран, импортирующий мок по имени, пережил бы
+   подключение сервера и продолжил молча показывать демо-цифры. У этого файла
+   ровно обратная задача — макетам в claude.ai/design нужны настоящие строки
+   домена, а приложения за ним нет. Импорт глубокий по той же причине. */
+export { ROWS } from './entities/tender/api/tenders.mock';
+export { MOCK_COMPARISON } from './entities/comparison/api/comparison.mock';
 
 /* --- обвязка превью ---------------------------------------------------------
    Приложение оборачивает дерево тремя провайдерами (app/index.tsx):

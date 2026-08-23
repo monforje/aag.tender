@@ -1,8 +1,12 @@
-/** Самопроверка сравнения КП. Третье место в проекте, где ошибка была бы
+/** Самопроверка сравнения КП. Импорт — через публичную точку слайса ('..'):
+ *  проверка описывает КОНТРАКТ наружу, а не устройство сегментов, и переезд
+ *  функции из calc.ts в filters.ts её ронять не должен.
+ *
+ *  Третье место в проекте, где ошибка была бы
  *  тихой: ранжир не падает — он молча объявляет победителем не того. Дешёвое
  *  неполное КП обязано уходить ВНИЗ, а не наверх, и глазами на живых данных
  *  эту перестановку не поймать: суммы правдоподобны в любом порядке.
- *  Запуск: bun src/entities/tender/model/comparison.check.ts
+ *  Запуск: bun src/entities/comparison/model/comparison.check.ts
  *  Фреймворка нет намеренно — то же соглашение, что у registry.check.ts. */
 import { strict as assert } from 'node:assert';
 import {
@@ -12,8 +16,8 @@ import {
   SYSTEM_THRESHOLDS,
   type CellLine, type ComparePosition, type CompareThresholds, type CompareView,
   type Contractor, type PositionGroup,
-} from './comparison';
-import { MOCK_COMPARISON } from './comparison.mock';
+} from '..';
+import { MOCK_COMPARISON } from '../api/comparison.mock';
 
 // Живая фикстура — ровно так же, как её берёт экран: разделы из ответа,
 // плоский список выводится из них.

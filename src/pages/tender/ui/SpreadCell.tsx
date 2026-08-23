@@ -1,5 +1,5 @@
 import { cx } from '@/shared/lib/cx';
-import { decimal, type CompareThresholds, type RowFacts } from '@/entities/tender';
+import { decimal, type CompareThresholds, type RowFacts } from '@/entities/comparison';
 import type { CellPopupBind } from '@/shared/ui/CellPopup';
 import { tableCell } from '@/shared/ui/Table';
 import { SpreadMark } from './assets';

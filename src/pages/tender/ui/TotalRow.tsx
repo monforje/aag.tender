@@ -1,5 +1,7 @@
 import { cx } from '@/shared/lib/cx';
-import { cellMark, money, type Bid, type CompareMetricId, type RowFacts } from '@/entities/tender';
+import {
+  cellMark, money, type Bid, type CompareMetricId, type RowFacts,
+} from '@/entities/comparison';
 import { tableCell } from '@/shared/ui/Table';
 import s from './TenderCompare.module.css';
 

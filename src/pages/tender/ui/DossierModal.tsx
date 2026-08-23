@@ -4,7 +4,7 @@ import { Badge } from '@/shared/ui/Badge';
 import { Button } from '@/shared/ui/Button';
 import { Icon } from '@/shared/ui/Icon';
 import { Modal, modalPart } from '@/shared/ui/Modal';
-import { bidStatus, money, type Bid } from '@/entities/tender';
+import { bidStatus, money, type Bid } from '@/entities/comparison';
 import s from './DossierModal.module.css';
 
 /**

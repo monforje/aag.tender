@@ -1,19 +1,19 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Navigate, useParams } from 'react-router-dom';
 import { Breadcrumbs } from '@/shared/ui/Breadcrumbs';
+import { ErrorState } from '@/shared/ui/ErrorState';
 import { ScrollArea } from '@/shared/ui/ScrollArea';
+import { Skeleton } from '@/shared/ui/Skeleton';
 import {
   PageHeader, Screen, ScreenPlaceholder, SecondaryHeader, type SecondaryTab,
 } from '@/shared/ui/Page';
-import {
-  applyTransition, MOCK_ROUND1, MOCK_ROUND2_FULL,
-  MOCK_ROUND2_PARTIAL, PRESETS, SYSTEM_THRESHOLDS, tenderById,
-  type AnalysisResult, type AnalysisTransition, type CompareThresholds,
-  type CompareView, type PresetId,
-} from '@/entities/tender';
+import { fetchTender } from '@/entities/tender';
 import { useWorkspaceStore } from '@/entities/workspace';
 import { AI_DOCK_ID, AiTrigger, AnalysisDock } from '@/features/ai-analysis';
+import { useAsync } from '@/shared/lib/useAsync';
+import { useComparisonData } from '../model/useComparisonData';
+import { useCompareScreen } from '../model/useCompareScreen';
 import { RoundsPanel } from './RoundsPanel';
 import { TenderCompare } from './TenderCompare';
 import { TenderSummary } from './TenderSummary';
@@ -32,31 +32,6 @@ const TABS: SecondaryTab[] = [
   { id: 'documents', label: 'Документы' },
   { id: 'activity', label: 'Активность' },
 ];
-
-/* ── ДЕМО-фикстуры раундов ──────────────────────────────────────────────────
-   Три снимка одной истории (сцены 4 → 6 → 7). В проде здесь стоит запрос по
-   tender.id и раунду; подмена — замена этой таблицы, экран о происхождении
-   данных не знает. Ревизия растёт на каждой подаче — по ней панель понимает,
-   что сохранённый разбор устарел (05 §8.2). */
-const DATASETS = {
-  r1: MOCK_ROUND1,
-  r2Partial: MOCK_ROUND2_PARTIAL,
-  r2Full: MOCK_ROUND2_FULL,
-} as const;
-
-type DatasetId = keyof typeof DATASETS;
-
-const NEXT_DATASET: Partial<Record<DatasetId, DatasetId>> = {
-  r1: 'r2Partial',
-  r2Partial: 'r2Full',
-};
-
-/** Причина изменения данных — текст плашки устаревания (05 §8.2 называет её). */
-const CHANGE_NOTE: Record<DatasetId, string> = {
-  r1: 'Исходный сбор КП',
-  r2Partial: 'ИнженерГрупп прислал КП второго круга',
-  r2Full: 'СтройМонтаж прислал новое КП',
-};
 
 /**
  * Карточка тендера — экран за строкой реестра.
@@ -112,16 +87,17 @@ const CHANGE_NOTE: Record<DatasetId, string> = {
 export function TenderPage() {
   const { id } = useParams();
   const [tab, setTab] = useState(TABS[0].id);
-  const tender = tenderById(id);
 
-  /* Срез сравнения, ★ и подсветка — общий слой таблицы и дока. */
-  const [view, setView] = useState<CompareView>({ preset: 'overview', ...PRESETS.overview });
-  /* Пороги аналитики — НАСТРОЙКИ ТЕНДЕРА (не константы кода): системный старт,
-     правятся в окне `⚙` на полосе сравнения. Живут рядом со срезом — URL их
-     не ловит по той же причине, что и фильтры реестра. */
-  const [thresholds, setThresholds] = useState<CompareThresholds>(SYSTEM_THRESHOLDS);
-  const [starred, setStarred] = useState<string[]>([]);
-  const [focusRowId, setFocusRowId] = useState<string | null>(null);
+  /* Тендер и его сравнение — два разных запроса: шапка карточки живёт без
+     сравнения (вкладок семь, сравнение — одна), и ждать одно ради другого
+     незачем. */
+  const tenderQuery = useAsync(() => fetchTender(id), [id]);
+  const tender = tenderQuery.data;
+  const data = useComparisonData(id ?? '');
+
+  /* Срез сравнения, ★ и переход из разбора — общий слой таблицы и дока. */
+  const screen = useCompareScreen();
+
   /* Открытость панели — состояние КАРКАСА (колонка рядом с main), не страницы:
      колонку рисует Workspace, а связку с сайдбаром держит сам стор
      (openAiPanel закрывает его навсегда). Уход со страницы гасит флаг
@@ -141,87 +117,87 @@ export function TenderPage() {
      и та складывается до иконки. */
   const [headStuck, setHeadStuck] = useState(false);
 
-  /* ── данные раундов и ревизия ── */
-  const [datasetId, setDatasetId] = useState<DatasetId>('r1');
-  const dataset = DATASETS[datasetId];
-  const prevDataset = datasetId === 'r1' ? undefined : DATASETS.r1;
-
-  /* ── переход «анализ → таблица» (05 §7) ──
-     До первого применения запоминается ПОЛНЫЙ пользовательский вид; возврат —
-     по явному чипу «Вернуть мой вид». Подсветка ячеек живёт ~5 секунд и
-     гаснет сама; вид при этом не откатывается. */
-  const savedView = useRef<CompareView | null>(null);
-  const [analysisApplied, setAnalysisApplied] = useState(false);
-  /* Комментарии последнего разбора — для попапов ячеек (слой 6): до запуска
-     их нет, попапы показывают одни числа. */
-  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
-  const [flash, setFlash] = useState<{
-    cells: Set<string>;
-    cols: Set<string>;
-    rowId: string | null;
-  } | null>(null);
-  const flashTimer = useRef<number | undefined>(undefined);
-  useEffect(() => () => window.clearTimeout(flashTimer.current), []);
-
-  const handleTransition = (transition: AnalysisTransition) => {
-    if (!analysisApplied) savedView.current = view;
-    setAnalysisApplied(true);
-    setView((current) => applyTransition(current, transition));
-
-    const focus = transition.focus ?? {};
-    const cells = new Set<string>();
-    const cols = new Set<string>();
-    if (focus.positionId && focus.contractorId) {
-      cells.add(`${focus.contractorId}:${focus.positionId}`);
-    } else if (focus.contractorId) {
-      cols.add(focus.contractorId);
-    }
-    setFlash({ cells, cols, rowId: focus.positionId ?? null });
-    window.clearTimeout(flashTimer.current);
-    flashTimer.current = window.setTimeout(() => setFlash(null), 5300);
-  };
-
-  const restoreView = () => {
-    if (savedView.current) setView(savedView.current);
-    savedView.current = null;
-    setAnalysisApplied(false);
-    setFlash(null);
-  };
-
-  /* Ручное движение по осям возвращает управление пользователю: чип анализа
-     уступает место обычному состоянию вида. Сам вид не трогается. */
-  const handleManualPreset = (preset: PresetId) => {
-    setAnalysisApplied(false);
-    applyPreset(preset);
-  };
-  const handleManualPatch = (patch: Partial<Omit<CompareView, 'preset'>>) => {
-    setAnalysisApplied(false);
-    patchView(patch);
-  };
-
-  /* ДЕМО: подача КП следующим молчащим контрагентом — данные меняются,
-     сохранённый разбор становится устаревшим с названной причиной. */
-  const simulateSubmission = () => {
-    const next = NEXT_DATASET[datasetId];
-    if (!next) return;
-    setDatasetId(next);
-  };
-
+  /* Проверки стоят ПОСЛЕ всех хуков: ранний возврат выше менял бы их число
+     между рендерами. */
+  if (tenderQuery.loading) {
+    return (
+      <Screen>
+        <PageHeader breadcrumb><Skeleton width={220} /></PageHeader>
+        <ScrollArea variant="page" className={s.scroll}>
+          <div className={s.loading}>
+            <Skeleton height={22} width="40%" />
+            <Skeleton height={14} width="65%" />
+            <Skeleton height={38} radius={6} />
+          </div>
+        </ScrollArea>
+      </Screen>
+    );
+  }
+  /* Неизвестный номер уводит в реестр — это опечатка или мёртвая ссылка, а не
+     пустая карточка. СБОЙ ЗАПРОСА — другое дело: тендер, может, и есть,
+     поэтому здесь предложение повторить, а не молчаливый увод. */
+  if (tenderQuery.error) {
+    return (
+      <Screen>
+        <PageHeader breadcrumb>
+          <Breadcrumbs links={[{ title: 'Реестр тендеров', to: '/tenders/registry' }]} current={id ?? ''} />
+        </PageHeader>
+        <ErrorState
+          title="Тендер не загрузился"
+          description="Данные карточки не пришли. Реестр при этом работает."
+          onRetry={tenderQuery.reload}
+        />
+      </Screen>
+    );
+  }
   if (!tender) return <Navigate to="/tenders/registry" replace />;
 
-  const applyPreset = (preset: PresetId) => setView({ preset, ...PRESETS[preset] });
-  const patchView = (patch: Partial<Omit<CompareView, 'preset'>>) =>
-    setView((prev) => ({ ...prev, ...patch }));
-  const toggleStar = (contractorId: string) =>
-    setStarred((list) => (
-      list.includes(contractorId)
-        ? list.filter((x) => x !== contractorId)
-        : [...list, contractorId]
-    ));
   /* Закрытие только гасит панель: сайдбар стор не возвращает (контракт
      «открыл анализ — сайдбар закрылся»). Фокус на бейдж возвращает САМ
      триггер (preventScroll), поэтому закрытие не прокручивает страницу. */
   const closeAi = () => useWorkspaceStore.getState().closeAiPanel();
+
+  /* Сравнение и его состояния — одним блоком: раздел «Сравнение» и панель
+     разбора читают ОДИН снимок, и расходиться им нельзя. */
+  const compare = data.loading ? (
+    <div className={s.loading}>
+      <Skeleton height={38} radius={6} />
+      <Skeleton height={200} radius={6} />
+    </div>
+  ) : data.error ? (
+    <ErrorState
+      title="Сравнение не загрузилось"
+      description="Остальные разделы карточки работают."
+      onRetry={data.reload}
+    />
+  ) : !data.comparison ? (
+    <ScreenPlaceholder icon="billList">
+      По этому тендеру сравнения ещё нет.
+    </ScreenPlaceholder>
+  ) : (
+    /* Данные уходят в раздел ПРОПАМИ: <TenderCompare> о происхождении не
+       знает — потому и переживёт подмену мока запросом. */
+    <TenderCompare
+      {...data.comparison}
+      view={screen.view}
+      onPreset={screen.selectPreset}
+      onPatch={screen.patchView}
+      thresholds={screen.thresholds}
+      onThresholds={screen.setThresholds}
+      starred={screen.starred}
+      onToggleStar={screen.toggleStar}
+      focusRowId={screen.focusRowId}
+      onFocusClear={screen.clearFocus}
+      noteFor={screen.noteFor}
+      flashCells={screen.flash?.cells}
+      flashCols={screen.flash?.cols}
+      analysisApplied={screen.analysisApplied}
+      onRestoreView={screen.restoreView}
+      /* Липкая шапка встала на линию — бирка «Анализ ИИ» складывается
+         до иконки (см. compact у <AiTrigger> ниже). */
+      onHeadStuckChange={setHeadStuck}
+    />
+  );
 
   return (
     <Screen>
@@ -239,38 +215,14 @@ export function TenderPage() {
       <ScrollArea variant="page" className={s.scroll}>
         <TenderSummary tender={tender} />
         <SecondaryHeader tabs={TABS} activeId={tab} onChange={setTab} variant="canvas" />
-        {tab === 'compare' ? (
-          /* Данные сравнения приходят СЮДА и уходят в раздел пропами: это
-             единственное место, где сегодня стоит фикстура, и то же место,
-             где завтра встанет запрос по tender.id. Сам <TenderCompare> о
-             происхождении данных не знает — потому и переживёт подмену. */
-          <TenderCompare
-            {...dataset}
-            view={view}
-            onPreset={handleManualPreset}
-            onPatch={handleManualPatch}
-            thresholds={thresholds}
-            onThresholds={setThresholds}
-            starred={starred}
-            onToggleStar={toggleStar}
-            focusRowId={focusRowId ?? flash?.rowId ?? null}
-            onFocusClear={() => setFocusRowId(null)}
-            noteFor={(contractorId, positionId) => analysisResult?.popupNotes[`${contractorId}:${positionId}`]}
-            flashCells={flash?.cells}
-            flashCols={flash?.cols}
-            analysisApplied={analysisApplied}
-            onRestoreView={restoreView}
-            /* Липкая шапка встала на линию — бирка «Анализ ИИ» складывается
-               до иконки (см. compact у <AiTrigger> ниже). */
-            onHeadStuckChange={setHeadStuck}
-          />
-        ) : tab === 'rounds' ? (
-          <RoundsPanel comparison={dataset} onSimulateSubmission={simulateSubmission} />
-        ) : (
-          <ScreenPlaceholder icon="clipboardList">
-            Раздел «{TABS.find((t) => t.id === tab)?.label}» ещё не реализован.
-          </ScreenPlaceholder>
-        )}
+        {tab === 'compare' ? compare
+          : tab === 'rounds' && data.comparison ? (
+            <RoundsPanel comparison={data.comparison} onSimulateSubmission={data.submitNext} />
+          ) : (
+            <ScreenPlaceholder icon="clipboardList">
+              Раздел «{TABS.find((t) => t.id === tab)?.label}» ещё не реализован.
+            </ScreenPlaceholder>
+          )}
       </ScrollArea>
 
       {/* Триггер — вне портала и вне ScrollArea: fixed-бирка на каркасе.
@@ -291,18 +243,18 @@ export function TenderPage() {
       {/* Панель живёт в слоте каркаса (Workspace → #ai-panel-slot) третьей
           колонкой ряда: main сжимается флексом сам, история чата и сохранённые
           разборы раундов переживают открытие/закрытие — панель не
-          размонтируется, открытость гасят классы слота. */}
-      {slotNode ? createPortal(
+          размонтируется, открытость гасят классы слота.
+          БЕЗ ДАННЫХ ПАНЕЛИ НЕЧЕГО РАЗБИРАТЬ — до их прихода она не монтируется
+          вовсе: пустой разбор пришлось бы объяснять отдельным состоянием. */}
+      {slotNode && data.comparison ? createPortal(
         <AnalysisDock
           open={aiOpen}
           onClose={closeAi}
-          comparison={dataset}
-          prevComparison={prevDataset}
-          thresholds={thresholds}
-          rev={datasetId}
-          revNote={CHANGE_NOTE[datasetId]}
-          onTransition={handleTransition}
-          onResultChange={setAnalysisResult}
+          comparison={data.comparison}
+          prevComparison={data.prevComparison}
+          thresholds={screen.thresholds}
+          onTransition={screen.applyAnalysis}
+          onResultChange={screen.setAnalysisResult}
         />,
         slotNode,
       ) : null}

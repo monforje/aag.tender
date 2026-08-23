@@ -1,4 +1,4 @@
-import { decimal, type Bid } from '@/entities/tender';
+import { decimal, type Bid } from '@/entities/comparison';
 import type { Tone } from '@/shared/ui/Badge';
 
 /** Формат и цвет сравнения КП: тон → CSS-токен и обратно, подписи процентов,

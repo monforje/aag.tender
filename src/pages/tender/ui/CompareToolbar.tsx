@@ -10,11 +10,8 @@ import { IconButton } from '@/shared/ui/IconButton';
 import { Segmented } from '@/shared/ui/Segmented';
 import { Switch } from '@/shared/ui/Switch';
 import {
-  METRIC_LABEL, PREDICATES, PRESET_LABEL, ROW_VIEW_LABEL, SATELLITE_LABEL,
-  predicateCount,
-  type CompareMetricId, type CompareThresholds, type CompareView,
-  type PredicateId, type PresetId, type RowFacts, type RowViewId, type SatelliteId,
-} from '@/entities/tender';
+  METRIC_LABEL, predicateCount, PREDICATES, PRESET_LABEL, ROW_VIEW_LABEL, SATELLITE_LABEL, type CompareMetricId, type CompareThresholds, type CompareView, type PredicateId, type PresetId, type RowFacts, type RowViewId, type SatelliteId,
+} from '@/entities/comparison';
 import { AnomalyGlyph, CoinMark, KeyMark, MedMark, SpreadMark } from './assets';
 import { CompareLegend } from './CompareLegend';
 import { CompareSettings } from './CompareSettings';

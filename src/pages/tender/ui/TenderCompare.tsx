@@ -10,11 +10,8 @@ import { ScreenPlaceholder } from '@/shared/ui/Page';
 import { Table, tableCell } from '@/shared/ui/Table';
 import { plural } from '@/shared/lib/plural';
 import {
-  analyzeComparison, filterRows, flatten, isModifiedView, METRIC_LABEL,
-  rankBids, ROW_VIEW_LABEL,
-  type Bid, type Comparison, type CompareThresholds, type CompareView,
-  type PositionGroup, type PresetId, type RowFacts,
-} from '@/entities/tender';
+  analyzeComparison, filterRows, flatten, isModifiedView, METRIC_LABEL, rankBids, ROW_VIEW_LABEL, type Bid, type CompareThresholds, type CompareView, type Comparison, type PositionGroup, type PresetId, type RowFacts,
+} from '@/entities/comparison';
 import { choose, resolveTone } from '../model/compareFormat';
 import { useTableDock } from '../model/useTableDock';
 import { CompareToolbar } from './CompareToolbar';
@@ -67,7 +64,7 @@ import s from './TenderCompare.module.css';
  *         при layout="fixed", содержимое на них не влияет.
  *
  * @example
- * <TenderCompare {...MOCK_COMPARISON} view={view} onPreset={applyPreset}
+ * <TenderCompare {...comparison} view={view} onPreset={applyPreset}
  *                onPatch={patchView} starred={starred} onToggleStar={toggleStar}
  *                focusRowId={focusRowId} onFocusClear={() => setFocusRowId(null)} />
  */

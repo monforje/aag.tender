@@ -12,8 +12,8 @@ import { IconButton } from '@/shared/ui/IconButton';
 import { RangeCalendar } from '@/shared/ui/RangeCalendar';
 import { SearchInput } from '@/shared/ui/SearchInput';
 import {
-  activeCount, EMPTY_FILTERS, FACETS, panelCount, STATUS, STATUS_IDS,
-  type Filters,
+  activeCount, EMPTY_FILTERS, facetsOf, panelCount, STATUS, STATUS_IDS,
+  type Filters, type TenderRow,
 } from '@/entities/tender';
 import s from './RegistryFilters.module.css';
 
@@ -22,10 +22,15 @@ interface RegistryFiltersProps {
   onChange: (next: Filters) => void;
 }
 
+/** Строки, из которых собираются значения критериев. ПРОПОМ, а не импортом:
+ *  значения меню выводятся из данных, а данные приходят запросом — модуль,
+ *  посчитавший их при загрузке, показал бы пустое меню навсегда. */
+type WithRows = RegistryFiltersProps & { rows: TenderRow[] };
+
 /** Окно «Фильтры»: критерии слева, значения справа — универсальный
- *  <FacetFilter>. Домен отдаёт ему только список критериев (FACETS) и срез
+ *  <FacetFilter>. Домен отдаёт ему только список критериев (facetsOf) и срез
  *  Filters по этим ключам; про портфели и виды работ компонент не знает. */
-function FiltersPopover({ value, onChange }: RegistryFiltersProps) {
+function FiltersPopover({ value, onChange, rows }: WithRows) {
   const slot = useDropdownSlot('filters');
   const count = panelCount(value);
 
@@ -37,7 +42,7 @@ function FiltersPopover({ value, onChange }: RegistryFiltersProps) {
       menu={(
         <FacetFilter
           open={slot.open}
-          facets={FACETS}
+          facets={facetsOf(rows)}
           value={{
             portfolio: value.portfolio, project: value.project, kind: value.kind, owner: value.owner,
           }}
@@ -204,9 +209,9 @@ function PeriodSelect({ value, onChange }: RegistryFiltersProps) {
  *         Dropdown).
  *
  * @example
- * <RegistryFilters value={filters} onChange={setFilters} />
+ * <RegistryFilters value={filters} onChange={setFilters} rows={rows} />
  */
-export function RegistryFilters({ value, onChange }: RegistryFiltersProps) {
+export function RegistryFilters({ value, onChange, rows }: WithRows) {
   const active = activeCount(value);
 
   return (
@@ -234,7 +239,7 @@ export function RegistryFilters({ value, onChange }: RegistryFiltersProps) {
               <span className={s.resetCount}>{active}</span>
             </Button>
           ) : null}
-          <FiltersPopover value={value} onChange={onChange} />
+          <FiltersPopover value={value} onChange={onChange} rows={rows} />
         </div>
       </div>
     </DropdownGroup>

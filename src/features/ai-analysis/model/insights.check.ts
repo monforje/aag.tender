@@ -2,14 +2,14 @@
  *  она молча советует не то, и глазами на живых данных подмену правила не
  *  поймать: текст всегда правдоподобен. Здесь фиксируется, КАКОЙ вывод обязан
  *  делать каждое правило на фикстуре, где каждый случай присутствует нарочно.
- *  Запуск: bun src/entities/tender/model/insights.check.ts
+ *  Запуск: bun src/features/ai-analysis/model/insights.check.ts
  *  Фреймворка нет намеренно — то же соглашение, что у comparison.check.ts. */
 import { strict as assert } from 'node:assert';
-import { POTENTIAL_MIN, SYSTEM_THRESHOLDS } from './comparison';
-import { MOCK_COMPARISON } from './comparison.mock';
+import { POTENTIAL_MIN, SYSTEM_THRESHOLDS } from '@/entities/comparison';
+import { fetchComparison } from '@/entities/comparison';
 import { deriveInsights, scenarioPreset, SCENARIOS } from './insights';
 
-const { groups: GROUPS, contractors: CONTRACTORS } = MOCK_COMPARISON;
+const { groups: GROUPS, contractors: CONTRACTORS } = (await fetchComparison({ tenderId: 'T-2026-014' }))!;
 
 /* Сценарий → пресет: связь односторонняя, у остальных сценариев её нет. */
 assert.equal(scenarioPreset('bidding'), 'bidding');

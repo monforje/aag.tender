@@ -6,22 +6,19 @@ import { ErrorState } from '@/shared/ui/ErrorState';
 import { Icon } from '@/shared/ui/Icon';
 import { IconButton } from '@/shared/ui/IconButton';
 import { Skeleton } from '@/shared/ui/Skeleton';
-import {
-  buildAnalysis, snapshotRound,
-  type AnalysisItem, type AnalysisRef,
-  type AnalysisResult, type AnalysisSectionId, type AnalysisSubsectionId,
-  type AnalysisTransition, type Comparison, type CompareThresholds,
-} from '@/entities/tender';
+import { reducedMotion } from '@/shared/lib/reducedMotion';
+import type { CompareThresholds, Comparison } from '@/entities/comparison';
+import type {
+  AnalysisItem, AnalysisRef, AnalysisResult,
+  AnalysisSectionId, AnalysisSubsectionId, AnalysisTransition,
+} from '../model/analysis';
+import { useAnalysisRuns } from '../model/useAnalysisRuns';
 import { AI_DOCK_ID, AiDock } from './AiDock';
 import { SparkGlyph } from './assets/SparkGlyph';
 /* Оболочка панели (геометрия, спектральная линия, плитка ИИ) — ОДНА на оба
    режима: импорт того же CSS-модуля даёт те же хэши классов без копии правил. */
 import base from './AiDock.module.css';
 import s from './AnalysisDock.module.css';
-
-const reducedMotion = () =>
-  typeof window !== 'undefined'
-  && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /** Слова-сущности внутри серверной строки: пунктир и мягкий красный видны без
  *  наведения (05 §6); переход ведёт только то, у чего есть валидный переход. */
@@ -169,7 +166,7 @@ function RoundPicker({ value, options, onChange }: {
  *         объявляется через aria-live области результата.
  */
 export function AnalysisDock({
-  open, onClose, comparison, prevComparison, thresholds, rev, revNote, onTransition, onResultChange,
+  open, onClose, comparison, prevComparison, thresholds, onTransition, onResultChange,
 }: {
   open: boolean;
   onClose: () => void;
@@ -179,10 +176,6 @@ export function AnalysisDock({
   prevComparison?: Comparison | null;
   /** Пороги тендера: разбор каскадирует в сводку и метки вместе с таблицей. */
   thresholds: CompareThresholds;
-  /** Ревизия данных: изменилась после запуска — разбор устарел. */
-  rev: string;
-  /** Причина последнего изменения данных для плашки («поставщик прислал новое КП»). */
-  revNote?: string | null;
   /** Переход «анализ → таблица»: пресет + обязательные показатели + фокус. */
   onTransition: (transition: AnalysisTransition) => void;
   /** Готовый результат наружу: странице нужны комментарии разбора для
@@ -190,65 +183,20 @@ export function AnalysisDock({
   onResultChange?: (result: AnalysisResult | null) => void;
 }) {
   const headingRef = useRef<HTMLHeadingElement>(null);
-  const runTimer = useRef<number | undefined>(undefined);
-
-  /* Сохранённые разборы ПО РАУНДАМ: перезапуск заменяет результат своего
-     раунда и никогда — чужого (05 §8.1). */
-  const [runs, setRuns] = useState<Record<number, { result: AnalysisResult; rev: string }>>({});
-  const [running, setRunning] = useState(false);
-  const [failed, setFailed] = useState(false);
-  const [roundNo, setRoundNo] = useState(() => snapshotRound(comparison));
   const [chatMode, setChatMode] = useState(false);
   /* Управляемая раскрытость секций: свёрнуты по умолчанию, якорь сводки
      раскрывает свою и скроллит к ней. */
   const [unfolded, setUnfolded] = useState<Record<string, boolean>>({});
 
+  /* Запуски по раундам, устаревание и сам расчёт — в хуке: правил там три,
+     и в теле компонента они тонули между разметкой секций. */
+  const {
+    entry, running, failed, run, roundNo, setRoundNo, rounds, round, isDataRound, staleReason,
+  } = useAnalysisRuns({ comparison, prevComparison, thresholds, onResultChange });
+
   useEffect(() => {
     if (open) headingRef.current?.focus();
   }, [open]);
-
-  useEffect(() => () => window.clearTimeout(runTimer.current), []);
-
-  const rounds = comparison.rounds ?? [];
-  const round = rounds.find((r) => r.number === roundNo);
-  const entry = runs[roundNo];
-  /* Запуск возможен только по данным раунда, который СЕЙЧАС на экране:
-     панель не пересчитывает прошлое и не угадывает будущее. Чужой раунд —
-     просмотр сохранённого результата, если он есть. */
-  const isDataRound = roundNo === snapshotRound(comparison);
-
-  /* Плашка живёт только у анализа ТЕКУЩЕГО раунда (05 §8.2): прошлый круг —
-     завершённое событие, пересчитывать его нечем. */
-  const staleReason = entry && entry.rev !== rev && round?.status !== 'closed'
-    ? revNote ?? 'Данные тендера изменились'
-    : null;
-
-  const prev = prevComparison && snapshotRound(prevComparison) === roundNo - 1
-    ? prevComparison
-    : undefined;
-
-  const run = () => {
-    if (running || !comparison.contractors.length) return;
-    setFailed(false);
-    setRunning(true);
-    /* ДЕМО-задержка вместо ответа модели: при reduced-motion короче. */
-    runTimer.current = window.setTimeout(() => {
-      try {
-        const result = buildAnalysis(comparison, prev, thresholds);
-        if (!result) {
-          setFailed(true);
-          onResultChange?.(null);
-        } else {
-          setRuns((all) => ({ ...all, [roundNo]: { result, rev } }));
-          onResultChange?.(result);
-        }
-      } catch {
-        setFailed(true);
-        onResultChange?.(null);
-      }
-      setRunning(false);
-    }, reducedMotion() ? 300 : 800);
-  };
 
   const goto = (section: AnalysisSectionId, subsection?: AnalysisSubsectionId) => {
     const key = subsection ?? section;

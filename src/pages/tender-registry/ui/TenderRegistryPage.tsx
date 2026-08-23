@@ -3,14 +3,18 @@ import { Link, useNavigate } from 'react-router-dom';
 import { cx } from '@/shared/lib/cx';
 import { Badge } from '@/shared/ui/Badge';
 import { Button } from '@/shared/ui/Button';
+import { ErrorState } from '@/shared/ui/ErrorState';
+import { Stack } from '@/shared/ui/Layout';
 import { ScrollArea } from '@/shared/ui/ScrollArea';
+import { Skeleton } from '@/shared/ui/Skeleton';
 import { Table, tableCell } from '@/shared/ui/Table';
 import {
   PageHeader, PageTitle, Screen, SecondaryHeader, type SecondaryTab,
 } from '@/shared/ui/Page';
 import {
-  applyFilters, EMPTY_FILTERS, ROWS, STATUS, tenderPath, type Filters,
+  applyFilters, EMPTY_FILTERS, fetchTenders, STATUS, tenderPath, type Filters,
 } from '@/entities/tender';
+import { useAsync } from '@/shared/lib/useAsync';
 import { RegistryFilters } from './RegistryFilters';
 
 type RegistryTab = 'active' | 'closed' | 'drafts';
@@ -52,7 +56,11 @@ export function TenderRegistryPage() {
   const [tab, setTab] = useState<RegistryTab>('active');
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
 
-  const rows = applyFilters(ROWS, filters);
+  const { data, loading, error, reload } = useAsync(() => fetchTenders(), []);
+  /* Отбор идёт по ПРИШЕДШИМ строкам: пока их нет — фильтровать нечего, и это
+     не «ничего не найдено», а «ещё не приехало». Разные экраны. */
+  const all = data ?? [];
+  const rows = applyFilters(all, filters);
 
   return (
     <Screen>
@@ -60,12 +68,25 @@ export function TenderRegistryPage() {
         <PageTitle>Реестр тендеров</PageTitle>
       </PageHeader>
       <SecondaryHeader tabs={TABS} activeId={tab} onChange={(id) => setTab(id as RegistryTab)} />
-      <RegistryFilters value={filters} onChange={setFilters} />
+      <RegistryFilters value={filters} onChange={setFilters} rows={all} />
       <ScrollArea variant="page">
+        {loading ? (
+          /* Полосы стоят на месте будущих строк таблицы — загрузка не должна
+             читаться как прыжок раскладки. */
+          <Stack gap={2}>
+            {[0, 1, 2, 3, 4, 5].map((i) => <Skeleton key={i} height={36} radius={6} />)}
+          </Stack>
+        ) : error ? (
+          <ErrorState
+            title="Реестр не загрузился"
+            description="Список тендеров не пришёл. Фильтры и поиск при этом настроены."
+            onRetry={reload}
+          />
+        ) : (
         <Table
-          caption={rows.length === ROWS.length
-            ? `Всего тендеров: ${ROWS.length}`
-            : `Показано ${rows.length} из ${ROWS.length}`}
+          caption={rows.length === all.length
+            ? `Всего тендеров: ${all.length}`
+            : `Показано ${rows.length} из ${all.length}`}
         >
           <thead>
             <tr>
@@ -128,6 +149,7 @@ export function TenderRegistryPage() {
             ) : null}
           </tbody>
         </Table>
+        )}
       </ScrollArea>
     </Screen>
   );

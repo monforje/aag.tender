@@ -34,7 +34,7 @@
  *  цены» у m4/w4); снятая позиция g4 остаётся в списке с нулевым весом;
  *  корректировка объёма показана парой значений у плёнки (m4). */
 
-import type { Comparison, ComparisonRound } from './comparison';
+import type { Comparison, ComparisonRound } from '../model/contract';
 
 /* Смета у всех снимков ОДНА — между раундами объёмы не правились (это же и
    показывает секция «Общая картина»: изменение бюджета без изменения объёма). */
@@ -105,6 +105,8 @@ export const MOCK_ROUND1: Comparison = {
   groups: GROUPS,
   rounds: ROUNDS,
   roundNumber: 1,
+  revision: 'r1',
+  revisionNote: 'Исходный сбор КП',
   contractors: [
     {
       id: 'ms', name: 'АО «МетСнаб»', status: 'complete', fill: 100,
@@ -170,6 +172,8 @@ export const MOCK_ROUND2_PARTIAL: Comparison = {
   groups: GROUPS,
   rounds: ROUNDS,
   roundNumber: 2,
+  revision: 'r2-partial',
+  revisionNote: 'ИнженерГрупп прислал КП второго круга',
   contractors: [
     { ...MOCK_ROUND1.contractors[0] },   // МетСнаб: ещё не подал
     {
@@ -199,6 +203,8 @@ export const MOCK_ROUND2_FULL: Comparison = {
   groups: GROUPS,
   rounds: ROUNDS,
   roundNumber: 2,
+  revision: 'r2-full',
+  revisionNote: 'СтройМонтаж прислал новое КП',
   contractors: [
     { ...MOCK_ROUND1.contractors[0] },   // МетСнаб: всё ещё не подал
     MOCK_ROUND2_PARTIAL.contractors[1],

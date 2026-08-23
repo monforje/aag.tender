@@ -1,10 +1,8 @@
 import { type ReactNode } from 'react';
 import { cx } from '@/shared/lib/cx';
 import {
-  cellLines, cellMark, decimal, deviationPct, hasAnomaly, money, moneyCompact,
-  type CellLine, type CompareThresholds, type CompareView, type Contractor,
-  type RowFacts,
-} from '@/entities/tender';
+  cellLines, cellMark, decimal, deviationPct, hasAnomaly, money, moneyCompact, type CellLine, type CompareThresholds, type CompareView, type Contractor, type RowFacts,
+} from '@/entities/comparison';
 import type { CellPopupBind, CellPopupData } from '@/shared/ui/CellPopup';
 import { tableCell } from '@/shared/ui/Table';
 import { Icon } from '@/shared/ui/Icon';

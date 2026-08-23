@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { IconButton } from '@/shared/ui/IconButton';
 import { Icon } from '@/shared/ui/Icon';
 import { Popover } from '@/shared/ui/Popover';
-import { decimal, type CompareThresholds } from '@/entities/tender';
+import { decimal, type CompareThresholds } from '@/entities/comparison';
 import { AnomalyGlyph, CoinMark, KeyMark } from './assets';
 import s from './CompareLegend.module.css';
 

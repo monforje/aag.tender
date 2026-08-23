@@ -24,7 +24,7 @@ import {
   medianOf, money, POTENTIAL_MIN, rankBids, snapshotRound, sumOf,
   type ComparePosition, type CompareThresholds, type Comparison, type Contractor,
   type PresetId, type RowFacts, type TransitionMetricId,
-} from './comparison';
+} from '@/entities/comparison';
 
 /* ── контракт вывода ──────────────────────────────────────────────────────── */
 

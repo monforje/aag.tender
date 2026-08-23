@@ -4,7 +4,8 @@ import { Icon } from '@/shared/ui/Icon';
 import { IconButton } from '@/shared/ui/IconButton';
 import { Popover } from '@/shared/ui/Popover';
 import { plural } from '@/shared/lib/plural';
-import { SYSTEM_THRESHOLDS, type Comparison } from '@/entities/tender';
+import { reducedMotion } from '@/shared/lib/reducedMotion';
+import { SYSTEM_THRESHOLDS, type Comparison } from '@/entities/comparison';
 import { askAi, type AiAnswer } from '../model/askAi';
 import { SparkGlyph } from './assets/SparkGlyph';
 import { RichText } from './RichText';
@@ -53,9 +54,6 @@ interface ChatSession {
 
 type Phase = 'idle' | 'thinking' | 'streaming';
 
-const reducedMotion = () =>
-  typeof window !== 'undefined'
-  && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /* Заголовок разговора: первый вопрос пользователя одной строкой; длинный
    обрезается по границе слова (не по букве) и закрывается многоточием. */
@@ -122,7 +120,7 @@ const withSession = (
  *         нативного <dialog>; текущий разговор помечен aria-current.
  *
  * @example
- * <AiDock open={aiOpen} onClose={closeAi} comparison={MOCK_COMPARISON}
+ * <AiDock open={aiOpen} onClose={closeAi} comparison={comparison}
  *         starred={starred} onFocusRow={setFocusRowId}
  *         onThinkingChange={setAiThinking} />
  */

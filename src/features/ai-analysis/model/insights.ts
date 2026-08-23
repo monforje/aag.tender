@@ -19,7 +19,7 @@ import {
   analyzeComparison, cellMark, money, POTENTIAL_MIN,
   rankBids, sumOf,
   type CompareThresholds, type Contractor, type PositionGroup, type PresetId, type RowFacts,
-} from './comparison';
+} from '@/entities/comparison';
 
 /** Сценарий — вопрос, на который блок отвечает набором карточек. Два из пяти
  *  заодно переключают пресет таблицы (см. scenarioPreset): анализ синхронизирован

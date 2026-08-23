@@ -1,6 +1,6 @@
 import { Badge } from '@/shared/ui/Badge';
 import { Button } from '@/shared/ui/Button';
-import { snapshotRound, type Comparison, type RoundStatus } from '@/entities/tender';
+import { snapshotRound, type Comparison, type RoundStatus } from '@/entities/comparison';
 import s from './RoundsPanel.module.css';
 
 /** Статус раунда описан один раз: тон и глиф — те же каналы, что у прочих

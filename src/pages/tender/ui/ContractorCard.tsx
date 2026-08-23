@@ -3,7 +3,7 @@ import { cx } from '@/shared/lib/cx';
 import { Badge } from '@/shared/ui/Badge';
 import { Icon } from '@/shared/ui/Icon';
 import { VisuallyHidden } from '@/shared/ui/VisuallyHidden';
-import { bidStatus, money, type Bid } from '@/entities/tender';
+import { bidStatus, money, type Bid } from '@/entities/comparison';
 import s from './TenderCompare.module.css';
 
 /**

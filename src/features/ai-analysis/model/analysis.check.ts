@@ -3,10 +3,13 @@
  *  текст всегда правдоподобен. Здесь фиксируются лимиты секций, их порядок,
  *  граничные случаи раундов («ещё не подал», рост из-за состава) и merge-
  *  семантика перехода в таблицу.
- *  Запуск: bun src/entities/tender/model/analysis.check.ts */
+ *  Запуск: bun src/features/ai-analysis/model/analysis.check.ts */
 import { strict as assert } from 'node:assert';
-import { applyTransition, SYSTEM_THRESHOLDS, type CompareView } from './comparison';
-import { MOCK_ROUND1, MOCK_ROUND2_FULL, MOCK_ROUND2_PARTIAL } from './comparison.mock';
+import { applyTransition, SYSTEM_THRESHOLDS, type CompareView } from '@/entities/comparison';
+/* Снимки берутся ЧЕРЕЗ ДВЕРЬ слайса, а не импортом фикстуры: проверка ходит
+   за данными тем же путём, что экран, — и ловит расхождение между лентой
+   подач и тем, что отдаёт запрос по номеру раунда. */
+import { fetchComparison, simulateNextSubmission } from '@/entities/comparison';
 import {
   ANALYSIS_LIMITS, buildAnalysis,
   type AnalysisItem,
@@ -14,9 +17,18 @@ import {
 
 const T = SYSTEM_THRESHOLDS;
 
+const TENDER = 'T-2026-014';
+const R1 = (await fetchComparison({ tenderId: TENDER }))!;
+await simulateNextSubmission();
+const R2_PARTIAL = (await fetchComparison({ tenderId: TENDER }))!;
+await simulateNextSubmission();
+const R2_FULL = (await fetchComparison({ tenderId: TENDER }))!;
+/* Прошлый круг остаётся доступен по номеру и после двух подач. */
+assert.equal((await fetchComparison({ tenderId: TENDER, round: 1 }))!.revision, 'r1');
+
 /* ── раунд 1: только базовый разбор ──────────────────────────────────────── */
 
-const r1 = buildAnalysis(MOCK_ROUND1, undefined, T)!;
+const r1 = buildAnalysis(R1, undefined, T)!;
 assert.equal(r1.roundNumber, 1);
 /* Секции «Изменения» и «Общая картина» в первом круге НЕ показываются вовсе:
    отсутствие — норма, а не пустая секция (05 §4). */
@@ -66,7 +78,7 @@ assert.ok(r1.summary.length > 0 && r1.summary.length <= ANALYSIS_LIMITS.summary)
 
 /* ── раунд 2, частичная подача ───────────────────────────────────────────── */
 
-const p2 = buildAnalysis(MOCK_ROUND2_PARTIAL, MOCK_ROUND1, T)!;
+const p2 = buildAnalysis(R2_PARTIAL, R1, T)!;
 assert.equal(p2.roundNumber, 2);
 assert.deepEqual(
   p2.sections.map((s) => s.id),
@@ -100,7 +112,7 @@ assert.match(meta['Изменение'], /479\s030/u);
 assert.equal(meta['Объём работ'], 'не изменился');
 
 /* Без прошлого снимка объём честно читается «нет данных». */
-const p2noref = buildAnalysis(MOCK_ROUND2_PARTIAL, undefined, T)!;
+const p2noref = buildAnalysis(R2_PARTIAL, undefined, T)!;
 const metaNoRef = Object.fromEntries(
   p2noref.sections[1].meta!.map((m) => [m.label, m.value]),
 );
@@ -108,7 +120,7 @@ assert.equal(metaNoRef['Объём работ'], 'нет данных');
 
 /* ── раунд 2, полнее: СтройМонтаж переподал ──────────────────────────────── */
 
-const f2 = buildAnalysis(MOCK_ROUND2_FULL, MOCK_ROUND1, T)!;
+const f2 = buildAnalysis(R2_FULL, R1, T)!;
 const fItems = f2.sections[0].items!;
 const sm = fItems.find((i) => i.id === 'sc:sm')!;
 

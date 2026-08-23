@@ -7,9 +7,8 @@ import { IconButton } from '@/shared/ui/IconButton';
 import { Input } from '@/shared/ui/Input';
 import { Popover } from '@/shared/ui/Popover';
 import {
-  clampThresholds, decimal, SYSTEM_THRESHOLDS,
-  type CompareThresholds, type RowFacts,
-} from '@/entities/tender';
+  clampThresholds, decimal, SYSTEM_THRESHOLDS, type CompareThresholds, type RowFacts,
+} from '@/entities/comparison';
 import { plural } from '@/shared/lib/plural';
 import s from './CompareSettings.module.css';
 

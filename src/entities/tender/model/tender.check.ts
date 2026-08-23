@@ -1,10 +1,11 @@
 /** Самопроверка режимов срока сбора КП. Второе место в проекте, где ошибка
  *  была бы тихой: подсказка «осталось N дней» не падает — она просто говорит
  *  неправду, и на живых данных мимо порогов в неделю и месяц не пройдёшь.
- *  Запуск: bun src/entities/tender/model/registry.check.ts
+ *  Запуск: bun src/entities/tender/model/tender.check.ts
  *  Фреймворка нет намеренно — то же соглашение, что у date.check.ts. */
 import { strict as assert } from 'node:assert';
-import { bidsDue, ROWS, type DueMode, type TenderRow } from './registry';
+import { bidsDue, type DueMode, type TenderRow } from './tender';
+import { ROWS } from '../api/tenders.mock';
 
 const OPEN = ROWS.find((row) => row.status === 'open') as TenderRow;
 const TODAY = '2026-08-20';

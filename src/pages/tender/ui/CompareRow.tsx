@@ -1,7 +1,7 @@
 import { cx } from '@/shared/lib/cx';
 import {
   decimal, money, type Bid, type CompareThresholds, type CompareView, type RowFacts,
-} from '@/entities/tender';
+} from '@/entities/comparison';
 import type { CellPopupBind } from '@/shared/ui/CellPopup';
 import { tableCell } from '@/shared/ui/Table';
 import { BidCell } from './BidCell';

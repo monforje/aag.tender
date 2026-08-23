@@ -9,13 +9,8 @@
  *  встанет запрос к модели — контракт AiAnswer уже разговорный.
  */
 
-import {
-  deriveInsights,
-  type CompareThresholds,
-  type Contractor,
-  type Insight,
-  type PositionGroup,
-} from '@/entities/tender';
+import type { CompareThresholds, Contractor, PositionGroup } from '@/entities/comparison';
+import { deriveInsights, type Insight } from './insights';
 import { plural } from '@/shared/lib/plural';
 
 export interface AskContext {

@@ -151,4 +151,9 @@ const { Screen, PageHeader, PageTitle, Stack, Inline, Card, Text, Heading,
 ```
 
 Демо-данные домена тоже в бандле и годятся для макетов: `ROWS`, `STATUS`,
-`STATUS_IDS`, `FACETS`, `BID_STATUS`, `MOCK_COMPARISON`.
+`STATUS_IDS`, `BID_STATUS`, `MOCK_COMPARISON`. Список критериев фильтра —
+ФУНКЦИЯ от строк: `facetsOf(ROWS)`.
+
+`ROWS` и `MOCK_COMPARISON` приезжают только сюда, из `ds-entry.ts`: публичные
+точки слайсов фикстуры не отдают, чтобы приложение не смогло случайно
+показать демо-цифры вместо ответа сервера.
