@@ -61,7 +61,7 @@ export function BidCell({ row, contractor, view, thresholds, bind, note, flash }
   /* Снятая строка схлопывается во всех КП: история, а не мусор. */
   if (position.removed) {
     return (
-      <td className={cx(tableCell.numeric, tableCell.roomy, flash && s.cellFlash)}>
+      <td className={cx(tableCell.numeric, flash && s.cellFlash)}>
         <span className={s.dash}>—</span>
       </td>
     );
@@ -75,7 +75,7 @@ export function BidCell({ row, contractor, view, thresholds, bind, note, flash }
      не бывает (05 §4.3.4). */
   if (mark.declined) {
     return (
-      <td className={cx(tableCell.numeric, tableCell.roomy, flash && s.cellFlash)}>
+      <td className={cx(tableCell.numeric, flash && s.cellFlash)}>
         <span className={s.chip}>
           <Icon name="closeCircle" className={s.chipIcon} />
           Отказ
@@ -88,7 +88,7 @@ export function BidCell({ row, contractor, view, thresholds, bind, note, flash }
      нет») и тире. Отсутствие ключа — не ноль. Комментария не бывает. */
   if (price === undefined) {
     return (
-      <td className={cx(tableCell.numeric, tableCell.roomy, s.cellMissing, flash && s.cellFlash)}>
+      <td className={cx(tableCell.numeric, s.cellMissing, flash && s.cellFlash)}>
         <span className={s.dash}>—</span>
         <span className={tableCell.sub}>нет цены</span>
       </td>
@@ -126,8 +126,8 @@ export function BidCell({ row, contractor, view, thresholds, bind, note, flash }
     : Math.min(row.spread / thresholds.spreadHigh, 1);
 
   /* Монета запаса торга — пометка данных, от режима не зависит; сидит на
-     главной строке у её основания. Штампу «МИН» отведён левый нижний угол
-     ячейки — с монетой они не пересекаются по вертикали. */
+     главной строке ВПЛОТНУЮ слева от числа. Штамп «МИН» с ней не спорит: он
+     живёт в левом нижнем углу САМОЙ ЯЧЕЙКИ, ниже строки цены. */
   const coinData: CellPopupData | null = mark.potential ? {
     tone: 'info',
     title: 'Заявленный запас торга',
@@ -202,11 +202,10 @@ export function BidCell({ row, contractor, view, thresholds, bind, note, flash }
       : mark.potential ? moneyCompact(mark.potential * qty) : '—';
     return (
       <span key="main" className={s.priceLine}>
-        {/* .price держит position:relative для монеты; штамп «МИН» — прямой
-            ребёнок td, координаты берёт от ячейки. */}
+        {/* .price — якорь монеты: она стоит ВПЛОТНУЮ слева от числа (решение
+            владельца 24.08.2026 — прежние −25px читались отрывом). Штампа
+            «МИН» здесь нет: его место — угол ячейки, см. ниже. */}
         <span className={s.price}>
-          {head}
-          {plan.deviationOn === 'main' ? devSuffix : null}
           {!anomaly && coinData ? (
             <button
               type="button"
@@ -217,18 +216,29 @@ export function BidCell({ row, contractor, view, thresholds, bind, note, flash }
               <CoinMark />
             </button>
           ) : null}
+          {head}
+          {plan.deviationOn === 'main' ? devSuffix : null}
         </span>
       </span>
     );
   };
 
-  /* Главное значение и все его устройства живут одной строкой; резерв справа
-     держит .stack — общий всем ячейкам колонки, поэтому выравнивание не едет. */
-  const body = <span className={s.stack}>{plan.lines.map(renderLine)}</span>;
+  /* Главное значение и его строки-спутники — одной группой у числа цены. */
+  const body = (
+    <span className={s.stack}>
+      {plan.lines.map(renderLine)}
+    </span>
+  );
 
   if (!anomaly) {
     return (
-      <td className={cx(tableCell.numeric, tableCell.roomy, isMin && s.cellMin, flash && s.cellFlash)}>
+      /* ШТАМП «МИН» — В ЛЕВОМ НИЖНЕМ УГЛУ ЯЧЕЙКИ (решение владельца
+         24.08.2026, вторая волна: правый верхний угол блока цены оказался «в
+         корне не верным» — надстрочный знак читался частью числа). Угол
+         ячейки, а не блока цены: числа выровнены вправо, и слева у них
+         пустует ровно то место, где отметка никому не мешает и стоит у всех
+         строк на одной вертикали. Позиционируется по .cell--min. */
+      <td className={cx(tableCell.numeric, s.cellMin, flash && s.cellFlash)}>
         {body}
         {isMin && minData ? (
           <button
@@ -249,7 +259,7 @@ export function BidCell({ row, contractor, view, thresholds, bind, note, flash }
      Обводка перехода ложится ПОВЕРХ штриховки через outline — оба сигнала
      читаются одновременно (05 §7). */
   return (
-    <td className={cx(tableCell.numeric, tableCell.roomy, s.cellAnomaly, flash && s.cellFlash)}>
+    <td className={cx(tableCell.numeric, s.cellAnomaly, flash && s.cellFlash)}>
       <button
         type="button"
         className={s.anomalyTrigger}

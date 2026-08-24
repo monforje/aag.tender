@@ -36,7 +36,27 @@ export const resolveTone = (tone: Tone) =>
 export const pctSigned = (v: number): string =>
   `${v > 0 ? '+' : v < 0 ? '−' : ''}${decimal(Math.abs(v))} %`;
 
-/** Действующий цвет колонки: рука важнее ранжира. Отсутствие ключа в `tint`
- *  значит «красит ранжир». */
-export const choose = (tint: Record<string, string>, bid: Bid): string =>
-  tint[bid.contractor.id] ?? toneColor(bid.tone);
+/** Действующий цвет колонки. Ручная палитра (<ColumnPainter>) старше всего:
+ *  человек перекрасил — так и останется. Дефолтной подкраски по ранжиру в
+ *  покое НЕТ (решение владельца 24.08.2026), она включается тумблером
+ *  «Раскрасить по ранжированию» в окне параметров — тогда некрашеная колонка
+ *  берёт тон своего места. Выключено и не крашено — `undefined`, и потребители
+ *  просто не ставят `--col`. */
+export const choose = (
+  tint: Record<string, string>, bid: Bid, byRank = false,
+): string | undefined =>
+  tint[bid.contractor.id] ?? (byRank ? toneColor(bid.tone) : undefined);
+
+/** Сколько знаков названия съедает ключевая пометка: глиф 28px плюс отступ
+ *  6px ≈ пять знаков. Резерв обязателен — иначе ключ выталкивается за край
+ *  ячейки ровно у тех строк, где он и нужен. */
+const KEY_RESERVE = 5;
+
+/** Название позиции под лимит знаков (`titleLimit()` в model/columns.ts):
+ *  влезает — как есть; не влезает — срезаем последние три знака лимита и
+ *  ставим многоточие, полное название всплывает <Tooltip>'ом. */
+export function clipTitle(title: string, limit: number, hasKey: boolean): string {
+  const max = Math.max(4, hasKey ? limit - KEY_RESERVE : limit);
+  if (title.length <= max) return title;
+  return `${title.slice(0, max - 3).trimEnd()}…`;
+}

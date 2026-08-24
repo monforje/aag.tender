@@ -24,9 +24,11 @@
    того, что уже описано токенами.
 
    --wash — сила заливки. 7% — предел, за которым текст в ячейках теряет
-   контраст, а ховер строки (.05) перестаёт читаться поверх цвета. Число стоит
-   в двух правилах ниже (.card и .col--tint) и больше нигде: колонка и её
-   шапка обязаны быть ОДНОГО цвета, иначе полоса разрывается на стыке. */
+   контраст. Число стоит в двух правилах ниже (.card и .col--tint) и больше
+   нигде: колонка и её шапка обязаны быть ОДНОГО цвета, иначе полоса
+   разрывается на стыке. Цвет по умолчанию НЕ ставится: подкраска колонок по
+   ранжиру снята (24.08.2026) — без ручной палитры --col отсутствует, и
+   color-mix уезжает в прозрачный слой поверх белого. */
 
 /* --- КАРТОЧКА ПОДРЯДЧИКА = ШАПКА КОЛОНКИ ---------------------------------
    Занимает ячейку целиком (у неё tableCell.card, паддинга нет), поэтому свои
@@ -54,7 +56,7 @@
      полоску сняли: цветной кант по краю карточки это самый заметный штамп
      «сгенерированного» интерфейса, а тон в карточке и так назван дважды
      (кружок места и заливка шкалы). Третий раз он ничего не добавлял. */
-  background: color-mix(in srgb, var(--col) var(--wash), var(--cu-background-main));
+  background: color-mix(in srgb, var(--col, transparent) var(--wash), var(--cu-background-main));
   white-space: normal;
   font-weight: var(--cu-font-weight-regular);
   color: var(--cu-content-primary);
@@ -79,6 +81,14 @@
    сливаются в кашу. Работает это только при border-collapse:collapse — он у
    <Table> и стоит. Последняя колонка линейки не получает: там край ленты. */
 .col--rule{ border-right: 1px solid var(--cu-border-default); }
+/* ЛИНЕЙКА В САМОЙ ШАПКЕ. Правило выше стоит на <col>, а ячейки липкой шапки
+   уезжают в собственный слой (position:sticky + z-index) и закрывают её
+   собой: между «Позиция», «Количество», «Единица» и «Разброс» разделение
+   пропадало, и шапка читалась одной сплошной полосой — в том числе поэтому
+   булавке в углу «Позиции» не за что было зацепиться глазом. Линию ячейка
+   рисует сама; border-right никем больше на th не задан, специфичности
+   одиночного класса хватает. */
+.head-rule{ border-right: 1px solid var(--cu-border-default); }
 
 /* ── ШИРИНЫ СЧИТАЕТ АЛГОРИТМ ─────────────────────────────────────────────
     Раньше здесь жил контракт ширин на cqw-формулах со ступенями плотности
@@ -110,27 +120,38 @@
    .band, декорации таблицы в режиме stickyHead живут на самой таблице
    (см. Table.module.css).
 
-   ТОНКИЙ СКРОЛЛБАР — локальное исключение из глобального «скроллбаров нет»
+   СКРОЛЛБАР — локальное исключение из глобального «скроллбаров нет»
    (global.css): шесть колонок не влезают почти всегда, и без видимой полосы
    панорама была бы открытием для мыши без тачпада. Толщина собирается
-   рамкой-отступом вокруг thumb: сама полоса 10px, видно из них ~4.
-   Firefox получает пару scrollbar-width/color. */
+   рамкой-отступом вокруг thumb: сама полоса 14px, видно из них ~8.
+
+   Стандартная пара scrollbar-width/color на .band НЕ СТОИТ — и это не
+   вкусовщина: с Chromium 121 любое не-начальное значение этих свойств
+   отключает кастомизацию через ::-webkit-scrollbar, все числа ниже перестали
+   бы исполняться, и полоса вернулась бы к тонкой нативной — ровно то, отчего
+   здесь всё и началось. Здесь пара сброшена в начальные значения (заодно
+   перекрывая глобальный reset `* { scrollbar-width: none }`), чем webkit-путь
+   и включается; Firefox ни размеров, ни webkit-псевдо не знает и получает
+   ключевую пару из @supports ниже. */
 .band{
   overflow-y: auto; overflow-x: auto;
   /* contain по ОБЕИМ осям: вертикальный край ленты не отдаёт жест странице
-     сам — этим управляет гейт «страница → лента» в useTableDock (осознанная
-     передача, а не перелив по инерции). Горизонталь и раньше была contain. */
+   сам — этим управляет гейт «страница → лента» в useTableDock (осознанная
+   передача, а не перелив по инерции). Горизонталь и раньше была contain. */
   overscroll-behavior: contain;
   max-height: var(--band-max-h, none);
-  scrollbar-width: thin;
-  scrollbar-color: var(--cu-content-placeholder) transparent;
+  /* Начальные значения = разрешение на ::-webkit-scrollbar. Убрать их вовсе
+   нельзя: глобальный reset дал бы .band scrollbar-width:none по наследству
+   селектора, и полоса исчезла бы целиком. */
+  scrollbar-width: auto;
+  scrollbar-color: auto;
   /* Лента — от края до края <main>: вынос за паддинг страницы делает САМ
      блок (внутри него у таблицы --table-bleed: 0px, иначе скроллблок
      подрезал бы её край). */
   margin-inline: -12px;
   --table-bleed: 0px;
 }
-.band::-webkit-scrollbar{ width: 10px; height: 10px; }
+.band::-webkit-scrollbar{ width: 10px; height: 14px; }
 .band::-webkit-scrollbar-thumb{
   background: var(--cu-content-placeholder);
   border-radius: 8px;
@@ -138,6 +159,14 @@
 }
 .band::-webkit-scrollbar-track,
 .band::-webkit-scrollbar-corner{ background: transparent; }
+/* Firefox: длины scrollbar-width не реализованы, webkit-псевдо не парсятся —
+   только ключевая пара. Равная специфичность с .band выше, решает порядок. */
+@supports not selector(::-webkit-scrollbar){
+  .band{
+    scrollbar-width: thin;
+    scrollbar-color: var(--cu-content-placeholder) transparent;
+  }
+}
 /* Рамка блока под фокусом с клавиатуры (tabIndex стоит на нём же). */
 .band:focus-visible{ outline: var(--cu-focus-ring); outline-offset: -2px; }
 
@@ -147,6 +176,15 @@
   --table-pad-y: 8px;
   --table-edge-pad: 12px;
   --table-zoom: 1;
+
+  /* ЛЕСТНИЦА УРОВНЕЙ (решение владельца 24.08.2026): шапка тёмная → секция
+     светлее → позиция белая — там, где вносят данные, глаз ищет числа.
+     Ховер строки ЗАВЕДОМО СВЕТЛЕЕ секции (~.028 против .06): подсветка не
+     спорит с рамкой блока, различие с белой строкой читается мягкой
+     промывкой. Дефолтная подкраска колонок по ранжиру снята в тот же день —
+     цвет колонки теперь только ручной (<ColumnPainter>). */
+  --table-head-bg: var(--cu-state-hover-strong);
+  --row-hover-bg: rgba(0, 0, 0, .028);
 }
 
 /* Ступень 1 — панель ИИ или ноутбук: воздух тоньше. */
@@ -169,19 +207,6 @@
   .density{
     --table-zoom: 0.96;
   }
-}
-
-/* Замерщик имён: невидимая копия шапок карточек вне таблицы. Класс имени
-   (.card__name) даёт замерщикам ТОТ ЖЕ шрифт, что у живых карточек, —
-   подменой кегля или веса расхождение бы молча вернуло многоточие. Стоит
-   сиблингом .band (не внутри): скроллблок обрезал бы измеряемый текст.
-   Замеренные полы уезжают не сюда, а в model/columns.ts — единственное
-   место, где решается ширина каждой колонки. */
-.measure{
-  position: absolute;
-  visibility: hidden;
-  pointer-events: none;
-  white-space: nowrap;
 }
 
 /* Рецепт (4) каталога состояний: карточка — белая поверхность на светлом
@@ -278,10 +303,13 @@
 
 .card__body{ display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
 
-/* Шкала и сумма — одной строкой. min-width:0 на полосе обязателен: без него
-   flex-элемент не сжимается ниже своего содержимого, и длинная сумма
-   вытолкнула бы шкалу за край карточки. */
-.figures{ display: flex; align-items: center; gap: 10px; }
+/* Полнота и сумма — одной строкой. ВЫРАВНИВАНИЕ ПО БАЗОВОЙ ЛИНИИ, а не по
+   центру (решение владельца 24.08.2026, вторая волна): слева блок в две
+   строки («100 %» + капитель «ЗАПОЛНЕНО»), справа одна — по центру их числа
+   стояли на разной высоте и читались как два независимых куска. Базовая линия
+   колоночного flex-блока — это линия его ПЕРВОЙ строки, то есть самого
+   процента: он и встаёт вровень с суммой. */
+.figures{ display: flex; align-items: baseline; gap: 10px; }
 
 /* Строка статуса и действий. Капсула прижата влево, две иконки — вправо:
    margin-right:auto на капсуле, а не justify-content:space-between, иначе
@@ -318,7 +346,7 @@
 .card__act--spin:hover svg{ transform: rotate(360deg); }
 /* Палитра вместо движения НАЛИВАЕТСЯ цветом своей колонки — ответ на курсор
    тот же по силе, но говорит о том, что кнопка делает. */
-.card__act--paint:hover{ color: var(--col); }
+.card__act--paint:hover{ color: var(--col, currentColor); }
 
 /* --- ПОЛНОТА КП ----------------------------------------------------------
    ЧИСЛО, А НЕ ШКАЛА. Здесь стояли по очереди десять делений и сплошная
@@ -338,7 +366,7 @@
    незакрытой позиции. */
 .fill{
   display: flex; flex-direction: column;
-  flex: 1 1 auto; min-width: 0;
+  flex: 0 1 auto; min-width: 0;
   cursor: help;
 }
 .percent{
@@ -359,6 +387,9 @@
   font-size: 10px; line-height: 12px; font-weight: var(--cu-font-weight-medium);
   text-transform: uppercase; letter-spacing: .06em;
   color: var(--cu-content-secondary);
+  /* Переноситься подписи нельзя: она держит высоту всей карточки, а ширину
+     под неё выделяет колонка (BID_FIXED посчитан от этих 66px). */
+  white-space: nowrap;
 }
 
 /* Итог — самое крупное число карточки: за ним сюда и приходят. 17/22 —
@@ -417,61 +448,80 @@
   .pin:hover{ background: var(--cu-state-hover); color: var(--cu-content-primary); }
 }
 .pin--on{ color: var(--cu-content-primary); }
-/* Залитая булавка — bold-начертание Solar: геометрия в ЗАЛИВКЕ, а глобальное
-   правило иконок (fill:none; stroke:currentColor) оставило бы от неё пустой
-   силуэт. Тот же случай и то же лечение, что у .star.is-on выше. */
-.pin--on svg{ fill: currentColor; stroke: none; }
+/* Втыкание — отклик на СМЕНУ СОСТОЯНИЯ, а не на курсор (как поворот .fold):
+   булавка качнулась вокруг оси и легла на место, контур сменился заливкой.
+   Играет при появлении .pin--on — глиф меняется на bold, React монтирует
+   новый <svg>, анимация стартует сама; повторное закрепление проигрывает её
+   заново. Открепление мгновенное: обратный ход ничего не добавляет, а
+   мгновенное свёртывание здесь уже выбрано для секций. Характер — тот же,
+   что у брелоков (.tag, .coin): физический cubic-bezier(.36,.07,.19,.97). */
+@keyframes pin-stick{
+  0%{ transform: rotate(0deg) }
+  35%{ transform: rotate(-24deg) }
+  70%{ transform: rotate(7deg) }
+  100%{ transform: rotate(0deg) }
+}
+.pin--on svg{
+  fill: currentColor; stroke: none;
+  animation: pin-stick .45s cubic-bezier(.36,.07,.19,.97);
+}
 .pin:focus-visible{ outline: var(--cu-focus-ring); outline-offset: 1px; }
 
-/* Полоса раздела — во всю ширину таблицы, а не только под четырьмя левыми
-   колонками: она отделяет блок строк, и обрываться на середине ей нечем.
-   Заливка ПОЛУПРОЗРАЧНАЯ (.035) по той же причине, что у строки итога: цвет
-   колонки живёт на <col>, ниже ячейки, и плотный фон разорвал бы его. */
+/* Полоса секции — во всю ширину таблицы: она отделяет блок строк, и
+   обрываться на середине ей нечем. Заливка ПОЛУПРОЗРАЧНАЯ по той же причине,
+   что у строки итога: цвет ручной палитры живёт на <col>, ниже ячейки, и
+   плотный фон разорвал бы его. Ступень — --cu-fill (.06), на уровень темнее
+   белых строк позиций и светлее шапки (.09) — средний уровень лестницы. */
 /* Тон — СЛОЕМ-ГРАДИЕНТОМ, а не `background`: канал background-color занят
    непрозрачной базой липкого якоря (Table.module.css, stickyCol), и шорткат
    обнулял бы её — прокрученная колонка-якорь стала бы прозрачной и показала
-   сквозь себя уехавшие цены. Полупрозрачность тона при этом сохраняется, а
-   значит цвет колонки на <col> под ячейкой по-прежнему виден. */
+   сквозь себя уехавшие цены. */
 .group-row th, .group-row td{
-  background-image: linear-gradient(var(--cu-fill-subtle), var(--cu-fill-subtle));
+  background-image: linear-gradient(var(--cu-fill), var(--cu-fill));
 }
 /* Ячейке заголовка паддинг снимает tableCell.card — свои поля несёт кнопка. */
 .group-head{ vertical-align: middle; }
 
-/* Размер раздела в колонках «Количество» и «Единица». Капитель + третичный
-   тон + 11px — тот же язык, которым в этом интерфейсе говорят ПОДПИСИ
-   (.field__label в сводке, .total-label ниже), а не значения. Разница со
-   сметной строкой идёт по трём осям сразу — кегль (11 против 14), тон
-   (третичный против primary) и форма (капитель): одного кегля мало, мелкое
-   чёрное число всё равно читалось бы как замер. */
-.group-meta{
-  font-size: 11px; line-height: 14px; font-weight: var(--cu-font-weight-medium);
-  text-transform: uppercase; letter-spacing: .06em;
-  color: var(--cu-content-tertiary);
-}
-/* Название на колонке контента (12px) — там же, где первая колонка таблицы,
-   стрелка сразу за ним. Кнопкой стала вся полоса, а не один квадрат стрелки:
-   зона нажатия обязана совпадать с видимой строкой, иначе в стрелку
-   приходится целиться. Полоса при этом прижата влево (не растянута
-   space-between): стрелка принадлежит названию, а не правому краю блока в
-   тысячу с лишним пикселей. */
-.group-toggle{
-  display: flex; align-items: center; gap: 8px;
-  width: 100%; padding: 8px 12px;
+/* ── ШАПКА СЕКЦИИ: одна строка, название по центру видимой области ──────────
+    Кнопка-полоса липнет к левой кромке скроллблока (position:sticky; left:0)
+    и стоит шириной с ВИДИМУЮ область ленты: заголовок центрируется
+    относительно того, что перед глазами сейчас, а не всей прокрученной
+    таблицы (решение владельца 24.08.2026). Сетка из трёх колонок с равными
+    краями — как у карточки подрядчика: центр названия не съезжает на
+    полстрелки. Счётчика «N позиций» больше нет — это строка-заголовок блока.
+
+    ШИРИНА — 100cqw, А НЕ ЧИСЛО ИЗ JS. Контейнер запросов объявлен на обёртке
+    таблицы (shared/ui/Table, .table-wrap: container-type: inline-size), и в
+    режиме stickyHead её ширина РАВНА видимой области ленты независимо от
+    того, насколько таблица шире, — ровно то, что раньше мерила страница и
+    присылала сюда инлайновой --band-w. Замена не косметическая: инлайн
+    переписывался КАЖДЫЙ кадр анимации сайдбара и панели «Анализ ИИ», а вместе
+    с ним прогонялся весь рендер экрана; cqw пересчитывает движок, без React
+    и без единой записи в DOM. */
+.section-toggle{
+  position: sticky; left: 0;
+  display: grid;
+  grid-template-columns: var(--cu-size-6) minmax(0, 1fr) var(--cu-size-6);
+  align-items: center; gap: 6px;
+  width: 100cqw;
+  padding: 8px 12px;
   font-size: 13px; line-height: 18px; color: var(--cu-content-primary);
   transition: background-color var(--cu-animation-duration) var(--cu-animation-timing);
 }
-/* Рецепт (1), ступень «крупная поверхность»: полоса во всю ширину четырёх
-   колонок — это не компактный контрол. */
-.group-toggle:hover{ background: var(--cu-state-hover-subtle); }
-.group-toggle:focus-visible{ outline: var(--cu-focus-ring); outline-offset: -2px; }
-/* РЕЦЕПТ (7): одна подсветка на один жест. Курсор на квадрате стрелки — и
-   заливка полосы гаснет, остаётся только заливка квадрата; иначе под курсором
-   горели бы две вложенные «таблетки» сразу, и было бы непонятно, что именно
-   нажимается. Правило стоит ПОСЛЕ :hover: специфичность у них одинаковая
-   (0,2,0), решает порядок. */
-.group-toggle:has(.fold:hover){ background: transparent; }
-.group-title{ font-weight: var(--cu-font-weight-semibold); }
+.section-toggle:hover{ background: var(--cu-state-hover-subtle); }
+.section-toggle:focus-visible{ outline: var(--cu-focus-ring); outline-offset: -2px; }
+.section-toggle:has(.fold:hover){ background: transparent; }
+/* Название переносится до двух строк — длинное «МКД-1 АХП (…)» читается
+   целиком; дальше многоточие, а полное название всплывает <Tooltip>'ом
+   (тот же паттерн, что у имени в шапке колонки). */
+.section-title{
+  text-align: center;
+  font-weight: var(--cu-font-weight-semibold);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
 
 /* Каскадный въезд строк раскрытого раздела. Анимируются ЯЧЕЙКИ, а не <tr>:
    поддержка transform у табличных строк ненадёжна, у ячеек — штатная.
@@ -483,23 +533,27 @@
 @keyframes row-in{
   from{ opacity: 0; transform: translateY(-3px); }
 }
-/* :is(th, td) — колонка-якорь теперь <th scope="row">, и селектор на голом
-   td перестал бы её анимировать: строка въезжала бы без своего названия. */
-.row-enter > :is(th, td){
+/* Пара `th, td`, а не голый td: колонка-якорь теперь <th scope="row">, и на
+   одном td строка въезжала бы без своего названия. Развёрнутой парой, а не
+   :is(...) — разбор цены :is() в шапке Table.module.css. */
+.row-enter > th,
+.row-enter > td{
   animation: row-in var(--cu-duration-base) var(--cu-ease-standard) backwards;
   animation-delay: calc(min(var(--row-in, 0), 8) * 24ms);
 }
 
 /* ИТОГ РАЗДЕЛА — самая тяжёлая строка блока, и это осознанно: за суммами по
-   разделам сюда и приходят, а позиции читают уже потом. Три канала сразу,
-   потому что одного мало на полосе в 1252px: заливка ступенью выше шапки
-   раздела (.06 против .035 — читается как «главное здесь»), линия сверху,
-   закрывающая блок, и полужирные числа кеглем строки.
+   секциям сюда и приходят, а позиции читают уже потом. Три канала сразу:
+   заливка ступенью между секцией (.06) и шапкой (.09) — итог тяжелее блока,
+   но не спорит с шапкой, линия сверху, закрывающая секция, и полужирные
+   числа кеглем строки.
 
-   Заливка ПОЛУПРОЗРАЧНАЯ: цвет колонки живёт на <col>, то есть НИЖЕ ячейки, и
-   плотный фон стёр бы его — колонка разорвалась бы на каждом итоге. */
-.total-row :is(th, td){
-  background-image: linear-gradient(var(--cu-fill), var(--cu-fill));
+   Заливка ПОЛУПРОЗРАЧНАЯ: цвет ручной палитры живёт на <col>, то есть НИЖЕ
+   ячейки, и плотный фон стёр бы его — колонка разорвалась бы на каждом
+   итоге. */
+.total-row th,
+.total-row td{
+  background-image: linear-gradient(rgba(0, 0, 0, .075), rgba(0, 0, 0, .075));
   border-top: 1px solid var(--cu-content-placeholder);
   padding-block: 11px;
 }
@@ -537,9 +591,9 @@
 .head-gap{ margin-top: 20px; }
 
 /* ── СТЕК ЗНАЧЕНИЯ ЯЧЕЙКИ КП ─────────────────────────────────────────────── */
-/* Резерв справа — под штамп «МИН», прижатый к правому верхнему углу ячейки
-   (надпись ≈26px + отступ 3px); он общий ВСЕМ ячейкам колонки, поэтому правое
-   выравнивание чисел не едет, а цена не оказывается под штампом. */
+/* Блок цены и его строк-спутников. Своего позиционирования не держит: штамп
+   «МИН» переехал в угол ЯЧЕЙКИ (.cell--min ниже), и якорить его тут больше
+   некому. */
 .stack{ display: inline-block; text-align: right; }
 .price-line{ display: block; white-space: nowrap; }
 
@@ -576,35 +630,33 @@
 }
 
 /* Цена — главный текст ячейки: кегль не меняется, ничего не двигается.
-   position:relative нужен монете (left:-25px). Минимум называет САМА
-   отметка в углу: бывший мазок маркера под ценой снят — второй зелёный
-   сигнал на ячейке был бы шумом.
-   ВАЖНО: кнопка отметки в DOM — прямой ребёнок td, НЕ внутрь .price:
-   позиционированный .price перехватил бы абсолют у штампа. */
-.price{ position: relative; display: inline-block; white-space: nowrap; }
+   Устройства пометок (монета слева, штамп «МИН» сверху-справа) стоят ВНУТРИ
+   группы цены и читаются вместе с числом. */
+.price{ display: inline-block; white-space: nowrap; }
 
-/* Штамп «МИН» — зелёная надпись в левом нижнем углу ЯЧЕЙКИ: координаты
-   считаются от td (.cell--min ниже), а не от текста цены. Тела у отметки нет
-   сознательно: прямоугольник-стикер снят, лайм был оправдан физическим
-   телом, а цвет СМЫСЛА («минимум») возвращён токену success — как у всех
-   семантических цветов проекта. Физику держат наклон (−1.25°, «приштамповано
-   чуть криво») и ДВЕ тени (красит сам текст): короткая плотная тонет в ту же
-   зелёную семью, мягкая рассеянная продаёт подъём над бумагой. Триггер
-   попапа — сама отметка: «шлёп» появляется, только когда курсор на ней.
+/* Ячейка с минимальной ценой — рамка отсчёта для штампа. Ставится только там,
+   где штамп есть: лишний position:relative на пятистах ячейках даром грузил
+   бы раскладку. */
+.cell--min{ position: relative; }
+
+/* Штамп «МИН» — В ЛЕВОМ НИЖНЕМ УГЛУ ЯЧЕЙКИ (решение владельца 24.08.2026,
+   вторая волна). Прежний правый верхний угол блока цены был «в корне не
+   верен»: надстрочный знак при числе читался частью самого числа, а на
+   прокрутке ещё и наезжал на соседей. Числа в колонке выровнены ВПРАВО —
+   значит слева у них пустует ровно то место, где отметка никому не мешает и
+   стоит у всех строк на одной вертикали.
+
+   Тела-стикера нет сознательно: цвет СМЫСЛА («минимум») — токен success;
+   физику держат наклон (−8°, «приштамповано чуть криво») и ДВЕ тени (красят
+   сам текст). Триггер попапа — сама отметка.
 
    HOVER — «шлёп → стабилизация»: приподняться, качнуться вокруг точки
-   крепления (левый нижний угол, 18% 84%) и прижаться ровно (−1.25° →
-   +1.1° → −0.5° → 0° за .28s). Конечный 0° стоит и в правиле :hover — после
-   анимации штамп лежит flat, пока курсор рядом; на уходе transition
-   возвращает наклон.
-
-   ГРАНИЦЫ: габариты с паддингом ≈28×14 целиком внутри ячейки (у td в
-   fixed-разметке overflow:hidden); чистую зону держит tableCell.roomy,
-   замах ±1.25° сдвигает края менее чем на пиксель — клиппинга нет. */
-.cell--min{ position: relative; }
+   крепления (левый нижний угол) и прижаться ровно (−8° → +3° → −1° → 0°).
+   Конечный 0° стоит и в правиле :hover — после анимации штамп лежит flat,
+   пока курсор рядом; на уходе transition возвращает наклон. */
 .tag{
-  position: absolute; bottom: 2px; left: 3px; z-index: 3;
-  padding: 2px;
+  position: absolute; left: 4px; bottom: 4px; z-index: 3;
+  padding: 1px 2px;
   border-radius: var(--cu-radii-2);
   font-size: 10px; line-height: 1;
   font-weight: var(--cu-font-weight-bold);
@@ -614,14 +666,14 @@
     0 1px 1px rgba(0,77,46,.38),
     0 2px 3px rgba(0,0,0,.12);
   cursor: help;
-  transform: rotate(-1.25deg);
-  transform-origin: 18% 84%;
+  transform: rotate(-8deg);
+  transform-origin: 12% 88%;
   transition: transform var(--cu-duration-slow) var(--cu-ease-standard);
 }
 @keyframes tag-slap{
-  0%{ transform: rotate(-1.25deg) translateY(0) }
-  34%{ transform: rotate(1.1deg) translateY(-1.3px) }
-  66%{ transform: rotate(-.5deg) translateY(-.3px) }
+  0%{ transform: rotate(-8deg) translateY(0) }
+  34%{ transform: rotate(3deg) translateY(-1.3px) }
+  66%{ transform: rotate(-1deg) translateY(-.3px) }
   100%{ transform: rotate(0deg) translateY(0) }
 }
 .tag:hover{
@@ -635,15 +687,14 @@
   outline: var(--cu-focus-ring); outline-offset: 2px; border-radius: 6px;
 }
 
-/* Запас торга — монета у ОСНОВАНИЯ цены слева: её место — рядом с числом,
-   к которому она относится. С штампом «МИН» (левый нижний угол ячейки) она
-   не пересекается по вертикали: монета сидит на главной строке у верха
-   ячейки. Прислонена под наклоном; hover — перекатывание НА РЕБРЕ, физика
-   другой породы, чем шлёп штампа. */
+/* Запас торга — монета ВПЛОТНУЮ слева от числа цены: её место — рядом с
+   числом, к которому она относится (прежний отрыв на −25px снят, решение
+   владельца 24.08.2026). Прислонена под наклоном; hover — перекатывание НА
+   РЕБРЕ, физика другой породы, чем шлёп штампа. */
 .coin{
-  position: absolute; left: -25px; z-index: 2;
-  top: calc(50% - 12px);
-  width: 21px; height: 21px;
+  display: inline-block;
+  width: 20px; height: 20px;
+  margin-right: 5px; vertical-align: -4px;
   rotate: -14deg;
   transform-origin: 78% 82%;
   cursor: help; color: var(--cu-tone-info);
@@ -701,7 +752,15 @@
   .spread-mark:hover [data-mk='cap-l'],
   .spread-mark:hover [data-mk='cap-r']{ animation: none; }
   .dev-suffix, .rate-line{ animation: none; }
-  .row-enter > :is(th, td){ animation: none; }
+  .row-enter > th,
+  .row-enter > td{ animation: none; }
+  /* Устройства матрицы условий гасятся тем же блоком: отклик остаётся
+     фоном под курсором, движение убирается. */
+  .term-mark:hover svg, .term-note:hover svg{ animation: none; }
+  .term-value:hover{ transform: none; }
+  /* Втыкание булавки — движение по смене состояния, но убирается туда же:
+     подтверждением остаётся смена контура на заливку. */
+  .pin--on svg{ animation: none; }
 }
 
 /* ── АНОМАЛИЯ: штриховка «внимание» + рейка слева ──────────────────────────
@@ -770,7 +829,8 @@
     Правило стоит ПОСЛЕ .group-row: у группы своя тихая заливка, но её строки
     обычные, конфликта нет; с .row--removed не спорит — приглушение живёт
     в opacity и складывается с фоном, а не отменяет его. */
-.row--focused > :is(th, td){
+.row--focused > th,
+.row--focused > td{
   background-image: linear-gradient(var(--cu-state-hover), var(--cu-state-hover));
 }
 
@@ -814,3 +874,66 @@
   font-size: 11px; line-height: 13px; font-weight: 400;
   color: var(--cu-content-tertiary);
 }
+
+/* ── УСЛОВИЯ ПОСТАВЩИКОВ (матрица внизу таблицы) ───────────────────────────
+   Строки-вопросы формы КП, колонки — те же подрядчики: ответы читаются
+   столбиком под его же ценами. Подпись блока — капитель, тот же язык
+   подписей, что был у счётчика секций и у строки итога. */
+.terms-cap{
+  padding: 9px 12px 7px;
+  font-size: 11px; line-height: 14px;
+  font-weight: var(--cu-font-weight-medium);
+  text-transform: uppercase; letter-spacing: .06em;
+  color: var(--cu-content-tertiary);
+}
+.term-label{
+  font-size: 13px; line-height: 18px;
+  font-weight: var(--cu-font-weight-medium);
+  color: var(--cu-content-primary);
+}
+.term-cell{ text-align: right; }
+
+/* Да/нет — иконка тона: success решению «да», danger — «нет». В покое тихая,
+   под курсором пружинит (pop) — ответ подтверждается движением, а не
+   миганием. */
+.term-mark{
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px;
+  border-radius: var(--cu-radii-3);
+  color: var(--cu-content-secondary); --icon-size: 16px;
+  transition: background-color var(--cu-animation-duration) var(--cu-animation-timing);
+}
+.term-mark:hover{ background: var(--cu-state-hover); }
+.term-mark:focus-visible{ outline: var(--cu-focus-ring); outline-offset: 1px; }
+.term-yes{ color: var(--cu-tone-success); }
+.term-no{ color: var(--cu-tone-danger); }
+@keyframes term-pop{
+  0%{ transform: scale(.7) } 55%{ transform: scale(1.15) } 100%{ transform: scale(1) }
+}
+.term-mark:hover svg{ animation: term-pop .45s cubic-bezier(.34,1.56,.64,1); }
+
+/* Примечание — кнопка с попапом по клику; иконка покачиванием зовёт нажать. */
+@keyframes note-wiggle{
+  0%{ transform: rotate(0deg) } 30%{ transform: rotate(-10deg) }
+  60%{ transform: rotate(8deg) } 100%{ transform: rotate(0deg) }
+}
+.term-note:hover svg{ animation: note-wiggle .5s var(--cu-animation-timing); }
+.term-note-text{
+  max-width: 280px; white-space: normal;
+  font-size: 13px; line-height: 18px;
+}
+
+/* Число или срок — текстом с микроподъёмом: отклик есть, число не прыгает
+   по кеглю. tabular-nums: столбик значений читается разряд в разряд. */
+.term-value{
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: var(--cu-radii-3);
+  font-size: 13px; line-height: 18px;
+  color: var(--cu-content-primary);
+  font-variant-numeric: tabular-nums;
+  transition: transform var(--cu-animation-duration) var(--cu-animation-timing),
+              background-color var(--cu-animation-duration) var(--cu-animation-timing);
+}
+.term-value:hover{ background: var(--cu-state-hover); transform: translateY(-1px); }
+.term-value:focus-visible{ outline: var(--cu-focus-ring); outline-offset: 1px; }

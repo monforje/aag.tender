@@ -11,13 +11,13 @@
 import { strict as assert } from 'node:assert';
 import {
   analyzeComparison, bidStatus, cellLines, cellMark, clampThresholds, decimal,
-  deviationPct, filterRows, flatten, groupSum, isModifiedView, medianOf, money,
+  deviationPct, filterRows, flatten, groupSum, hasAnomaly, isModifiedView, medianOf, money,
   moneyCompact, predicateCount, predicatePasses, PRESETS, rankBids, spread, sumOf,
-  SYSTEM_THRESHOLDS,
+  SYSTEM_THRESHOLDS, termRows, hasTerms,
   type CellLine, type ComparePosition, type CompareThresholds, type CompareView,
   type Contractor, type PositionGroup,
 } from '..';
-import { MOCK_COMPARISON } from '../api/comparison.mock';
+import { MOCK_AXP, MOCK_COMPARISON } from '../api/comparison.mock';
 
 // Живая фикстура — ровно так же, как её берёт экран: разделы из ответа,
 // плоский список выводится из них.
@@ -356,5 +356,129 @@ assert.deepEqual(PRESETS.anomalies, {
   rowView: 'weight', filters: ['spread', 'anomaly'],
 });
 assert.equal(isModifiedView({ ...PRESETS.overview, preset: 'overview' }), false);
+
+/* ═══════════════════ ТЕНДЕР «АХП В МКД-1, МКД-3» (MOCK_AXP) ═══════════════
+   Данные перенесены из ФКП руками — а значит, их можно перенести криво:
+   потерять позицию, поставить чужую цену, отдать «Отказу» стоимость. Всё это
+   молча: экран не падает, он показывает неправду. */
+
+// ── состав сметы: id уникальны, объёмы положительные, расценки файла на месте
+const AXP_POSITIONS = flatten(MOCK_AXP.groups);
+{
+  const ids = AXP_POSITIONS.map((p) => p.id);
+  assert.equal(new Set(ids).size, ids.length, 'id позиций уникальны во всей смете');
+  assert.equal(AXP_POSITIONS.length, 65, '31 (МКД-1) + 34 (МКД-3) — как в файле');
+  for (const p of AXP_POSITIONS) {
+    assert.ok(p.qty > 0 && Number.isFinite(p.qty), `${p.id}: объём положительный`);
+    assert.ok(p.unit.length > 0, `${p.id}: единица не пустая`);
+    assert.ok(p.title.length > 0, `${p.id}: название не пустое`);
+  }
+  assert.equal(MOCK_AXP.groups.map((g) => g.id).join('+'), 'axp-mkd1+axp-mkd3',
+    'две секции — МКД-1 и МКД-3');
+}
+
+// ── участник №1: цена файла есть у КАЖДОЙ позиции, итог положительный ──────
+const STM = MOCK_AXP.contractors.find((c) => c.id === 'stm');
+assert.ok(STM, 'участник №1 с ценами файла на месте');
+for (const p of AXP_POSITIONS) {
+  const price: number | undefined = STM.prices[p.id];
+  assert.ok(price !== undefined && price > 0, `${p.id}: у №1 есть цена файла`);
+}
+
+// ── вилки вымышленных КП: детерминированная вилка не должна уехать ─────────
+// Материалы множатся на [0.92; 1.08], работы — на [worksLo; worksLo+0.14].
+// Границы в ассерте чуть шире шага хэша: правка seed не должна ронять проверку,
+// а УЕЗД вилку (правка factor) — обязана.
+const WORK_LO: Record<string, number> = { pes: 0.99, mvp: 1.03, sso: 1.05, rek: 0.97 };
+const stmPrices = STM.prices;
+for (const c of MOCK_AXP.contractors) {
+  if (c.id === 'stm') continue;
+  const lo: number | undefined = WORK_LO[c.id];
+  assert.ok(lo !== undefined, `${c.id}: вилка известна`);
+  const worksLo: number = lo;
+  for (const p of AXP_POSITIONS) {
+    const base: number = stmPrices[p.id];
+    const price: number | undefined = c.prices[p.id];
+    if (price === undefined) continue; // честный пробел данных
+    // Внешний вердикт (аномалия) — осознанное отклонение ОТ вилки, ей не меряется.
+    if (hasAnomaly(cellMark(c, p.id))) continue;
+    const [min, max]: [number, number] = base >= 50000
+      ? [worksLo - 0.01, worksLo + 0.15]
+      : [0.9, 1.1];
+    assert.ok(price >= min * base && price <= max * base,
+      `${c.id}/${p.id}: ${price} вне вилки [${min * base}; ${max * base}] от ${base}`);
+  }
+}
+
+// ── дыры и отказы: ключа нет ровно там, где заявлено ───────────────────────
+const byId = (id: string): Contractor => {
+  const c = MOCK_AXP.contractors.find((x) => x.id === id);
+  assert.ok(c, `${id}: подрядчик на месте`);
+  return c;
+};
+for (const id of ['a05', 'a22', 'b14', 'b25']) {
+  assert.equal(byId('mvp').prices[id], undefined, `mvp/${id}: пробел данных`);
+}
+for (const id of ['a09', 'b06']) {
+  assert.equal(byId('rek').prices[id], undefined, `rek/${id}: пробел данных`);
+}
+for (const id of ['a28', 'b31']) {
+  assert.equal(byId('sso').prices[id], undefined,
+    `sso/${id}: у отказа НЕТ цены — иначе отказ участвует в сумме и ранжире`);
+  const mark = cellMark(byId('sso'), id);
+  assert.equal(mark.declined, true, `sso/${id}: отказ помечен решением`);
+}
+
+// ── аномалия: внешний вердикт с причиной, цена ниже всех в строке ──────────
+{
+  const sso = byId('sso');
+  const anomalyMark = cellMark(sso, 'a12');
+  assert.equal(hasAnomaly(anomalyMark), true, 'a12: внешний вердикт стоит');
+  assert.ok(anomalyMark.anomaly && anomalyMark.anomaly.length > 30,
+    'причина обязательна — строку нечем объяснить подрядчику');
+  const others = MOCK_AXP.contractors
+    .filter((c) => c.id !== 'sso')
+    .map((c) => c.prices.a12)
+    .filter((v) => v !== undefined);
+  assert.ok(others.every((v) => v! > sso.prices.a12),
+    'аномальная цена ниже всех остальных в строке');
+}
+
+// ── ранжир: участник №1 (цены файла) — лидер по сумме ──────────────────────
+{
+  const bids = rankBids(MOCK_AXP.contractors, AXP_POSITIONS);
+  assert.equal(bids.find((b) => b.rank === 1)?.contractor.id, 'stm',
+    'минимальный итог — у колонки из файла');
+  // Отказ и пробелы НЕ выводят КП из ранжира и не считают нулём.
+  const ssoSum = bids.find((b) => b.contractor.id === 'sso')?.sum ?? 0;
+  assert.ok(ssoSum > 0, 'КП с отказом остаётся в сравнении');
+}
+
+// ── условия формы: подписи — ключи, виды ответов валидны ───────────────────
+{
+  const KINDS = new Set(['bool', 'value', 'note']);
+  const stmLabels = (STM.terms ?? []).map((x) => x.label);
+  assert.ok(stmLabels.length >= 9, 'у №1 заполнена вся форма (9 вопросов)');
+  assert.equal(new Set(stmLabels).size, stmLabels.length, 'подписи-ключи без дублей');
+  for (const c of MOCK_AXP.contractors) {
+    for (const term of c.terms ?? []) {
+      assert.ok(KINDS.has(term.kind), `${c.id}/${term.id}: вид ответа известен`);
+      assert.ok(term.value.length > 0, `${c.id}/${term.id}: ответ не пустой`);
+      if (term.kind === 'bool') {
+        assert.match(term.value, /^(да|нет)$/iu, `${c.id}/${term.id}: bool — да/нет`);
+      }
+    }
+  }
+  // Матрица собирается и выравнивается по колонкам (model/terms.ts).
+  const rows = termRows(MOCK_AXP.contractors);
+  assert.equal(rows.length, 9, 'объединение вопросов — 9 строк матрицы');
+  const avans = rows.find((r) => r.label === 'Авансирование');
+  assert.deepEqual(avans?.cells.map((c) => c?.value),
+    ['40 %', '20 %', '30 %', '40 %', '50 %'],
+    'ответы стоят под своими колонками, порядок — как в форме №1');
+  assert.equal(hasTerms(MOCK_AXP.contractors), true);
+  // У демо-шестёрки условия тоже заполнены — матрица живёт на обоих тендерах.
+  assert.equal(hasTerms(MOCK_COMPARISON.contractors), true);
+}
 
 console.log('comparison: ok');

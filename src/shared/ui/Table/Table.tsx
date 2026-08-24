@@ -23,6 +23,9 @@ import s from './Table.module.css';
  * - `card`    — ячейка ЦЕЛИКОМ отдана своему содержимому: ни паддинга, ни
  *               фиксированной высоты шапки. Для колонки, в которой стоит не
  *               значение, а блок (карточка подрядчика в сравнении КП);
+ * - `fullRow` — строка-заголовок секции: <th colSpan> на все колонки. Гасит
+ *               липкость sticky-col, которая иначе застыла бы у кромки одной
+ *               первой колонкой и порвала собственный colSpan;
  * - `empty`   — <td colSpan> с объяснением пустого результата.
  */
 export const tableCell = {
@@ -35,6 +38,7 @@ export const tableCell = {
   link: s.cellLink,
   rowLink: s.rowLink,
   card: s.cellCard,
+  fullRow: s.cellFullRow,
   empty: s.empty,
 } as const;
 
@@ -78,10 +82,22 @@ export const tableCell = {
  *   <tbody>{rows.map((r) => <tr key={r.id}><td className={tableCell.mono}>{r.id}</td></tr>)}</tbody>
  * </Table>
  */
-export function Table({ caption, layout, stickyHead, stickyCol, children }: {
+export function Table({ caption, layout, stickyHead, stickyCol, width, children }: {
   caption?: ReactNode;
   /** 'fixed' — ширины из <colgroup> (см. UX). По умолчанию авторазметка. */
   layout?: 'auto' | 'fixed';
+  /**
+   * Явная ширина таблицы, px. ОБЯЗАТЕЛЬНА вместе с layout="fixed" у
+   * stickyHead-таблицы: у `width: max-content` вместе с table-layout:fixed
+   * браузер не исполняет ширины <col> и распределяет колонки по содержимому
+   * (проверено на Chrome 141). Ставится ИНЛАЙНОМ, а не наследуемой
+   * CSS-переменной намеренно: переменная на обёртке грязит стиль всей
+   * таблицы на каждом шаге её изменения (профилирование 24.08.2026 —
+   * +130мс стиля на кадр анимации панели), инлайн-ширина на самой таблице —
+   * только её раскладку. Потребитель — расчётчик ширин сравнения КП;
+   * без пропа таблица sizing'ится по содержимому, как раньше.
+   */
+  width?: number;
   /**
    * Липкая шапка: thead прибирается к верху БЛИЖАЙШЕГО прокручиваемого
    * предка нативным position:sticky (детали — .module.css).
@@ -128,6 +144,7 @@ export function Table({ caption, layout, stickyHead, stickyCol, children }: {
           stickyHead && s.tableStickyHead,
           stickyCol && s.tableStickyCol,
         )}
+        style={width != null ? { width: `${width}px` } : undefined}
       >
         {caption ? <caption className={s.caption}>{caption}</caption> : null}
         {children}

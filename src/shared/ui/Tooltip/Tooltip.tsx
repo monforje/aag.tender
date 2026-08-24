@@ -117,7 +117,11 @@ export function Tooltip({ text, children }: TooltipProps) {
             left: at.x,
             top: at.above ? undefined : at.top + GAP,
             bottom: at.above ? `calc(100dvh - ${at.top - GAP}px)` : undefined,
-            transform: at.above ? 'translate(-50%, -100%)' : 'translate(-50%, 0)',
+            /* Сдвиг ТОЛЬКО горизонтальный. Вертикаль уже задана краем (top или
+               bottom), и второй translateY(-100%) в верхней ветке уносил пузырь
+               ещё на его собственную высоту: подсказка к названию позиции
+               всплывала через строку над той, на которую навели. */
+            transform: 'translate(-50%, 0)',
           }}
         >
           {text}

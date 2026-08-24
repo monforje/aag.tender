@@ -114,6 +114,64 @@ await scenario('ховер: проход по строкам (40 шагов)', a
   for (let i = 0; i < 40; i++) { await page.mouse.move(x - 200 + (i % 8) * 60, y - 100 + (i % 5) * 34); await sleep(20); }
 });
 
+/* ── Сценарии новых фич (24.08.2026): матрица условий, тултипы названий,
+   попапы ячеек. Элемент может отсутствовать на старых данных — сценарий
+   тогда пропускается, а не падает. ── */
+
+// Матрица условий внизу ленты: прыжки к концу и обратно.
+const hasTerms = await page.evaluate(() => !!document.querySelector('[class*="terms-cap"]'));
+if (hasTerms) {
+  await scenario('условия: прыжки к матрице и назад ×5', async () => {
+    for (let i = 0; i < 5; i++) {
+      await page.evaluate((sel) => {
+        const b = document.querySelector(sel);
+        b.scrollTop = b.scrollHeight;
+        void b.scrollTop;
+        b.scrollTop = 0;
+      }, BAND);
+      await sleep(120);
+    }
+  });
+
+  // Ховер по ответам матрицы: 450мс на ячейке — ровно порог показа попапа,
+  // чтобы сценарий гонял цикл «показ → мост → сокрытие», а не только таймеры.
+  await scenario('условия: ховер по ответам (6×450мс)', async () => {
+    const cells = await page.$$('[class*="term-mark"], [class*="term-value"]');
+    const n = Math.min(cells.length, 6);
+    for (let i = 0; i < n; i++) {
+      const box = await cells[i].boundingBox();
+      if (!box) continue;
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      await sleep(450);
+    }
+    await page.mouse.move(x, y);
+  });
+}
+
+// Тултипы названий: 450мс на ячейке-якоре — порог показа <Tooltip>.
+await scenario('тултипы названий: ховер по якорю (5×450мс)', async () => {
+  const rows = await page.$$('tbody th[class*="strong"]');
+  for (let i = 0; i < Math.min(rows.length, 5); i++) {
+    const box = await rows[i].boundingBox();
+    if (!box) continue;
+    await page.mouse.move(box.x + 80, box.y + box.height / 2);
+    await sleep(450);
+  }
+  await page.mouse.move(x, y);
+});
+
+// Попапы пометок ячеек: МИН/монета/аномалия — цикл показа на живых целях.
+await scenario('попапы ячеек: ховер по пометкам (5×450мс)', async () => {
+  const marks = await page.$$('[class*="tag"], [class*="coin"], [class*="anomaly-trigger"]');
+  for (let i = 0; i < Math.min(marks.length, 5); i++) {
+    const box = await marks[i].boundingBox();
+    if (!box) continue;
+    await page.mouse.move(box.x + Math.min(box.width / 2, 30), box.y + box.height / 2);
+    await sleep(450);
+  }
+  await page.mouse.move(x, y);
+});
+
 /* Панель «Анализ ИИ» — единственная кнопка с парой aria-expanded/aria-controls;
    тогглы разделов несут только aria-expanded. */
 const ai = await page.$('button[aria-controls][aria-expanded]');

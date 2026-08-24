@@ -1,10 +1,11 @@
 import type { ReactNode } from 'react';
+import { cx } from '@/shared/lib/cx';
 import { plural } from '@/shared/lib/plural';
 import { Badge } from '@/shared/ui/Badge';
 import { Button } from '@/shared/ui/Button';
 import { Icon } from '@/shared/ui/Icon';
 import { Modal, modalPart } from '@/shared/ui/Modal';
-import { bidStatus, money, type Bid } from '@/entities/comparison';
+import { bidStatus, money, type Bid, type SupplierTerm } from '@/entities/comparison';
 import s from './DossierModal.module.css';
 
 /**
@@ -14,10 +15,16 @@ import s from './DossierModal.module.css';
  * НЕ ДЛЯ: правки данных подрядчика — окно только читает то, что уже известно
  *         из сравнения.
  *
- * UX:     Пока заглушка: реквизиты, итог по КП и честная фраза о том, что
- *         раздел ещё не сделан. Окно с пустотой внутри хуже отсутствия окна,
- *         поэтому здесь стоит то, что УЖЕ известно. Открытость выводится из
- *         пропа: содержимое рисуется, только когда окно открыто.
+ * UX:     Пока заглушка: реквизиты, УСЛОВИЯ КП, итог и честная фраза о том,
+ *         что раздел ещё не сделан. Окно с пустотой внутри хуже отсутствия
+ *         окна, поэтому здесь стоит то, что УЖЕ известно. Открытость выводится
+ *         из пропа: содержимое рисуется, только когда окно открыто.
+ *         УСЛОВИЯ ДУБЛИРУЮТ матрицу внизу таблицы (<TermsBand>) намеренно
+ *         (решение владельца 24.08.2026, вторая волна): там их читают ПОПЕРЁК
+ *         подрядчиков — «у кого аванс меньше», здесь ВДОЛЬ одного — «что
+ *         вообще предложил этот». Это два разных вопроса, и гонять человека
+ *         за ответом на второй в подвал ленты незачем. Источник один
+ *         (`contractor.terms`), поэтому разъехаться им нечем.
  * A11Y:   фокус в окно ставит нативный showModal(); autoFocus на кнопке
  *         «Закрыть» не оставляет фокус на самом <dialog>. Реквизиты —
  *         настоящий <dl>: скринридер читает пары «подпись — значение».
@@ -63,6 +70,22 @@ function Dossier({ bid, total, onClose }: { bid: Bid; total: number; onClose: ()
         <Fact label="Место в сравнении">{rankLabel}</Fact>
       </dl>
 
+      {/* Условия формы КП — тот же список, что стоит строками матрицы внизу
+          таблицы. Развёрнутый ответ (`note`) занимает обе колонки: в половине
+          ширины он превратился бы в столбик из двух слов. */}
+      {contractor.terms?.length ? (
+        <>
+          <h3 className={s.subhead}>Условия КП</h3>
+          <dl className={s.facts}>
+            {contractor.terms.map((term: SupplierTerm) => (
+              <Fact key={term.id} label={term.label} wide={term.kind === 'note'}>
+                {term.value}
+              </Fact>
+            ))}
+          </dl>
+        </>
+      ) : null}
+
       {/* <ScreenPlaceholder> сюда не берётся намеренно: у него min-height 320px —
           он рассчитан на пустой ЭКРАН и в окне на 520px выглядел бы дырой. */}
       <p className={s.note}>
@@ -78,9 +101,9 @@ function Dossier({ bid, total, onClose }: { bid: Bid; total: number; onClose: ()
   );
 }
 
-function Fact({ label, children }: { label: string; children: ReactNode }) {
+function Fact({ label, wide, children }: { label: string; wide?: boolean; children: ReactNode }) {
   return (
-    <div className={s.fact}>
+    <div className={cx(s.fact, wide && s.factWide)}>
       <dt className={s.factLabel}>{label}</dt>
       <dd className={s.factValue}>{children}</dd>
     </div>

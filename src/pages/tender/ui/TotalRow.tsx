@@ -48,7 +48,7 @@ export function TotalRow({ label, rows, bids, metric }: {
           0,
         );
         return (
-          <td key={bid.contractor.id} className={cx(tableCell.numeric, tableCell.roomy, s.totalValue)}>
+          <td key={bid.contractor.id} className={cx(tableCell.numeric, s.totalValue)}>
             {sum ? money(sum) : '—'}
           </td>
         );

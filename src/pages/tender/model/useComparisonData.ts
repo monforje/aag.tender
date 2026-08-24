@@ -49,9 +49,10 @@ export function useComparisonData(tenderId: string) {
     error: state.error,
     reload: state.reload,
     /** ДЕМО: следующий молчащий подрядчик подаёт КП. Перечитывать нечего,
-     *  когда подавать больше некому — лента об этом и сообщает. */
+     *  когда подавать больше некому — лента об этом и сообщает. Тендер назван
+     *  явно: у статических снимков ленты подач нет, и кнопка гаснет сразу. */
     submitNext: async () => {
-      if (await simulateNextSubmission()) setSubmissions((n) => n + 1);
+      if (await simulateNextSubmission(tenderId)) setSubmissions((n) => n + 1);
     },
   };
 }

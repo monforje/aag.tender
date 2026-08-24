@@ -13,6 +13,19 @@
   color: var(--cu-content-secondary);
 }
 .fact__value{ font-size: 14px; line-height: 20px; font-variant-numeric: tabular-nums; }
+/* Развёрнутый ответ формы («Примечание») — на обе колонки: в половине ширины
+   абзац превращается в столбик из двух слов. */
+.fact--wide{ grid-column: 1 / -1; }
+.fact--wide .fact__value{ white-space: normal; }
+
+/* Заголовок второго блока реквизитов. Капитель того же языка, что подписи
+   полей, но ступенью крупнее: он называет БЛОК, а не поле. */
+.subhead{
+  margin: 18px 0 10px;
+  font-size: 12px; line-height: 16px; font-weight: var(--cu-font-weight-semibold);
+  text-transform: uppercase; letter-spacing: .06em;
+  color: var(--cu-content-tertiary);
+}
 
 /* Честная фраза о том, чего ещё нет. Тот же смысл, что у <ScreenPlaceholder>,
    но строкой: у того min-height 320px — он рассчитан на пустой ЭКРАН. */

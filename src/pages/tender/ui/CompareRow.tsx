@@ -5,6 +5,8 @@ import {
 } from '@/entities/comparison';
 import type { CellPopupBind } from '@/shared/ui/CellPopup';
 import { tableCell } from '@/shared/ui/Table';
+import { Tooltip } from '@/shared/ui/Tooltip';
+import { clipTitle } from '../model/compareFormat';
 import { BidCell } from './BidCell';
 import { KeyMark } from './assets';
 import { SpreadCell } from './SpreadCell';
@@ -14,7 +16,7 @@ import s from './TenderCompare.module.css';
  * Строка позиции в таблице сравнения: имя (+ключ, снятие), объём
  * (+корректировка), единица, разброс и ячейки КП с пометками.
  *
- * КОГДА:  и в виде «По разделам», и в плоских видах «По весу»/«По потенциалу»
+ * КОГДА:  и в виде «По секциям», и в плоских видах «По весу»/«По потенциалу»
  *         — строку собирает <TenderCompare>.
  * НЕ ДЛЯ: строки реестра тендеров (см. TenderRegistryPage) и шапки колонки
  *         (см. ContractorCard).
@@ -37,7 +39,7 @@ import s from './TenderCompare.module.css';
  * <CompareRow row={row} view={view} bids={bids} sumWeight={facts.sumWeight}
  *             bind={popup.bind} focused={focusRowId === row.position.id} />
  */
-function CompareRowImpl({ row, view, thresholds, bids, sumWeight, bind, focused, noteFor, flashCells, enterIndex }: {
+function CompareRowImpl({ row, view, thresholds, bids, sumWeight, bind, focused, noteFor, flashCells, enterIndex, titleLimit }: {
   row: RowFacts;
   view: CompareView;
   /** Пороги тендера: метки разброса и аномальность делят их с фильтрами. */
@@ -55,9 +57,19 @@ function CompareRowImpl({ row, view, thresholds, bids, sumWeight, bind, focused,
   /** Порядковый номер при каскадном въезде раскрытого раздела: строка получает
    *  задержку анимации. Не передаётся в плоских видах — там въезд не играет. */
   enterIndex?: number;
+  /** Потолок названия В ЗНАКАХ — считает `titleLimit()` от ширины колонки
+   *  (model/columns.ts). ЦЕЛОЕ ЧИСЛО, и в этом весь смысл: ширина ленты
+   *  меняется каждый кадр, а лимит — раз в несколько десятков пикселей,
+   *  поэтому memo строки переживает и анимацию панели, и уход сайдбара. */
+  titleLimit: number;
 }) {
   const { position } = row;
   const removed = position.removed === true;
+  /* Название режется СЧЁТОМ ЗНАКОВ, а не CSS-многоточием (решение владельца
+     24.08.2026): ellipsis заставлял движок перемерять текст всех строк на
+     каждом кадре изменения ширины, и колонка названий видимо кипела при уходе
+     сайдбара. Резерв под ключ учитывает сама функция. */
+  const title = clipTitle(position.title, titleLimit, !removed && position.key === true);
   const share = sumWeight ? (row.weight / sumWeight) * 100 : 0;
   const noteOf = (contractorId: string) => noteFor?.(contractorId, position.id);
   const flashOf = (contractorId: string) => !!flashCells?.has(`${contractorId}:${position.id}`);
@@ -72,11 +84,14 @@ function CompareRowImpl({ row, view, thresholds, bids, sumWeight, bind, focused,
           не значит ничего — её читают на пересечении «позиция × подрядчик», и
           без заголовка СТРОКИ скринридер объявляет только колонку: подрядчика
           называет, позицию нет. Тот же якорь держит горизонтальную прокрутку
-          (<Table stickyCol>), так что потеря была бы сразу в двух каналах.
-          title обязателен — ширина задана контрактом, длинное название уходит
-          в многоточие, и прочитать его целиком должно чем. */}
-      <th scope="row" className={tableCell.strong} title={position.title}>
-        {removed ? <s>{position.title}</s> : position.title}
+          (<Table stickyCol>). Название длиннее лимита режется по знакам,
+          ПОЛНЫЙ ТЕКСТ всплывает <Tooltip>'ом (паттерн имени в шапке колонки,
+          решение владельца 24.08.2026): нативный title снят — он не гасится
+          попапом и рисуется ОС, а не нами. */}
+      <th scope="row" className={tableCell.strong}>
+        <Tooltip text={position.title}>
+          <span>{removed ? <s>{title}</s> : title}</span>
+        </Tooltip>
 
         {/* Ключ — в ПРАВОЙ части имени: левый край всех строк остаётся единым.
             Без title: нативная подсказка спорила бы с попапом; словарь пометки

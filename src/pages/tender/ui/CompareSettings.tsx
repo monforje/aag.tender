@@ -9,7 +9,7 @@ import { Icon } from '@/shared/ui/Icon';
 import { IconButton } from '@/shared/ui/IconButton';
 import { NumberInput } from '@/shared/ui/NumberInput';
 import { Popover } from '@/shared/ui/Popover';
-import { Tabs } from '@/shared/ui/Tabs';
+import { Switch } from '@/shared/ui/Switch';
 import {
   clampThresholds, decimal, predicateCount, PREDICATES, SYSTEM_THRESHOLDS,
   type CompareThresholds, type PredicateId, type RowFacts,
@@ -19,7 +19,7 @@ import { AnomalyGlyph, CoinMark, KeyMark, MedMark, SpreadMark } from './assets';
 import s from './CompareSettings.module.css';
 
 /* Глиф предиката — ТОТ ЖЕ маркер, что красит ячейки таблицы: один смысл —
-   один глиф везде. Переехал сюда вместе со списком фильтров из полосы. */
+   один глиф везде. Читают его и «Параметры», и отдельные «Фильтры». */
 const PREDICATE_GLYPH: Record<PredicateId, ReactElement> = {
   key: <KeyMark />,
   spread: <SpreadMark />,
@@ -27,11 +27,6 @@ const PREDICATE_GLYPH: Record<PredicateId, ReactElement> = {
   pot: <CoinMark />,
   med: <MedMark />,
 };
-
-const TABS = [
-  { id: 'params', label: 'Параметры' },
-  { id: 'filters', label: 'Фильтры' },
-] as const;
 
 /** Пороговые поля с фиксированным смыслом — рендерятся общим циклом; особые
  *  строки (коэффициент с подсказкой, доля ключевых с превью) — ниже. */
@@ -57,10 +52,14 @@ const PLAIN_ROWS = [
  * 22.08.2026 — личных и организационных дефолтов нет).
  *
  * КОГДА:  из кнопки `⚙` полосы сравнения (<CompareToolbar>).
+ *         Плюс одна настройка ОФОРМЛЕНИЯ — подкраска колонок по ранжиру:
+ *         чисел она не меняет, поэтому стоит первой строкой и «Вернуть
+ *         системные значения» её не трогает.
  * НЕ ДЛЯ: показа отклонения и ставки (галочки спутников живут прямо на
- *         полосе), вида строк и фильтров (отдельные контролы), полоски
- *         распределения и способа подсветки минимума (место не назначено —
- *         открытый вопрос владельца).
+ *         полосе), вида строк и ФИЛЬТРОВ (отдельная кнопка-глиф
+ *         <CompareFilters> рядом: бизнес-логика среза всегда на виду, а
+ *         «настройка вида» и «срез данных» — разные действия, схлопывать их
+ *         в одну панель нельзя — решение владельца 24.08.2026).
  *
  * UX:     ПОВЕРХНОСТЬ — <Popover>, а не <Modal>: порог применяется сразу и
  *         каскадом перекрашивает таблицу, специалист обязан ВИДЕТЬ эффект,
@@ -76,23 +75,20 @@ const PLAIN_ROWS = [
  *         кнопка с aria-expanded, текст в потоке панели (не hover-only).
  *
  * @example
- * <CompareSettings thresholds={thresholds} onChange={handleThresholds}
- *                  allRows={facts.rows} />
+ * <CompareSettings thresholds={thresholds} onChange={handleThresholds} />
  */
-export function CompareSettings({ thresholds, onChange, allRows, filters, onFilters }: {
+export function CompareSettings({ thresholds, onChange, allRows, rankTint, onRankTint }: {
   thresholds: CompareThresholds;
   /** Зажатое значение приходят наружу: хранит страницу. */
   onChange: (thresholds: CompareThresholds) => void;
-  /** Все строки среза БЕЗ фильтров — база превью состава ключевых И счётчиков
-   *  предикатов: число на невыбранном пункте иначе бесполезно (показывало бы
-   *  «после всего остального»). */
+  /** Все строки среза БЕЗ фильтров — база превью состава ключевых. */
   allRows: RowFacts[];
-  /** Активные предикаты и их правка — вкладка «Фильтры». */
-  filters: PredicateId[];
-  onFilters: (filters: PredicateId[]) => void;
+  /** Подкраска колонок по ранжиру. Состояние — у <TenderCompare>; сюда
+   *  приходит пропом, потому что окно параметров ничего не хранит само. */
+  rankTint: boolean;
+  onRankTint: (on: boolean) => void;
 }) {
   const [at, setAt] = useState<DOMRect | null>(null);
-  const [tab, setTab] = useState<string>(TABS[0].id);
 
   const patch = (part: Partial<CompareThresholds>) =>
     onChange(clampThresholds({ ...thresholds, ...part }));
@@ -102,153 +98,182 @@ export function CompareSettings({ thresholds, onChange, allRows, filters, onFilt
        (232px) тесна для четырёх полей с пояснениями — без моста контент
        обрезается краем диалога (тот же приём, что у легенды). */
     <div className={s.root}>
-      {/* Одна кнопка на оба среза: пороги и фильтры. Число активных
-          предикатов обязано быть НА НЕЙ — фильтры уехали внутрь окна, и без
-          значка «что-то отфильтровано» перестало бы читаться с полосы вовсе.
-          Заливка в покое (active) — второй канал к значку, для чёрно-белого
-          и для тех, кто значок не заметил. */}
       <IconButton
         variant="topbar"
         icon="settings"
+        label="Параметры анализа"
+        title="Пороги аналитики этого тендера"
+        aria-haspopup="dialog"
+        aria-expanded={at !== null}
+        className={s.gear}
+        onClick={(e) => setAt(e.currentTarget.getBoundingClientRect())}
+      />
+      <Popover anchor={at} onClose={() => setAt(null)} label="Параметры анализа">
+        <div className={s.body}>
+          {/* ПОДКРАСКА ПО РАНЖИРУ — ПЕРВОЙ СТРОКОЙ и сознательно ОТДЕЛЬНО от
+              трёх порогов ниже: это единственная настройка окна, которая не
+              меняет ни одного числа, а только красит уже посчитанное. Ровно
+              поэтому её не трогает «Вернуть системные значения» внизу — та
+              кнопка возвращает ПОРОГИ, и утащить с ними выбор оформления
+              значило бы сбрасывать то, о чём не просили (решение владельца
+              24.08.2026, вторая волна: дефолтную подкраску сняли, а сам режим
+              вынесли в параметры). Ручная палитра колонки старше тумблера:
+              перекрашенная рукой колонка своего цвета не теряет. */}
+          <Setting
+            label="Раскрасить по ранжированию"
+            description="Колонки берут цвет своего места: лучший итог — зелёный, худший — красный. Цвет, выбранный палитрой вручную, остаётся как есть."
+          >
+            <Switch
+              checked={rankTint}
+              onChange={onRankTint}
+              aria-label="Раскрасить колонки по ранжированию"
+            />
+          </Setting>
+
+          {PLAIN_ROWS.map((row) => (
+            <Setting key={row.key} label={row.label} description={row.hint}>
+              <NumberInput
+                min={row.min}
+                max={row.max}
+                unit="%"
+                value={thresholds[row.key]}
+                onChange={(value) => patch({ [row.key]: value })}
+              />
+            </Setting>
+          ))}
+
+          {/* Коэффициент аномалии: единственный порог-КОЭФФИЦИЕНТ, без
+              разбора читается произвольным числом — подсказка обязательна. */}
+          <Setting
+            label="Коэффициент аномалии"
+            description="Множитель, с которым отклонение считается аномальным."
+            hint={<KHint />}
+          >
+            <NumberInput
+              min={1}
+              max={10}
+              step={0.5}
+              unit="×"
+              value={thresholds.anomalyK}
+              onChange={(anomalyK) => patch({ anomalyK })}
+            />
+          </Setting>
+
+          <Setting
+            label="Доля ключевых работ"
+            description={`Состав ключевых и линия отсечки в виде «По весу». Превью на срезе: при ${decimal(thresholds.keyShare)} % — ${keysAt(allRows, thresholds.keyShare)}, при 90 % — ${keysAt(allRows, 90)}.`}
+          >
+            <NumberInput
+              min={1}
+              max={100}
+              unit="%"
+              value={thresholds.keyShare}
+              onChange={(keyShare) => patch({ keyShare })}
+            />
+          </Setting>
+
+          {/* Сброс — во всю ширину внизу: он относится ко ВСЕМ четырём
+              порогам сразу, а кнопка в углу читалась бы как действие
+              последней строки. */}
+          <Button
+            variant="secondary"
+            className={s.reset}
+            onClick={() => onChange({ ...SYSTEM_THRESHOLDS })}
+          >
+            Вернуть системные значения
+          </Button>
+        </div>
+      </Popover>
+    </div>
+  );
+}
+
+/**
+ * Кнопка предикатов среза — «Фильтры»: что именно показываем в таблице.
+ *
+ * КОГДА:  из полосы сравнения (<CompareToolbar>), правее легенды — правый
+ *         край у действия с состоянием. Бизнес-логика среза живёт НА ВИДУ:
+ *         активные предикаты видны счётчиком на самой кнопке, а не спрятаны
+ *         вкладкой чужого окна (решение владельца 24.08.2026 — обратный ход
+ *         к слиянию фильтров с настройками: срезать данные и настраивать вид
+ *         — разные действия).
+ * НЕ ДЛЯ: порогов аналитики (см. <CompareSettings>) и выбора строк/показателя
+ *         (тихие селекты полосы).
+ *
+ * UX:     ЗАЛИВКА И ЦИФРА — два канала одного факта «срез активен»: бейдж с
+ *         числом активных предикатов и active-подложка кнопки; для тех, кто
+ *         значок не заметил, есть title. Поверхность — <Popover>, как у
+ *         соседей по полосе: чтение списка не обязано гасить таблицу.
+ * A11Y:   имя кнопки называет число активных предикатов; пункты —
+ *         role="checkbox" со счётчиком пропускаемых строк.
+ *
+ * @example
+ * <CompareFilters allRows={facts.rows} filters={view.filters}
+ *                 onFilters={(filters) => onPatch({ filters })} />
+ */
+export function CompareFilters({ allRows, filters, onFilters }: {
+  /** Все строки среза БЕЗ фильтров — база счётчиков: число на невыбранном
+   *  пункте иначе бесполезно (показывало бы «после всех остальных»). */
+  allRows: RowFacts[];
+  /** Активные предикаты и их правка — состояние страницы (ось view). */
+  filters: PredicateId[];
+  onFilters: (filters: PredicateId[]) => void;
+}) {
+  const [at, setAt] = useState<DOMRect | null>(null);
+
+  return (
+    <div className={s.root}>
+      <IconButton
+        variant="topbar"
+        icon="filter"
         label={filters.length
-          ? `Параметры анализа · фильтров: ${filters.length}`
-          : 'Параметры анализа'}
-        title="Пороги аналитики и фильтры этого тендера"
+          ? `Фильтры · активно: ${filters.length}`
+          : 'Фильтры'}
+        title="Что показывать в таблице: предикаты среза"
         aria-haspopup="dialog"
         aria-expanded={at !== null}
         active={filters.length > 0}
         badge={filters.length ? <span className={s.btnBadge}>{filters.length}</span> : null}
         className={s.gear}
-        /* Вкладка сбрасывается на ОТКРЫТИИ, а не на закрытии, хотя по смыслу
-           это одно и то же. Причина техническая: закрытие приходит событием
-           `close` у <dialog>, а оно срабатывает не во всякой среде — на
-           программный close() в headless-браузере не пришло ни разу. Здесь же
-           обработчик наш и выполняется всегда.
-
-           Зачем вообще сбрасывать: <Popover> меряет высоту ОДИН раз при
-           открытии и по замеру решает, откидываться ли вверх. Вкладки разной
-           высоты (429px против 266px), и панель, открывшаяся на короткой,
-           после переключения на длинную вылезала бы за нижний край экрана на
-           невысоком окне. Открываясь всегда на длинной, она меряет худший
-           случай и помещается в обоих. */
-        onClick={(e) => {
-          setTab(TABS[0].id);
-          setAt(e.currentTarget.getBoundingClientRect());
-        }}
+        onClick={(e) => setAt(e.currentTarget.getBoundingClientRect())}
       />
-      <Popover anchor={at} onClose={() => setAt(null)} label="Параметры анализа">
+      <Popover anchor={at} onClose={() => setAt(null)} label="Фильтры среза">
         <div className={s.body}>
-          {/* Вкладки — два среза одного окна: «чем считаем» и «что
-              показываем». Раньше фильтры жили отдельной кнопкой полосы; на
-              полосе из шести контролов седьмой уже не читался, а по смыслу
-              это та же настройка взгляда на таблицу.
+          <div className={s.predicates}>
+            {PREDICATES.map((predicate) => {
+              const count = predicateCount(predicate.id, allRows);
+              const on = filters.includes(predicate.id);
+              return (
+                <button
+                  key={predicate.id}
+                  type="button"
+                  role="checkbox"
+                  aria-checked={on}
+                  className={cx(s.predicate, !count && s.predicateEmpty)}
+                  onClick={() => onFilters(toggle(filters, predicate.id))}
+                >
+                  <span className={s.predicateGlyph}>{PREDICATE_GLYPH[predicate.id]}</span>
+                  <span className={s.predicateLabel}>{predicate.label}</span>
+                  {/* Сколько строк пропустит ЭТОТ предикат на ВСЕХ данных:
+                      число «после всех остальных» на невыбранном пункте
+                      бесполезно. */}
+                  <span className={s.predicateCount}>{count}</span>
+                  <span className={s.predicateCheck} aria-hidden="true">
+                    <Icon name="checkCircle" />
+                  </span>
+                </button>
+              );
+            })}
+          </div>
 
-              ВИДИМОГО ЗАГОЛОВКА НАД НИМИ НЕТ: вкладки называют содержимое
-              сами, а «Параметры анализа» третьей строкой сверху повторяло бы
-              и их, и подпись кнопки, из которой окно открыли. Для скринридера
-              имя осталось — оно на самом <Popover> (проп label). */}
-          <Tabs
-            aria-label="Разделы параметров"
-            items={TABS.map((t) => ({ id: t.id, label: t.label }))}
-            value={tab}
-            onChange={setTab}
-            className={s.tabs}
-          />
-
-          {tab === 'params' ? (
-            <>
-              {PLAIN_ROWS.map((row) => (
-                <Setting key={row.key} label={row.label} description={row.hint}>
-                  <NumberInput
-                    min={row.min}
-                    max={row.max}
-                    unit="%"
-                    value={thresholds[row.key]}
-                    onChange={(value) => patch({ [row.key]: value })}
-                  />
-                </Setting>
-              ))}
-
-              {/* Коэффициент аномалии: единственный порог-КОЭФФИЦИЕНТ, без
-                  разбора читается произвольным числом — подсказка обязательна. */}
-              <Setting
-                label="Коэффициент аномалии"
-                description="Множитель, с которым отклонение считается аномальным."
-                hint={<KHint />}
-              >
-                <NumberInput
-                  min={1}
-                  max={10}
-                  step={0.5}
-                  unit="×"
-                  value={thresholds.anomalyK}
-                  onChange={(anomalyK) => patch({ anomalyK })}
-                />
-              </Setting>
-
-              <Setting
-                label="Доля ключевых работ"
-                description={`Состав ключевых и линия отсечки в виде «По весу». Превью на срезе: при ${decimal(thresholds.keyShare)} % — ${keysAt(allRows, thresholds.keyShare)}, при 90 % — ${keysAt(allRows, 90)}.`}
-              >
-                <NumberInput
-                  min={1}
-                  max={100}
-                  unit="%"
-                  value={thresholds.keyShare}
-                  onChange={(keyShare) => patch({ keyShare })}
-                />
-              </Setting>
-
-              {/* Сброс — во всю ширину внизу: он относится ко ВСЕМ четырём
-                  порогам сразу, а кнопка в углу читалась бы как действие
-                  последней строки. */}
-              <Button
-                variant="secondary"
-                className={s.reset}
-                onClick={() => onChange({ ...SYSTEM_THRESHOLDS })}
-              >
-                Вернуть системные значения
-              </Button>
-            </>
-          ) : (
-            <>
-              <div className={s.predicates}>
-                {PREDICATES.map((predicate) => {
-                  const count = predicateCount(predicate.id, allRows);
-                  const on = filters.includes(predicate.id);
-                  return (
-                    <button
-                      key={predicate.id}
-                      type="button"
-                      role="checkbox"
-                      aria-checked={on}
-                      className={cx(s.predicate, !count && s.predicateEmpty)}
-                      onClick={() => onFilters(toggle(filters, predicate.id))}
-                    >
-                      <span className={s.predicateGlyph}>{PREDICATE_GLYPH[predicate.id]}</span>
-                      <span className={s.predicateLabel}>{predicate.label}</span>
-                      {/* Сколько строк пропустит ЭТОТ предикат на ВСЕХ данных:
-                          число «после всех остальных» на невыбранном пункте
-                          бесполезно. */}
-                      <span className={s.predicateCount}>{count}</span>
-                      <span className={s.predicateCheck} aria-hidden="true">
-                        <Icon name="checkCircle" />
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              <Button
-                variant="secondary"
-                className={s.reset}
-                disabled={!filters.length}
-                onClick={() => onFilters([])}
-              >
-                Сбросить фильтры
-              </Button>
-            </>
-          )}
+          <Button
+            variant="secondary"
+            className={s.reset}
+            disabled={!filters.length}
+            onClick={() => onFilters([])}
+          >
+            Сбросить фильтры
+          </Button>
         </div>
       </Popover>
     </div>

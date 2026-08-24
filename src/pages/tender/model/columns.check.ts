@@ -1,104 +1,118 @@
 /** Самопроверка расчётчика ширин колонок сравнения. Седьмое тихое место:
  *  алгоритм не падает — он молча отдаёт колонкам невозможную раскладку, и
  *  на живом экране это видно только лишним скроллом или щелью у края.
- *  Здесь фиксируются свойства распределения (полы, равность долей,
- *  сходимость суммы, монотонность) и живые сценарии («док открыли»,
- *  «шесть длинных имён»).
+ *  Здесь фиксируются свойства распределения (фиксированная ширина КП,
+ *  сходимость суммы, монотонность, порог панорамы) и живые сценарии
+ *  («док открыли», «пять подрядчиков на ноутбуке»).
  *  Запуск: bun src/pages/tender/model/columns.check.ts
  *  Фреймворка нет намеренно — то же соглашение, что у comparison.check.ts. */
 import { strict as assert } from 'node:assert';
-import { computeColumnLayout } from './columns';
+import { BID_FIXED, TITLE_CHARS, computeColumnLayout, titleLimit } from './columns';
+import { clipTitle } from './compareFormat';
 
-const layoutOf = (available: number, floors: number[]) =>
-  computeColumnLayout({ available, bids: floors.map((floor, i) => ({ id: `c${i}`, floor })) });
+const layoutOf = (available: number, n: number) =>
+  computeColumnLayout({ available, bids: Array.from({ length: n }, (_, i) => ({ id: `c${i}` })) });
 
 const sum = (l: ReturnType<typeof computeColumnLayout>) =>
   l.qty + l.unit + l.spread + l.title + Object.values(l.bids).reduce((a, b) => a + b, 0);
 
-// ── влезает: равная доля упирается в потолок, название забирает излишек ───
+const bidWidths = (l: ReturnType<typeof computeColumnLayout>) => Object.values(l.bids);
+
+// ── влезает: все колонки КП ровно BID_FIXED, излишек у названия ────────────
 {
-  const l = layoutOf(1457, [180, 180, 180]);
+  const l = layoutOf(1600, 3);
   assert.equal(l.pan, false);
-  const bidWidths = Object.values(l.bids);
-  assert.deepEqual(bidWidths, [280, 280, 280], 'доля выше потолка — все на потолке');
-  assert.equal(l.title, 1457 - 288 - 840, 'излишек целиком у названия');
+  assert.deepEqual(bidWidths(l), [BID_FIXED, BID_FIXED, BID_FIXED],
+    'колонки подрядчиков фиксированы и равны');
+  assert.deepEqual([l.qty, l.unit, l.spread], [106, 88, 96], 'левый блок на базах');
+  assert.equal(l.title, 1600 - 290 - 3 * BID_FIXED, 'весь излишек у названия');
 }
 
-// ── влезает впритык: доля между полом и потолком, колонки равны ───────────
+// ── тесно: левый блок сжимается первым, ширины КП не трогаются ─────────────
 {
-  const l = layoutOf(1300, [180, 180, 180]);
+  /* 1200 = между «полы левого блока + название + 3×BID_FIXED» (1188) и
+     «базы левого блока + то же» (1206): место есть, но не на базы. */
+  const l = layoutOf(1200, 3);
   assert.equal(l.pan, false);
-  const w = Object.values(l.bids);
-  assert.ok(w.every((x) => x === w[0]), 'равная доля — колонки одинаковы');
-  assert.ok(w[0] > 180 && w[0] < 280, `доля внутри вилки: ${w[0]}`);
-  assert.ok(l.qty === 104 && l.unit === 88 && l.spread === 96, 'левый блок на базах');
+  assert.ok(l.qty < 106 && l.unit < 88 && l.spread < 96, 'левый блок сжат');
+  assert.deepEqual(bidWidths(l), [BID_FIXED, BID_FIXED, BID_FIXED]);
+  assert.ok(l.title >= 280, `название не ниже минимума: ${l.title}`);
 }
 
-// ── тесно: левый блок сжимается, пока название не упрётся в минимум ────────
+// ── порог панорамы: ниже полов левого блока + фикс. ширин места нет ────────
 {
-  const l = layoutOf(1200, [250, 250, 250]);
-  assert.equal(l.pan, false);
-  assert.ok(l.qty < 104 && l.unit < 88 && l.spread < 96, 'левый блок сжат');
-  assert.deepEqual(Object.values(l.bids), [250, 250, 250], 'полы имён держатся');
-  assert.ok(l.title >= 200, `название не ниже минимума: ${l.title}`);
-}
-
-// ── длинное имя: своя колонка шире соседних, левые поджимаются ─────────────
-{
-  const l = layoutOf(1300, [170, 170, 420]);
-  assert.equal(l.pan, false);
-  assert.deepEqual(Object.values(l.bids), [170, 170, 420], 'каждый на своём полу');
-  assert.ok(l.title >= 200, `название удержало минимум: ${l.title}`);
-  assert.deepEqual([l.qty, l.unit, l.spread], [104, 88, 96],
-    'минимумам хватило места — левый блок остался на базах');
-}
-
-// ── полы доминируют: левый блок жертвует шириной первым ────────────────────
-{
-  const l = layoutOf(1200, [250, 250, 250]);
-  assert.equal(l.pan, false);
-  assert.deepEqual(Object.values(l.bids), [250, 250, 250]);
-  assert.ok(l.qty < 104 && l.unit < 88 && l.spread < 96, 'левый блок сжат');
-  assert.ok(l.title >= 200, `название не ниже минимума: ${l.title}`);
-}
-
-// ── глубокая панорама: сумма полов больше доступного вовсе ────────────────
-{
-  const l = layoutOf(700, [260, 260, 260, 260, 260, 260]);
-  assert.equal(l.pan, true);
-  assert.deepEqual(Object.values(l.bids), [260, 260, 260, 260, 260, 260]);
-  assert.equal(sum(l) > 700, true, 'сумма полов перерастает ленту — панорамирует она');
+  const threshold = 102 + 80 + 90 + 280 + 5 * BID_FIXED;
+  const fits = layoutOf(threshold, 5);
+  assert.equal(fits.pan, false, 'ровно на половах ещё влезает');
+  const pan = layoutOf(threshold - 1, 5);
+  assert.equal(pan.pan, true);
+  assert.deepEqual([pan.qty, pan.unit, pan.spread], [102, 80, 90], 'левые на минимумах');
+  assert.equal(pan.title, 280, 'названию — его минимум');
+  assert.ok(sum(pan) > threshold - 1, 'сумма перерастает ленту — панорамирует она');
 }
 
 // ── сходимость: вне панорамы сумма колонок ровно в доступной ширине ────────
 for (const available of [900, 1000, 1152, 1280, 1440, 1600, 1920]) {
-  for (const floors of [[150], [180, 220], [200, 200, 200], [190, 210, 430, 180]]) {
-    const l = layoutOf(available, floors);
+  for (const n of [1, 2, 3, 5, 6]) {
+    const l = layoutOf(available, n);
     if (!l.pan) {
-      assert.equal(sum(l), available, `${available}px / [${floors}]`);
-      assert.ok(l.title >= 200, `минимум названия: ${available}px / [${floors}]`);
+      assert.equal(sum(l), available, `${available}px / ${n} КП`);
+      assert.ok(l.title >= 280, `минимум названия: ${available}px / ${n} КП`);
+      assert.ok(bidWidths(l).every((w) => w === BID_FIXED));
     }
   }
 }
 
 // ── монотонность: расширение окна никогда не сужает колонку ────────────────
-const FLOORS = [230, 195, 205, 420, 185, 240];
-let prev = layoutOf(640, FLOORS);
+let prev = layoutOf(640, 6);
 for (let available = 690; available <= 2200; available += 10) {
-  const l = layoutOf(available, FLOORS);
+  const l = layoutOf(available, 6);
   assert.ok(l.qty >= prev.qty && l.unit >= prev.unit && l.spread >= prev.spread,
     `левый блок: ${prev.qty}/${prev.unit}/${prev.spread} → ${l.qty}/${l.unit}/${l.spread} @${available}`);
-  for (const [i, w] of Object.values(l.bids).entries()) {
-    assert.ok(w >= Object.values(prev.bids)[i],
-      `колонка c${i}: ${Object.values(prev.bids)[i]} → ${w} @${available}`);
+  for (const [i, w] of bidWidths(l).entries()) {
+    assert.ok(w >= bidWidths(prev)[i],
+      `колонка c${i}: ${bidWidths(prev)[i]} → ${w} @${available}`);
   }
   assert.ok(l.title >= prev.title, `название: ${prev.title} → ${l.title} @${available}`);
   prev = l;
 }
 
 // ── вырожденные случаи ─────────────────────────────────────────────────────
-assert.deepEqual(layoutOf(400, []).pan, true, 'без КП и места — панорама');
-const solo = layoutOf(1600, []);
+assert.equal(layoutOf(400, 0).pan, true, 'без места — панорама');
+const solo = layoutOf(1600, 1);
 assert.equal(solo.pan, false);
+assert.deepEqual(bidWidths(solo), [BID_FIXED]);
+
+// ── ЛИМИТ НАЗВАНИЯ В ЗНАКАХ ───────────────────────────────────────────────
+// Восьмое тихое место: обрезка не падает, она молча съедает конец названия.
+{
+  assert.equal(titleLimit(undefined), TITLE_CHARS, 'до замера — потолок');
+  assert.equal(titleLimit(10_000), TITLE_CHARS, 'широкая колонка не даёт больше потолка');
+  assert.ok(titleLimit(280) < TITLE_CHARS, 'на минимуме колонки лимит ниже потолка');
+  assert.ok(titleLimit(280) >= 14, 'ниже 14 знаков название перестаёт называть');
+
+  /* Монотонность — та же причина, что у ширин: сужение колонки не имеет права
+     УДЛИНИТЬ название. */
+  let prevLimit = titleLimit(180);
+  for (let w = 190; w <= 1200; w += 10) {
+    const now = titleLimit(w);
+    assert.ok(now >= prevLimit, `лимит: ${prevLimit} → ${now} @${w}px`);
+    prevLimit = now;
+  }
+
+  // Влезает — отдаётся как есть, ни одного лишнего знака.
+  assert.equal(clipTitle('Бетон B25 W8 F150', 40, false), 'Бетон B25 W8 F150');
+  // Не влезает — ровно limit−2 знака: срезаны три последних, добавлено одно «…».
+  const long = 'Крышка на лоток с заземлением осн. 200 L 2000, толщ. 1,2мм';
+  const cut = clipTitle(long, 40, false);
+  assert.equal(cut.length, 38, `обрезка до limit−2: «${cut}»`);
+  assert.ok(cut.endsWith('…'));
+  assert.ok(long.startsWith(cut.slice(0, -1)), 'обрезка — начало исходного названия');
+  // Ключ отъедает свой резерв — и только у той строки, где он есть.
+  assert.ok(clipTitle(long, 40, true).length < cut.length, 'под ключ остаётся место');
+  assert.equal(clipTitle('Кабель', 40, true), 'Кабель', 'короткое название резерв не режет');
+  // Вырожденный лимит не даёт отрицательного среза.
+  assert.ok(clipTitle(long, 2, true).length >= 1);
+}
 
 console.log('columns: ok');

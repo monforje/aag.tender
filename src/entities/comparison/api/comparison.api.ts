@@ -13,13 +13,17 @@
  *  демо-смета в приложении одна, и карточка ЛЮБОГО тендера показывает её же. */
 
 import type { Comparison } from '../model/contract';
-import { MOCK_ROUND1, MOCK_ROUND2_FULL, MOCK_ROUND2_PARTIAL } from './comparison.mock';
+import { MOCK_AXP, MOCK_ROUND1, MOCK_ROUND2_FULL, MOCK_ROUND2_PARTIAL } from './comparison.mock';
 
 export interface ComparisonQuery {
   tenderId: string;
   /** Номер раунда; не задан — снимок текущего круга. */
   round?: number;
 }
+
+/** Демо-сцена раундов живёт у одного тендера; остальным отвечает статический
+ *  снимок (пока данные есть только у двух). */
+const DEMO_TENDER_ID = 'T-2026-014';
 
 /* ── ДЕМО-СЦЕНАРИЙ ──────────────────────────────────────────────────────────
    Три снимка одной истории торгов (сцены 4 → 6 → 7). Курсор — состояние
@@ -39,6 +43,11 @@ let cursor = 0;
  *  несколько подач (второй раунд — сначала одно новое КП, потом два), и
  *  «раунд 2» означает его состояние НА СЕЙЧАС, а не первую из них. */
 export async function fetchComparison(query: ComparisonQuery): Promise<Comparison | null> {
+  if (query.tenderId !== DEMO_TENDER_ID) {
+    /* Раундов у статических тендеров нет: «раунд N» мимо текущего — данных
+       нет, и это не пустое сравнение, а другой экран. */
+    return query.round === undefined ? MOCK_AXP : null;
+  }
   const seen = TIMELINE.slice(0, cursor + 1);
   if (query.round === undefined) return seen[seen.length - 1];
   return [...seen].reverse().find((snapshot) => snapshot.roundNumber === query.round) ?? null;
@@ -50,8 +59,10 @@ export async function fetchComparison(query: ComparisonQuery): Promise<Compariso
  *  которая это дёргает, — часть демо-раздела «Раунды».
  *
  *  Возвращает `false`, когда подавать больше некому: кнопка обязана погаснуть,
- *  а не делать вид, что сработала. */
-export async function simulateNextSubmission(): Promise<boolean> {
+ *  а не делать вид, что сработала. У статических тендеров (вне демо-сцены)
+ *  ленты подач нет вовсе — `false` сразу. */
+export async function simulateNextSubmission(tenderId?: string): Promise<boolean> {
+  if (tenderId !== undefined && tenderId !== DEMO_TENDER_ID) return false;
   if (cursor >= TIMELINE.length - 1) return false;
   cursor += 1;
   return true;

@@ -41,6 +41,14 @@ import { findScrollParent } from './scroll-parent';
  *         остаётся как есть. Горизонтальное панорамирование порог не трогает:
  *         интересует только вертикальная составляющая.
  *
+ *         ── панорама средней кнопкой ──
+ *         Зажатая средняя кнопка тащит содержимое ленты под курсором по обеим
+ *         осям: на пяти-шести КП лента шире экрана всегда, а мыши без
+ *         горизонтального колеса — норма, и единственной альтернативой была
+ *         полоса прокрутки внизу, то есть увод курсора от данных. Родной
+ *         автоскролл Chrome при этом гасится (иначе по ленте едут двое), а
+ *         указатель захватывается — жест не рвётся на краю блока.
+ *
  *         ИЗВЕСТНАЯ ГРАНИЦА: тач-драг гейтом не ловится — это другой тип
  *         жеста (wheel там не возникает), и ловить его значит писать свой
  *         скролл-движок. На таче лента скроллится напрямую.
@@ -79,6 +87,7 @@ export function useTableDock({ focusRowId, onHeadStuckChange }: {
        шум тачпада вокруг нуля и расхождение rect'ов на субпиксели. */
     const EPS = 2;
     let lastTop = el.scrollTop;
+
     /* Скроллблок страницы ищется ОДИН раз на подписку, а не на каждое колесо:
        поиск идёт через getComputedStyle по цепочке предков, а тот посреди
        обработчика колеса ФОРСИРУЕТ пересчёт стилей — при прокрутке стили
@@ -118,6 +127,55 @@ export function useTableDock({ focusRowId, onHeadStuckChange }: {
     };
     el.addEventListener('wheel', onWheel, { passive: false });
 
+    /* ── панорама СРЕДНЕЙ КНОПКОЙ ─────────────────────────────────────────
+        Лента на пяти-шести КП шире экрана всегда, а мышь без горизонтального
+        колеса — норма: остаётся тащить полосу прокрутки внизу, то есть
+        уводить курсор от данных, на которые смотришь. Зажатая средняя кнопка
+        двигает содержимое под курсором по ОБЕИМ осям сразу — жест из карт и
+        САПР, знакомый той же аудитории (решение владельца 24.08.2026).
+
+        preventDefault на pointerdown обязателен: иначе Chrome вешает
+        собственный автоскролл-«компас», и дальше по ленте едут двое. Захват
+        указателя нужен по той же причине, по какой он нужен любому драгу —
+        курсор, ушедший за край блока, не должен ронять жест на полпути.
+        Скролл двигается ПРОТИВ движения мыши: тащим лист, а не рамку.
+        Клавиатура своё уже имеет — стрелки на сфокусированном регионе. */
+    let panFrom: number | null = null;
+    /* Дельта считается по clientX/clientY, а НЕ по movementX/movementY:
+       последние приходят от ОС в её собственных единицах — на масштабе
+       дисплея, на удалённом рабочем столе и в автоматизации они то занижены,
+       то нули. Разность двух своих же координат врать не умеет. */
+    let panAt = { x: 0, y: 0 };
+    const onPanStart = (e: PointerEvent) => {
+      if (e.button !== 1) return;
+      e.preventDefault();
+      panFrom = e.pointerId;
+      panAt = { x: e.clientX, y: e.clientY };
+      el.setPointerCapture(e.pointerId);
+      el.style.cursor = 'grabbing';
+    };
+    const onPanMove = (e: PointerEvent) => {
+      if (panFrom === null) return;
+      el.scrollLeft -= e.clientX - panAt.x;
+      el.scrollTop -= e.clientY - panAt.y;
+      panAt = { x: e.clientX, y: e.clientY };
+    };
+    const onPanEnd = (e: PointerEvent) => {
+      if (panFrom === null) return;
+      if (el.hasPointerCapture(panFrom)) el.releasePointerCapture(panFrom);
+      panFrom = null;
+      el.style.cursor = '';
+      e.preventDefault();
+    };
+    /* Средний клик по ссылке открыл бы вкладку, по тексту в X11 — вставил бы
+       буфер: жест закончился панорамой, и «клика» после него не было. */
+    const onAuxClick = (e: MouseEvent) => { if (e.button === 1) e.preventDefault(); };
+    el.addEventListener('pointerdown', onPanStart);
+    el.addEventListener('pointermove', onPanMove);
+    el.addEventListener('pointerup', onPanEnd);
+    el.addEventListener('pointercancel', onPanEnd);
+    el.addEventListener('auxclick', onAuxClick);
+
     const evaluate = () => {
       const top = el.scrollTop;
       const down = top > lastTop;
@@ -138,6 +196,11 @@ export function useTableDock({ focusRowId, onHeadStuckChange }: {
     return () => {
       el.removeEventListener('wheel', onWheel);
       el.removeEventListener('scroll', evaluate);
+      el.removeEventListener('pointerdown', onPanStart);
+      el.removeEventListener('pointermove', onPanMove);
+      el.removeEventListener('pointerup', onPanEnd);
+      el.removeEventListener('pointercancel', onPanEnd);
+      el.removeEventListener('auxclick', onAuxClick);
     };
   }, []);
 

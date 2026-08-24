@@ -4,6 +4,7 @@ import { Badge } from '@/shared/ui/Badge';
 import { Icon } from '@/shared/ui/Icon';
 import { VisuallyHidden } from '@/shared/ui/VisuallyHidden';
 import { bidStatus, money, type Bid } from '@/entities/comparison';
+import { Tooltip } from '@/shared/ui/Tooltip';
 import s from './TenderCompare.module.css';
 
 /**
@@ -30,11 +31,16 @@ import s from './TenderCompare.module.css';
  *         вердикт, при любой перекраске остающаяся на месте.
  *         collapsed прячет тело всех карточек разом — состояние живёт у
  *         <TenderCompare>: колонки сравнивают, а не разглядывают по одной.
+ *         ИМЯ ОБРЕЗАЕТСЯ МНОГОТОЧИЕМ (колонка фиксированной ширины, решение
+ *         владельца 24.08.2026): полное название всплывает <Tooltip>'ом по
+ *         наведению и фокусу — имя контрагента важно, но не ключевое, лучше
+ *         уместить больше данных.
  * A11Y:   каждый контрол назван aria-label'ом с именем подрядчика; состояние
- *         звезды — aria-pressed, свёртывания — aria-expanded.
+ *         звезды — aria-pressed, свёртывания — aria-expanded. Полное имя
+ *         читается из текста целиком: многоточие — только визуальная обрезка.
  *
  * @example
- * <ContractorCard bid={bid} total={positions.length} col={choose(tint, bid)}
+ * <ContractorCard bid={bid} total={positions.length} col={tint[id]}
  *                 starred onStar={…} onPaint={…} onOpen={…}
  *                 collapsed={collapsed} onFold={toggleCollapsed} />
  */
@@ -45,8 +51,9 @@ export function ContractorCard({
   /** Сколько всего позиций в смете — знаменатель подписи «расценки есть у N
    *  из M». Пропом, а не из модуля: длина сметы приходит с данными. */
   total: number;
-  /** Готовая CSS-строка цвета: карточка не знает, ранжир его дал или рука. */
-  col: string;
+  /** Ручной цвет колонки; нет — карточка белая (дефолтной подкраски по
+   *  ранжиру больше нет). */
+  col?: string;
   starred: boolean;
   collapsed: boolean;
   onStar: () => void;
@@ -61,8 +68,8 @@ export function ContractorCard({
   return (
     // Целиком карточка НЕ кликается: в ней четыре собственных контрола, и
     // «клик мимо них» открывал модалку всякий раз, когда рука промахивалась.
-    // Досье открывают две явные цели — имя и стрелка напротив статуса.
-    <div className={s.card} style={{ '--col': col } as CSSProperties}>
+    // Досье открывают две явные цели — имя и стрелка досье.
+    <div className={s.card} style={(col ? { '--col': col } : {}) as CSSProperties}>
       <header className={s.cardHead}>
         <button
           type="button"
@@ -79,19 +86,23 @@ export function ContractorCard({
             теперь явная цель одна: стрелка досье. Медаль стоит ПЕРЕД именем,
             внутри центрируемой ячейки: пара «медаль + имя» центрируется как
             одно целое, и знак переживает свёртывание карточек — в сложенном
-            виде шапка остаётся с телом-именем, вердикт при нём. */}
-        <p className={s.cardName}>
-          {rank === 1 ? (
-            <span
-              className={s.leader}
-              title="Лучшее предложение — минимальный итог среди поданных КП"
-              aria-hidden="true"
-            >
-              <Icon name="skill" />
-            </span>
-          ) : null}
-          {contractor.name}
-        </p>
+            виде шапка остаётся с телом-именем, вердикт при нём.
+            Tooltip поверх: колонка фиксированной ширины, длинное имя уходит
+            в многоточие, полное название всплывает по наведению. */}
+        <Tooltip text={contractor.name}>
+          <p className={s.cardName}>
+            {rank === 1 ? (
+              <span
+                className={s.leader}
+                title="Лучшее предложение — минимальный итог среди поданных КП"
+                aria-hidden="true"
+              >
+                <Icon name="skill" />
+              </span>
+            ) : null}
+            {contractor.name}
+          </p>
+        </Tooltip>
 
         {/* Место в ранжире — текстом для скринридера: порядок колонок и их
             цвет говорят то же самое, но заливка в 7% для скринридера не

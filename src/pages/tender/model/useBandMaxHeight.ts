@@ -33,10 +33,18 @@ export function useBandMaxHeight(ref: RefObject<HTMLElement | null>, active: boo
     if (!active || !el || !scroller) return;
 
     let raf = 0;
+    /* Наблюдатель срабатывает и на ШИРИНУ — а её двигает каждый кадр анимации
+       сайдбара и панели «Анализ ИИ», хотя потолок высоты от неё не зависит.
+       Сравнение с прошлой высотой снимает с этих кадров getComputedStyle,
+       то есть принудительный пересчёт стилей посреди чужой анимации. */
+    let lastH = -1;
     const measure = () => {
       raf = 0;
+      const h = scroller.clientHeight;
+      if (h === lastH) return;
+      lastH = h;
       const pad = parseFloat(getComputedStyle(scroller).paddingBottom) || 0;
-      setMax(scroller.clientHeight - pad);
+      setMax(h - pad);
     };
     /* rAF-троттлинг — как в useBandWidth, и по более острой причине. Здесь
        наблюдается ПРЕДОК, чью высоту потолок и определяет: getComputedStyle

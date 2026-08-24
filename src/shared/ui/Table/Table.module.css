@@ -74,14 +74,18 @@
   border-bottom: 1px solid var(--cu-border-default);
 }
 .table tbody tr:last-child{ border-bottom: 0; }
-.table tbody tr:hover{ background: var(--cu-state-hover-subtle); }
+.table tbody tr:hover{ background: var(--row-hover-bg, var(--cu-state-hover-subtle)); }
 /* ОТЛИЧИЕ ОТ shadcn: у него шапка отделена только границей и на плотной
    таблице сливается с первой строкой. Даём ей «тихую» заливку в покое —
    --cu-fill-subtle (.035). Ступень выбрана именно эта: ховер строки ниже идёт
    .05, и шапка обязана быть светлее его, иначе подсветка под курсором
    читалась бы как вторая шапка. Зебры по той же причине нет: вторая заливка в
-   покое съела бы разницу с ховером. */
-.table thead{ background: var(--cu-fill-subtle); }
+   покое съела бы разницу с ховером.
+
+   ОБЕ ЗАЛИВКИ — РУЧКИ (--table-head-bg, --row-hover-bg): потребитель со своей
+   лестницей уровней (сравнение КП: тёмная шапка → секция → белая строка)
+   перекрывает их на своём корне, не трогая соседние таблицы. */
+.table thead{ background: var(--table-head-bg, var(--cu-fill-subtle)); }
 .table th{
   height: 40px;
   padding-inline: var(--table-pad-x, 8px);
@@ -110,7 +114,20 @@
    блоку, исключена: overflow:hidden срезал бы тень и кольцо фокуса карточки,
    которая в ней стоит. */
 .table--fixed{ table-layout: fixed; }
-.table--fixed :is(th, td):not(.cell--card){ overflow: hidden; text-overflow: ellipsis; }
+/* ПОЧЕМУ ЗДЕСЬ НЕТ :is(th, td). Он читался лучше, но стоил дорого: селектор,
+   у которого в СУБЪЕКТЕ два разных тега, движок не может разложить по
+   тег-корзинам и кладёт в универсальную — то есть примеряет к КАЖДОМУ
+   элементу, чей стиль пересчитывается, да ещё с обходом предков. На этом
+   экране таких правил набралось девять, и цена вылезла ровно там, где
+   пересчёт идёт чаще всего: при прокрутке курсор стоит, строки едут под ним,
+   и каждый кадр меняет наведённую строку. Замер (puppeteer, --cpu 4, 40
+   движений курсора): 133мс пересчёта стилей против 62мс без :is() при том же
+   числе пересчитанных элементов. Развёрнутая пара `th, td` попадает в свои
+   корзины и для чужих элементов не проверяется вовсе; специфичность у
+   :is(th, td) и у одиночного тега одинаковая (0,0,1), поэтому замена
+   механическая и каскад не двигает. */
+.table--fixed th:not(.cell--card),
+.table--fixed td:not(.cell--card){ overflow: hidden; text-overflow: ellipsis; }
 
 /* ── ЛИПКАЯ ШАПКА (проп stickyHead) ────────────────────────────────────────
    Шапка прилипает к верху СКРОЛЛА СТРАНИЦЫ нативным sticky: строки едут под
@@ -152,7 +169,7 @@
 .table--sticky-head thead th{
   position: sticky; top: 0; z-index: 5;
   background-color: var(--cu-background-main);
-  background-image: linear-gradient(var(--cu-fill-subtle), var(--cu-fill-subtle));
+  background-image: linear-gradient(var(--table-head-bg, var(--cu-fill-subtle)), var(--table-head-bg, var(--cu-fill-subtle)));
   box-shadow: 0 1px 0 var(--cu-border-default);
 }
 
@@ -177,7 +194,8 @@
 
    Угловая ячейка липнет по обеим осям сразу и обязана быть выше их обеих,
    иначе на пересечении её пробивает то шапка, то первая колонка. */
-.table--sticky-col :is(th, td):first-child{
+.table--sticky-col th:first-child,
+.table--sticky-col td:first-child{
   position: sticky; left: 0; z-index: 4;
   background-color: var(--cu-background-main);
 }
@@ -189,7 +207,8 @@
    прокрутке): у неподвижной таблицы липкая колонка ничем не отделена от
    соседней, и лишняя линия читалась бы разделителем колонок. */
 @supports (animation-timeline: scroll(nearest inline)){
-  .table--sticky-col :is(th, td):first-child{
+  .table--sticky-col th:first-child,
+  .table--sticky-col td:first-child{
     animation: sticky-col-edge steps(1) both;
     animation-timeline: scroll(nearest inline);
     animation-range: 0 1px;
@@ -203,8 +222,21 @@
 /* Строчные тона поверх непрозрачной базы якоря. Без них прокрученная строка
    теряет на якоре и ховер, и заливку раздела/итога — тон остался бы только у
    уехавших колонок, и строка читалась бы разорванной. */
-.table--sticky-col tbody tr:hover :is(th, td):first-child{
-  background-image: linear-gradient(var(--cu-state-hover-subtle), var(--cu-state-hover-subtle));
+.table--sticky-col tbody tr:hover th:first-child,
+.table--sticky-col tbody tr:hover td:first-child{
+  background-image: linear-gradient(var(--row-hover-bg, var(--cu-state-hover-subtle)), var(--row-hover-bg, var(--cu-state-hover-subtle)));
+}
+
+/* ЯЧЕЙКА НА ВСЮ ШИРИНУ ЛЕНТЫ (tableCell.fullRow) — не липнет. Строка-заголовок
+   секции (colSpan на все колонки) первой ячейкой попадает под правило
+   sticky-col и застыла бы у левой кромки одной своей колонкой, порвав
+   собственный colSpan; ей у кромки нечего держать. Селектор с тем же началом,
+   что у правила выше, — порядок в файле решает ничью специфичности. */
+.table--sticky-col th.cell-full-row,
+.table--sticky-col td.cell-full-row{
+  position: static;
+  background-color: transparent;
+  animation: none;
 }
 
 /* ── модификаторы ячеек ─────────────────────────────────────────────────── */

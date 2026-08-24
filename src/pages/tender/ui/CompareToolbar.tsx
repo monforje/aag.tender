@@ -12,7 +12,7 @@ import {
   type MetricTotals, type PresetId, type RowFacts, type RowViewId, type SatelliteId,
 } from '@/entities/comparison';
 import { CompareLegend } from './CompareLegend';
-import { CompareSettings } from './CompareSettings';
+import { CompareFilters, CompareSettings } from './CompareSettings';
 import s from './CompareToolbar.module.css';
 
 const METRICS = Object.keys(METRIC_LABEL) as CompareMetricId[];
@@ -32,6 +32,10 @@ interface ToolbarProps {
    *  точек торгов разбора. */
   totals: MetricTotals;
   modified: boolean;
+  /** Подкраска колонок по ранжиру: тумблер живёт в окне параметров, состояние
+   *  — у <TenderCompare> (эргономика чтения, не ось среза). */
+  rankTint: boolean;
+  onRankTint: (on: boolean) => void;
   /** Вид перестроен переходом «анализ → таблица»: чип с ВОЗВРАТОМ полного
    *  пользовательского вида (05 §7). Старый «Изменён · Сброс» при этом молчит:
    *  два чипа про один уход от базы — забор. */
@@ -65,7 +69,8 @@ interface ToolbarProps {
  *         closeOnSelect={false}; у свитчей подпись видима и aria-label.
  */
 export function CompareToolbar({
-  view, thresholds, onThresholds, allRows, totals, modified, analysisApplied, onRestoreView, onPreset, onPatch,
+  view, thresholds, onThresholds, allRows, totals, modified, rankTint, onRankTint,
+  analysisApplied, onRestoreView, onPreset, onPatch,
 }: ToolbarProps) {
   return (
     <DropdownGroup>
@@ -183,21 +188,26 @@ export function CompareToolbar({
           </button>
         ) : null}
 
-        <CompareLegend thresholds={thresholds} />
-        {/* Шестерня стоит ПОСЛЕДНЕЙ, на месте прежней кнопки «Фильтры»: по
-            регламенту настройки живут у правого края, а фильтры теперь её
-            вкладка — отдельной кнопки у них больше нет. Седьмой контрол в
-            полосе не читался, а по смыслу предикаты — та же настройка
-            взгляда на таблицу, что и пороги. */}
+        {/* Порядок правого блока — «sets · legend · filters» (решение
+            владельца 24.08.2026): настройки ВИДА (`⚙`), справка и ФИЛЬТРЫ.
+            Предикаты среза вернули отдельной кнопкой-глифом: это
+            бизнес-логика, всегда на виду, а не настройка вида — в одну
+            панель с порогами их схлопывать нельзя. */}
         {onThresholds ? (
           <CompareSettings
             thresholds={thresholds}
             onChange={onThresholds}
             allRows={allRows}
-            filters={view.filters}
-            onFilters={(filters) => onPatch({ filters })}
+            rankTint={rankTint}
+            onRankTint={onRankTint}
           />
         ) : null}
+        <CompareLegend thresholds={thresholds} />
+        <CompareFilters
+          allRows={allRows}
+          filters={view.filters}
+          onFilters={(filters) => onPatch({ filters })}
+        />
         </div>
       </div>
     </DropdownGroup>

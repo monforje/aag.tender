@@ -66,7 +66,8 @@ export const METRIC_LABEL: Record<CompareMetricId, string> = {
 };
 
 export const ROW_VIEW_LABEL: Record<RowViewId, string> = {
-  sections: 'По разделам', weight: 'По весу', potential: 'По потенциалу',
+  /* Термин владельца (24.08.2026): группы сметы — «секции». */
+  sections: 'По секциям', weight: 'По весу', potential: 'По потенциалу',
 };
 
 /** Строка ячейки в терминах модели: главное число, база-стоимость или

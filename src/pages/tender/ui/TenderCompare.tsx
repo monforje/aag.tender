@@ -1,5 +1,5 @@
 import {
-  useEffect, useLayoutEffect, useMemo, useRef, useState,
+  useEffect, useMemo, useState,
   type CSSProperties,
 } from 'react';
 import { cx } from '@/shared/lib/cx';
@@ -8,12 +8,12 @@ import { useCellPopup } from '@/shared/ui/CellPopup';
 import { Icon } from '@/shared/ui/Icon';
 import { ScreenPlaceholder } from '@/shared/ui/Page';
 import { Table, tableCell } from '@/shared/ui/Table';
-import { plural } from '@/shared/lib/plural';
+import { Tooltip } from '@/shared/ui/Tooltip';
 import {
   analyzeComparison, filterRows, flatten, isModifiedView, METRIC_LABEL, metricTotals, rankBids, ROW_VIEW_LABEL, type Bid, type CompareThresholds, type CompareView, type Comparison, type PositionGroup, type PresetId, type RowFacts,
 } from '@/entities/comparison';
 import { choose, resolveTone } from '../model/compareFormat';
-import { computeColumnLayout } from '../model/columns';
+import { computeColumnLayout, titleLimit } from '../model/columns';
 import { useBandMaxHeight } from '../model/useBandMaxHeight';
 import { useBandWidth } from '../model/useBandWidth';
 import { useTableDock } from '../model/useTableDock';
@@ -22,20 +22,9 @@ import { ColumnPainter } from './ColumnPainter';
 import { CompareRow } from './CompareRow';
 import { ContractorCard } from './ContractorCard';
 import { DossierModal } from './DossierModal';
+import { TermsBand } from './TermsBand';
 import { TotalRow } from './TotalRow';
 import s from './TenderCompare.module.css';
-
-/* Хром шапки карточки ВОКРУГ имени: паддинги (12×2), слоты звезды и стрелки
-   (--cu-size-6 по 24), гэпы сетки шапки (6×2) и зазор на округление вверх.
-   Прибавляется к замеренной ширине текста, образуя пол ширины колонки. */
-const NAME_CHROME = 24 * 3 + 6 * 2 + 2;
-/* Медаль лидера с её отступом — добавляется только колонке первого места. */
-const LEADER_CHROME = 14 + 5;
-
-const sameFloors = (a: Record<string, number>, b: Record<string, number>): boolean => {
-  const ka = Object.keys(a);
-  return ka.length === Object.keys(b).length && ka.every((k) => a[k] === b[k]);
-};
 
 /** Ширина на <col> инлайном; undefined — кадр до первого замера. */
 const pxStyle = (w?: number): { width: string } | undefined =>
@@ -50,7 +39,7 @@ const pxStyle = (w?: number): { width: string } | undefined =>
  * НЕ ДЛЯ: реестра тендеров (см. TenderRegistryPage) и списка самих КП
  *         (раздел «КП» — это документы, а не сопоставление цифр).
  *
- * ДАННЫЕ: приходят ПРОПАМИ — смета разделами и КП подрядчиков (тип
+ * ДАННЫЕ: приходят ПРОПАМИ — смета секциями и КП подрядчиков (тип
  *         Comparison), пометки анализа — готовыми полями КП (`marks`),
  *         пороги аналитики — настройками тендера. Всё производное считается
  *         `analyzeComparison()` одним проходом: таблица, фильтры, счётчики и
@@ -67,18 +56,23 @@ const pxStyle = (w?: number): { width: string } | undefined =>
  *         лучшей НЕаномальной цене при живой конкуренции и гаснет вне режима
  *         «Цена»: на колонке процентов он означал бы другое.
  *         ОТКАЗ И ПРОБЕЛ — РАЗНЫЕ СОСТОЯНИЯ (см. <BidCell>).
- *         ЦВЕТ КОЛОНКИ — ПОДСКАЗКА, А НЕ ВЕРДИКТ: базово его ставит ранжир,
- *         перекрашивается рукой через <ColumnPainter>; смысловые тона пометок
- *         при этом рукой не трогаются никогда.
+ *         ЦВЕТ КОЛОНКИ — ПОДСКАЗКА, А НЕ ВЕРДИКТ: в покое колонки белые,
+ *         подкраска по ранжиру включается тумблером в окне параметров, а
+ *         поверх неё колонку перекрашивают рукой через <ColumnPainter>;
+ *         смысловые тона пометок при этом рукой не трогаются никогда.
  *         СКРОЛЛ ЖИВЁТ В БЛОКЕ (.band), а не на странице: горизонталь нужна
  *         шести колонкам подрядчиков, но панорамировать весь экран ради неё
  *         нельзя — уезжала бы сводка с вкладками, а док «Анализ ИИ» справа
  *         переставал бы совпадать с содержимым. Потолок высоты блока ставит
  *         useBandMaxHeight, липкая шапка и автосайдбар — useTableDock.
- *         ШИРИНЫ СЧИТАЕТ АЛГОРИТМ (model/columns.ts): пол каждой колонки
- *         подрядчика — её полное имя (замерщик .measure); равная доля в
- *         вилке пол/потолок остаётся базой, длинное имя раздвигает свою
- *         колонку, теснота жмёт левый блок и название, дно — панорама.
+ *         ШИРИНЫ: колонки подрядчиков ФИКСИРОВАНЫ одной константой
+ *         (model/columns.ts, BID_FIXED — решение владельца 24.08.2026,
+ *         отменившее «пол по полному имени»); длинное имя обрезается
+ *         карточкой с всплытием полного названия, теснота жмёт левый блок
+ *         и название, дно — панорама. НАЗВАНИЕ ПОЗИЦИИ режется по ЗНАКАМ
+ *         (`titleLimit()` там же), а не CSS-многоточием: лимит — целое число
+ *         и меняется в разы реже ширины, поэтому колонка названий перестала
+ *         пересчитываться каждый кадр.
  *         ШАПКА И САЙДБАР: шапка таблицы прилипает к верхней кромке блока
  *         нативным sticky (<Table stickyHead>) — без JS в прокрутке; движение
  *         скролла ленты вниз прячет сайдбар в рейл. Механика — в хуке
@@ -171,6 +165,12 @@ export function TenderCompare({
      Это эргономика ЧТЕНИЯ — того же рода, что `folded` и `collapsed` рядом:
      переживает смену пресета, не переживает уход со страницы. */
   const [pinned, setPinned] = useState(false);
+  /* ПОДКРАСКА ПО РАНЖИРУ — ТУМБЛЕР, а не константа (решение владельца
+     24.08.2026, вторая волна): дефолт сняли, но сам режим оказался нужен, и
+     живёт он там же, где `pinned` и `collapsed`, — это эргономика ЧТЕНИЯ.
+     В `CompareView` ему не место по тем же двум причинам: чип «Изменён»
+     поднялся бы на раскраску, а смена пресета её сбрасывала бы. */
+  const [rankTint, setRankTint] = useState(false);
   const [folded, setFolded] = useState<Record<string, boolean>>({});
   const [tint, setTint] = useState<Record<string, string>>({});
   const [dossier, setDossier] = useState<Bid | null>(null);
@@ -179,6 +179,7 @@ export function TenderCompare({
   const [paint, setPaint] = useState<{ bid: Bid; at: DOMRect } | null>(null);
 
   const paintValue = (bid: Bid) => tint[bid.contractor.id] ?? resolveTone(bid.tone);
+  const colorOf = (bid: Bid) => choose(tint, bid, rankTint);
 
   /* Один попап на таблицу обслуживает все пометки. При смене нарезки строки
      пересобираются — держать подсказку не за что. Зависимости — сами оси:
@@ -199,62 +200,36 @@ export function TenderCompare({
   const bandMaxH = useBandMaxHeight(dockRef, active);
   const bandWidth = useBandWidth(dockRef, active);
 
-  /* ШИРИНА КОЛОНКИ ОТ ПОЛНОГО ИМЕНИ. Имя подрядчика — то, по чему колонку
-     опознают, поэтому пол каждой колонки — её собственное имя целиком:
-     скрытая копия шапки (ниже, .measure с тем же классом имени) меряет
-     тексты, и пол уезжает в расчётчик ширин. Пересчёт — при смене состава
-     или имён, смене лидера (медаль добавляет хром) и после догрузки
-     шрифтов; равные результаты состояние не двигают, иначе замер зациклил
-     бы перерендер. */
-  const nameNodes = useRef(new Map<string, HTMLSpanElement>());
-  const [nameFloors, setNameFloors] = useState<Record<string, number>>({});
-  /* В ключе — и состав имён, и текущий лидер: медаль добавляет колонке
-     первого места свой хром, и её переезд обязан пересчитать полы. */
-  const leaderId = bids.find((bid) => bid.rank === 1)?.contractor.id;
-  const namesKey =
-    contractors.map((c) => `${c.id}:${c.name}`).join('|') + '#' + String(leaderId);
-  /* Layout-эффект: полы обязаны встать до первой отрисовки, иначе колонки
-     на кадр рождаются равными долями и едут у пользователя на глазах.
-     document.fonts.ready — асинхронная доводка после подгрузки шрифтов. */
-  useLayoutEffect(() => {
-    let cancelled = false;
-    const measure = () => {
-      if (cancelled) return;
-      const floors: Record<string, number> = {};
-      for (const bid of bids) {
-        const node = nameNodes.current.get(bid.contractor.id);
-        if (!node) continue;
-        floors[bid.contractor.id] =
-          Math.ceil(node.offsetWidth) + NAME_CHROME + (bid.rank === 1 ? LEADER_CHROME : 0);
-      }
-      setNameFloors((prev) => (sameFloors(prev, floors) ? prev : floors));
-    };
-    measure();
-    document.fonts?.ready.then(measure);
-    return () => { cancelled = true; };
-    // Зависимость — состав имён: сам перечень bids пересоздаётся каждым
-    // рендером, и эффект по нему повторялся бы на любом постороннем движении.
-  }, [namesKey]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  /* РАСЧЁТ ШИРИН КОЛОНОК: чистая функция от видимой ширины и полов имён
-     (механика и три режима — в model/columns.ts). Пересобирается только
-     при смене ширины блока или полов; null — кадр до первого замера. */
-  const bidFloors = useMemo(
-    () => contractors.map((c) => ({ id: c.id, floor: nameFloors[c.id] ?? 0 })),
-    [contractors, nameFloors],
-  );
+  /* ШИРИНА КОЛОНКИ КП ФИКСИРОВАНА (model/columns.ts, BID_FIXED): замерщик
+      полных имён и его хромы ушли вместе с решением «пол по имени» — имя
+      длиннее константы обрезает <ContractorCard>, полное название всплывает
+      по наведению. Расчёт — чистая функция от видимой ширины блока; null —
+      кадр до первого замера ширины. */
   const layout = useMemo(
-    () => (bandWidth == null ? null : computeColumnLayout({ available: bandWidth, bids: bidFloors })),
-    [bandWidth, bidFloors],
+    () => (bandWidth == null
+      ? null
+      : computeColumnLayout({ available: bandWidth, bids: contractors })),
+    [bandWidth, contractors],
   );
+  /* Ширина таблицы = сумма колонок ровно до пикселя: с ней исполняются
+      ширины <col> при layout="fixed" (max-content их теряет). Инлайном на
+      самой таблице — смена ширины валидирует её РАСКЛАДКУ, но не стиль
+      всех ячеек, каких дала бы наследуемая переменная на обёртке. */
+  const tableWidth = useMemo(() => (layout == null ? undefined
+    : layout.qty + layout.unit + layout.spread + layout.title
+      + Object.values(layout.bids).reduce((acc, w) => acc + w, 0)),
+  [layout]);
   /* Закреплять имеет смысл ТОЛЬКО в панораме: в двух других режимах columns.ts
      раскладывает колонки ровно в ширину ленты, горизонтального хода нет вовсе,
      и закреплённая колонка ничем не отличалась бы от обычной. `pan` — это и
      есть «сумма полов больше доступного места», единственный режим с
      прокруткой. */
-  const pannable = layout?.pan ?? false;
+  /* ПОТОЛОК НАЗВАНИЯ В ЗНАКАХ. Целое число, и это условие работы memo у
+     <CompareRow>: ширина ленты дрожит каждый кадр анимации панели и ухода
+     сайдбара, а лимит меняется раз в несколько десятков пикселей. */
+  const limit = titleLimit(layout?.title);
 
-  /* Строки, прошедшие ВСЕ предикаты; разделы собирают свои из них же.
+  /* Строки, прошедшие ВСЕ предикаты; секции собирают свои из них же.
      Для ПОДЫТОГОВ узла нужен полный набор его позиций: фильтр прячет строки,
      но суммы не двигает. */
   const visible = useMemo(() => filterRows(facts.rows, view.filters), [facts, view.filters]);
@@ -292,6 +267,8 @@ export function TenderCompare({
           allRows={facts.rows}
           totals={totals}
           modified={modified}
+          rankTint={rankTint}
+          onRankTint={setRankTint}
           analysisApplied={analysisApplied}
           onRestoreView={onRestoreView}
           onPreset={onPreset}
@@ -324,6 +301,7 @@ export function TenderCompare({
           stickyHead
           stickyCol={pinned}
           layout="fixed"
+          width={tableWidth}
           caption={[
             `Показано ${visible.length} из ${facts.rows.length} позиций`,
             `основной показатель «${METRIC_LABEL[view.mainMetric]}»`,
@@ -335,23 +313,31 @@ export function TenderCompare({
         >
           {/* Цвет колонки — на <col>, а не на каждой ячейке: фон колонки рисуется
               НИЖЕ фона строки, поэтому ховер продолжает читаться поверх заливки.
-              ШИРИНЫ ставит расчётчик (model/columns.ts) инлайном: до первого
-              замера кадр живёт без них, дальше ширина есть у каждого <col>. */}
+              ДЕФОЛТНОЙ ПОДКРАСКИ ПО РАНЖИРУ НЕТ (решение владельца 24.08.2026):
+              в покое колонка белая. --col приходит либо от ручной палитры,
+              либо от тумблера «Раскрасить по ранжированию» в окне параметров;
+              ручной цвет старше — перекрашенная колонка тумблером не
+              перебивается. ШИРИНЫ ставит расчётчик
+              (model/columns.ts) инлайном: до первого замера кадр живёт без них,
+              дальше ширина есть у каждого <col>. */}
           <colgroup className={s.cols}>
             <col className={s.colRule} style={pxStyle(layout?.title)} />
             <col className={s.colRule} style={pxStyle(layout?.qty)} />
             <col className={s.colRule} style={pxStyle(layout?.unit)} />
             <col className={s.colRule} style={pxStyle(layout?.spread)} />
-            {bids.map((bid, i) => (
-              <col
-                key={bid.contractor.id}
-                className={cx(s.colTint, i < bids.length - 1 && s.colRule)}
-                style={{
-                  ...pxStyle(layout?.bids[bid.contractor.id]),
-                  '--col': choose(tint, bid),
-                } as CSSProperties}
-              />
-            ))}
+            {bids.map((bid, i) => {
+              const col = colorOf(bid);
+              return (
+                <col
+                  key={bid.contractor.id}
+                  className={cx(col && s.colTint, i < bids.length - 1 && s.colRule)}
+                  style={{
+                    ...pxStyle(layout?.bids[bid.contractor.id]),
+                    ...(col ? { '--col': col } : {}),
+                  } as CSSProperties}
+                />
+              );
+            })}
           </colgroup>
           <thead>
             <tr>
@@ -359,41 +345,48 @@ export function TenderCompare({
                   контролов: полоса уже отказала седьмому контролу (см.
                   CompareToolbar), а «закрепить» относится к ОДНОЙ конкретной
                   колонке — у её заголовка оно и объясняет себя без подписи.
-                  Показывается только когда есть что закреплять: лента шире
-                  своей видимой области. Иначе кнопка обещала бы эффект,
-                  которого при полностью влезающей таблице не существует. */}
-              <th scope="col">
+                  ПОКАЗЫВАЕТСЯ ВСЕГДА (решение владельца 24.08.2026, вторая
+                  волна). Прежний гейт «только когда лента шире видимой
+                  области» звучал разумно, но означал контрол, которого на
+                  одном тендере нет, а на другом есть: наличие кнопки зависело
+                  от числа КП и ширины окна — то есть от ДАННЫХ. Закрепление
+                  при влезающей таблице ничего не меняет и ничего не ломает,
+                  а предсказуемое место контрола дороже экономии на одном
+                  глифе. */}
+              <th scope="col" className={s.headRule}>
                 Позиция
-                {pannable ? (
-                  <button
-                    type="button"
-                    className={cx(s.pin, pinned && s.pinOn)}
-                    aria-pressed={pinned}
-                    title={pinned
-                      ? 'Открепить колонку — она снова будет уезжать при прокрутке'
-                      : 'Закрепить колонку — останется на месте при прокрутке вправо'}
-                    onClick={() => setPinned((on) => !on)}
-                  >
-                    <Icon name={pinned ? 'pinFilled' : 'pin'} />
-                    <span className="visually-hidden">
-                      {pinned ? 'Открепить колонку «Позиция»' : 'Закрепить колонку «Позиция»'}
-                    </span>
-                  </button>
-                ) : null}
+                <button
+                  type="button"
+                  className={cx(s.pin, pinned && s.pinOn)}
+                  aria-pressed={pinned}
+                  title={pinned
+                    ? 'Открепить колонку — она снова будет уезжать при прокрутке'
+                    : 'Закрепить колонку — останется на месте при прокрутке вправо'}
+                  onClick={() => setPinned((on) => !on)}
+                >
+                  <Icon name={pinned ? 'pinFilled' : 'pin'} />
+                  <span className="visually-hidden">
+                    {pinned ? 'Открепить колонку «Позиция»' : 'Закрепить колонку «Позиция»'}
+                  </span>
+                </button>
               </th>
-              <th scope="col" className={tableCell.numeric}>Количество</th>
-              <th scope="col">Единица</th>
-              <th scope="col" className={tableCell.numeric}>Разброс</th>
-            {bids.map((bid) => (
+              <th scope="col" className={cx(tableCell.numeric, s.headRule)}>Количество</th>
+              <th scope="col" className={s.headRule}>Единица</th>
+              <th scope="col" className={cx(tableCell.numeric, s.headRule)}>Разброс</th>
+            {bids.map((bid, i) => (
               <th
                 scope="col"
                 key={bid.contractor.id}
-                className={cx(tableCell.card, flashCols?.has(bid.contractor.id) && s.colFlash)}
+                className={cx(
+                  tableCell.card,
+                  i < bids.length - 1 && s.headRule,
+                  flashCols?.has(bid.contractor.id) && s.colFlash,
+                )}
               >
                 <ContractorCard
                   bid={bid}
                   total={positions.length}
-                  col={choose(tint, bid)}
+                  col={colorOf(bid)}
                   starred={starred.includes(bid.contractor.id)}
                   onStar={() => onToggleStar(bid.contractor.id)}
                   onPaint={(at) => setPaint({ bid, at })}
@@ -419,44 +412,51 @@ export function TenderCompare({
               </tr>
             </tbody>
           ) : view.rowView === 'sections' ? (
-            /* По разделам: заголовок, строки, подытог — и все три только из
-               видимых строк. Раздел, не прошедший фильтр, исчезает целиком:
-               пустой блок читался бы как сбой. */
-            groups.map((group) => {
-              const rows = rowsOfGroup(group);
-              if (!rows.length) return null;
-              const open = !folded[group.id];
-              return (
-                <tbody key={group.id}>
-                  <tr className={s.groupRow}>
-                    {/* Шапка раздела — <th scope="rowgroup">: заголовок для СТРОК
-                        под ним, а не ячейка со значением. Ровно это и говорил
-                        комментарий здесь всегда, а стоял `colgroup` — то есть
-                        «заголовок для группы КОЛОНОК», чем раздел сметы не
-                        является ни в каком приближении. */}
-                    <th scope="rowgroup" className={cx(tableCell.card, s.groupHead)}>
-                      <button
-                        type="button"
-                        className={s.groupToggle}
-                        aria-expanded={open}
-                        aria-label={`${group.title}: ${open ? 'свернуть' : 'развернуть'} раздел`}
-                        onClick={() => setFolded((all) => ({ ...all, [group.id]: open }))}
-                      >
-                        <span className={s.groupTitle}>{group.title}</span>
-                        <span className={cx(s.fold, !open && s.isOn)}>
-                          <Icon name="chevronDown" />
-                        </span>
-                      </button>
-                    </th>
-                    {/* Размер раздела стоит в колонках объёма, но НЕ выглядит
-                        объёмом: капитель 11px третичным тоном. */}
-                    <td className={cx(tableCell.numeric, s.groupMeta)}>{group.positions.length}</td>
-                    <td className={s.groupMeta}>
-                      {plural(group.positions.length, 'позиция', 'позиции', 'позиций')}
-                    </td>
-                    <td />
-                    {bids.map((bid) => <td key={bid.contractor.id} />)}
-                  </tr>
+             /* По секциям: заголовок, строки, подытог — и все три только из
+                видимых строк. Секция, не прошедшая фильтр, исчезает целиком:
+                пустой блок читался бы как сбой. */
+             groups.map((group) => {
+               const rows = rowsOfGroup(group);
+               if (!rows.length) return null;
+               const open = !folded[group.id];
+               return (
+                 <tbody key={group.id}>
+                   {/* Шапка секции — ОДНА ячейка на всю ширину таблицы
+                       (tableCell.fullRow гасит липкость sticky-col): строки
+                       внутри колонок на ней не рисуются, счётчика позиций
+                       больше нет (решение владельца 24.08.2026), это строка-
+                       заголовок блока, а не ряд значений. scope="rowgroup":
+                       заголовок для СТРОК под ним. */}
+                   <tr className={s.groupRow}>
+                     <th
+                       scope="rowgroup"
+                       colSpan={4 + bids.length}
+                       className={cx(tableCell.card, tableCell.fullRow, s.groupHead)}
+                     >
+                       {/* Кнопка-полоса ЛИПНЕТ К ЛЕВОЙ КРОМКЕ видимой области и
+                           стоит её шириной (100cqw — контейнер объявлен на
+                           обёртке таблицы): заголовок центрируется
+                           относительно того, что видит глаз сейчас, а не всей
+                           прокрученной таблицы. Стрелка слева, справа — её
+                           призрак той же ширины: иначе центр названия съезжал
+                           бы на полстрелки. */}
+                       <button
+                         type="button"
+                         className={s.sectionToggle}
+                         aria-expanded={open}
+                         aria-label={`${group.title}: ${open ? 'свернуть' : 'развернуть'} секцию`}
+                         onClick={() => setFolded((all) => ({ ...all, [group.id]: open }))}
+                       >
+                         <span className={cx(s.fold, !open && s.isOn)}>
+                           <Icon name="chevronDown" />
+                         </span>
+                         <Tooltip text={group.title}>
+                           <span className={s.sectionTitle}>{group.title}</span>
+                         </Tooltip>
+                         <span className={s.sectionSpacer} aria-hidden="true" />
+                       </button>
+                     </th>
+                   </tr>
 
                   {/* Итог остаётся и у свёрнутого раздела: ради него и сворачивают.
                       Строки въезжают каскадом по индексу — раскрытие подтверждается
@@ -468,6 +468,7 @@ export function TenderCompare({
                       row={row}
                       enterIndex={i}
                       view={view}
+                      titleLimit={limit}
                       thresholds={thresholds}
                       bids={bids}
                       sumWeight={facts.sumWeight}
@@ -494,6 +495,7 @@ export function TenderCompare({
                     key={row.position.id}
                     row={row}
                     view={view}
+                    titleLimit={limit}
                     thresholds={thresholds}
                     bids={bids}
                     sumWeight={facts.sumWeight}
@@ -513,33 +515,16 @@ export function TenderCompare({
           <tbody>
             <TotalRow label="Итого" rows={facts.rows} bids={bids} metric={view.mainMetric} />
           </tbody>
+
+          {/* Условия поставщиков — матрица ответов формы КП вне цен, выровненная
+              по тем же колонкам. Тендеров без `terms` она не касается вовсе. */}
+          <TermsBand bids={bids} bind={popup.bind} />
         </Table>
         </div>
       </div>
 
       {/* Один попап на таблицу: содержимое подставляется, элемент не меняется. */}
       {popup.view}
-
-      {/* Замерщик имён: копии шапок вне таблицы, тем же классом имени и с
-          медалью у лидера — ширина снимается ровно та, что встанет в
-          колонку. Сиблинг .band: скроллблок обрезал бы измеряемый текст. */}
-      <div className={s.measure} aria-hidden="true">
-        {bids.map((bid) => (
-          <span
-            key={bid.contractor.id}
-            className={s.cardName}
-            ref={(el) => {
-              if (el) nameNodes.current.set(bid.contractor.id, el);
-              else nameNodes.current.delete(bid.contractor.id);
-            }}
-          >
-            {bid.rank === 1 && (
-              <span className={s.leader}><Icon name="skill" /></span>
-            )}
-            {bid.contractor.name}
-          </span>
-        ))}
-      </div>
 
       {/* Досье подрядчика. */}
       <DossierModal bid={dossier} total={positions.length} onClose={() => setDossier(null)} />
