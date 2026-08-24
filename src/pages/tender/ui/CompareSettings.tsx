@@ -52,9 +52,9 @@ const PLAIN_ROWS = [
  * 22.08.2026 — личных и организационных дефолтов нет).
  *
  * КОГДА:  из кнопки `⚙` полосы сравнения (<CompareToolbar>).
- *         Плюс одна настройка ОФОРМЛЕНИЯ — подкраска колонок по ранжиру:
- *         чисел она не меняет, поэтому стоит первой строкой и «Вернуть
- *         системные значения» её не трогает.
+ *         Плюс две настройки ОФОРМЛЕНИЯ — подкраска колонок по ранжиру и
+ *         развёрнутые названия позиций: чисел они не меняют, поэтому стоят
+ *         первыми строками и «Вернуть системные значения» их не трогает.
  * НЕ ДЛЯ: показа отклонения и ставки (галочки спутников живут прямо на
  *         полосе), вида строк и ФИЛЬТРОВ (отдельная кнопка-глиф
  *         <CompareFilters> рядом: бизнес-логика среза всегда на виду, а
@@ -77,7 +77,9 @@ const PLAIN_ROWS = [
  * @example
  * <CompareSettings thresholds={thresholds} onChange={handleThresholds} />
  */
-export function CompareSettings({ thresholds, onChange, allRows, rankTint, onRankTint }: {
+export function CompareSettings({
+  thresholds, onChange, allRows, rankTint, onRankTint, wideTitle, onWideTitle,
+}: {
   thresholds: CompareThresholds;
   /** Зажатое значение приходят наружу: хранит страницу. */
   onChange: (thresholds: CompareThresholds) => void;
@@ -87,6 +89,9 @@ export function CompareSettings({ thresholds, onChange, allRows, rankTint, onRan
    *  приходит пропом, потому что окно параметров ничего не хранит само. */
   rankTint: boolean;
   onRankTint: (on: boolean) => void;
+  /** Развёрнутые названия позиций — второй тумблер оформления. */
+  wideTitle: boolean;
+  onWideTitle: (on: boolean) => void;
 }) {
   const [at, setAt] = useState<DOMRect | null>(null);
 
@@ -127,6 +132,26 @@ export function CompareSettings({ thresholds, onChange, allRows, rankTint, onRan
               checked={rankTint}
               onChange={onRankTint}
               aria-label="Раскрасить колонки по ранжированию"
+            />
+          </Setting>
+
+          {/* ВТОРОЙ ТУМБЛЕР ОФОРМЛЕНИЯ, рядом с первым и до порогов: он тоже
+              не меняет ни одного числа, только то, сколько названия видно.
+              Смету читают двумя способами — сравнивая цены столбиком (и тогда
+              длинное имя отнимает место у колонок КП) и разбираясь, что
+              именно за работа (и тогда «Кабель силовой, не р…» бесполезен).
+              Тумблером, а не автоматикой по длине названий: цена режима —
+              панорама раньше на 160px, и платить её решает человек.
+              «Вернуть системные значения» его не трогает по той же причине,
+              что и подкраску: та кнопка возвращает ПОРОГИ. */}
+          <Setting
+            label="Развернуть названия позиций"
+            description="Колонка «Позиция» становится шире, название переносится на вторую строку. Лента при этом раньше уходит в горизонтальную прокрутку."
+          >
+            <Switch
+              checked={wideTitle}
+              onChange={onWideTitle}
+              aria-label="Развернуть названия позиций"
             />
           </Setting>
 

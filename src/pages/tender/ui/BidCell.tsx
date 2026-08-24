@@ -1,14 +1,14 @@
 import { type ReactNode } from 'react';
 import { cx } from '@/shared/lib/cx';
 import {
-  cellLines, cellMark, decimal, deviationPct, hasAnomaly, money, moneyCompact, type CellLine, type CompareThresholds, type CompareView, type Contractor, type RowFacts,
+  cellLines, cellMark, decimal, deviationPct, hasAnomaly, money, moneyCompact, pendingCorrection, type CellLine, type CompareThresholds, type CompareView, type Contractor, type RowFacts,
 } from '@/entities/comparison';
 import type { CellPopupBind, CellPopupData } from '@/shared/ui/CellPopup';
 import { tableCell } from '@/shared/ui/Table';
 import { Icon } from '@/shared/ui/Icon';
 import { VisuallyHidden } from '@/shared/ui/VisuallyHidden';
 import { pctSigned } from '../model/compareFormat';
-import { CoinMark } from './assets';
+import { CoinMark, CorrectionMark } from './assets';
 import s from './TenderCompare.module.css';
 
 /**
@@ -34,6 +34,14 @@ import s from './TenderCompare.module.css';
  *         сигнал отклонения теперь живёт суффиксом по галочке.
  *         ОТКАЗ И ПРОБЕЛ — РАЗНЫЕ СОСТОЯНИЯ: отказ капсулой нейтрального тона,
  *         отсутствие цены — тире с пунктиром (отсутствие ключа — не ноль).
+ *         ⚠ «ИНОЙ ОБЪЁМ» — В СТРОКЕ СТОИМОСТИ, СРАЗУ ПОСЛЕ СУММЫ И ПЕРЕД
+ *         СУФФИКСАМИ (разбор 23.08.2026 §2): он о том, можно ли вообще
+ *         доверять этому числу, а суффиксы — уточнения к нему; знак,
+ *         оттеснённый процентами вправо, читался бы ещё одним суффиксом.
+ *         Слева от суммы не ставится: числа прижаты вправо, и знак повис бы
+ *         в пустоте на разном расстоянии в каждой строке. Клика у него здесь
+ *         НЕТ — навигировать некуда, ты уже в этой ячейке; раскрытие —
+ *         наведение.
  * A11Y:   каждый триггер попапа — кнопка со своим именем; у аномалии цель —
  *         содержимое ячейки. Payload попапов собирается готовым — ячейка
  *         ничего не делегирует счёт.
@@ -61,7 +69,7 @@ export function BidCell({ row, contractor, view, thresholds, bind, note, flash }
   /* Снятая строка схлопывается во всех КП: история, а не мусор. */
   if (position.removed) {
     return (
-      <td className={cx(tableCell.numeric, flash && s.cellFlash)}>
+      <td className={cx(tableCell.numeric, s.bidCell, flash && s.cellFlash)}>
         <span className={s.dash}>—</span>
       </td>
     );
@@ -70,12 +78,24 @@ export function BidCell({ row, contractor, view, thresholds, bind, note, flash }
   const mark = cellMark(contractor, position.id);
   const price = contractor.prices[position.id];
 
+  /* АДРЕС ЯЧЕЙКИ И ЕЁ ПОМЕТКИ — В DOM, а не только в модели. Переход «строка
+     перечня в уголке колонки → первая такая ячейка» берёт очерёдность из
+     DOM, и это единственный честный источник: «первая» означает «первая в
+     ТЕКУЩЕМ порядке строк», который задают вид строк, свёрнутые разделы и
+     фильтры сразу, а модель о них не знает. Раньше так был помечен ОДИН вид
+     пометки (`data-corr`), и обход умел ровно одно — корректировки. */
+  const cellId = `${contractor.id}:${position.id}`;
+
   /* Отказ — решение подрядчика: нейтральная капсула. Не тревога и не пробел:
      красить решение в danger — врать о его природе. ИИ-комментария у отказа
      не бывает (05 §4.3.4). */
   if (mark.declined) {
     return (
-      <td className={cx(tableCell.numeric, flash && s.cellFlash)}>
+      <td
+        className={cx(tableCell.numeric, s.bidCell, flash && s.cellFlash)}
+        data-cell={cellId}
+        data-marks="declined"
+      >
         <span className={s.chip}>
           <Icon name="closeCircle" className={s.chipIcon} />
           Отказ
@@ -88,7 +108,11 @@ export function BidCell({ row, contractor, view, thresholds, bind, note, flash }
      нет») и тире. Отсутствие ключа — не ноль. Комментария не бывает. */
   if (price === undefined) {
     return (
-      <td className={cx(tableCell.numeric, s.cellMissing, flash && s.cellFlash)}>
+      <td
+        className={cx(tableCell.numeric, s.bidCell, s.cellMissing, flash && s.cellFlash)}
+        data-cell={cellId}
+        data-marks="missing"
+      >
         <span className={s.dash}>—</span>
         <span className={tableCell.sub}>нет цены</span>
       </td>
@@ -128,6 +152,22 @@ export function BidCell({ row, contractor, view, thresholds, bind, note, flash }
   /* Монета запаса торга — пометка данных, от режима не зависит; сидит на
      главной строке ВПЛОТНУЮ слева от числа. Штамп «МИН» с ней не спорит: он
      живёт в левом нижнем углу САМОЙ ЯЧЕЙКИ, ниже строки цены. */
+  /* ⚠ «иной объём» существует ТОЛЬКО в состоянии «на рассмотрении» — это
+     проверяет `pendingCorrection`, и она же единственная дверь к знаку во
+     всех трёх осях: принял или отклонил — знак гаснет и в ячейке, и в шапке
+     колонки, и в строке (разбор 23.08.2026 §1, §6). */
+  const correction = pendingCorrection(mark);
+  const correctionData: CellPopupData | null = correction ? {
+    tone: 'warning',
+    title: 'Цена названа за другой объём',
+    fields: [
+      { label: 'В смете', value: `${decimal(qty)} ${position.unit}` },
+      { label: 'Поставщик считает', value: `${decimal(correction.qty)} ${position.unit}` },
+    ],
+    note: correction.note
+      ?? 'Обоснование не приложено — цены посчитаны за разные объёмы, требуется решение.',
+  } : null;
+
   const coinData: CellPopupData | null = mark.potential ? {
     tone: 'info',
     title: 'Заявленный запас торга',
@@ -171,6 +211,17 @@ export function BidCell({ row, contractor, view, thresholds, bind, note, flash }
       ...(mark.potential
         ? [{ label: 'Запас торга', value: `+${money(mark.potential * qty)}`, tone: true }]
         : []),
+      /* ponytail: у аномальной ячейки ⚠ уходит ПОЛЕМ, а не своим знаком —
+         триггером попапа там служит всё содержимое ячейки, и кнопка внутри
+         кнопки запрещена и валидатором, и фокусом (та же причина, по которой
+         прячется монета). Счётчики строки и колонки такую ячейку всё равно
+         считают, и это сознательный перекос: по канону цена за иной объём из
+         сравнения выключается и аномальной стать не успевает. Понадобится
+         сойтись — выносить триггер аномалии с содержимого на отдельный
+         элемент. */
+      ...(correction
+        ? [{ label: 'Поставщик считает', value: `${decimal(correction.qty)} ${position.unit}` }]
+        : []),
       { label: 'К медиане строки', value: dev === null ? '—' : pctSigned(dev) },
     ],
     meter: row.spread === null
@@ -179,6 +230,20 @@ export function BidCell({ row, contractor, view, thresholds, bind, note, flash }
     note: mark.anomaly
       ?? 'Цена выбивается из разброса остальных участников строки — запросить обоснование.',
   };
+
+  /* Знак ⚠ рисуется у ТОГО ЧИСЛА, которое является стоимостью: в режиме
+     «Стоимость» это главная строка, в режиме «Потенциал» — базовая под ней.
+     Второго знака в ячейке быть не должно (разбор §2). */
+  const corrMark = correctionData ? (
+    <button
+      type="button"
+      className={cx(s.corr, s.corrHint)}
+      aria-label={`Цена названа за другой объём: ${decimal(correction!.qty)} ${position.unit} вместо ${decimal(qty)}`}
+      {...bind(correctionData)}
+    >
+      <CorrectionMark />
+    </button>
+  ) : null;
 
   /* Строки плана рендерятся как есть: порядок и состав меняет только модель. */
   const renderLine = (line: CellLine): ReactNode => {
@@ -193,6 +258,7 @@ export function BidCell({ row, contractor, view, thresholds, bind, note, flash }
       return (
         <span key="base" className={s.baseLine}>
           {money(sum)}
+          {anomaly ? null : corrMark}
           {plan.deviationOn === 'base' ? devSuffix : null}
         </span>
       );
@@ -217,6 +283,7 @@ export function BidCell({ row, contractor, view, thresholds, bind, note, flash }
             </button>
           ) : null}
           {head}
+          {line.metric === 'cost' && !anomaly ? corrMark : null}
           {plan.deviationOn === 'main' ? devSuffix : null}
         </span>
       </span>
@@ -230,6 +297,16 @@ export function BidCell({ row, contractor, view, thresholds, bind, note, flash }
     </span>
   );
 
+  /* Порядок слов не значит ничего — атрибут читают селектором `~=`. Минимум
+     попадает сюда и у аномальной ячейки, хотя штамп «МИН» там не рисуется:
+     счёт в панели колонки считает его тем же предикатом (`row.bestId`), и
+     разойдись список с ним — кнопка «лучшая цена: 7» водила бы по шести. */
+  const marks = [
+    isMin && 'min',
+    anomaly && 'anomaly',
+    correction && 'correction',
+  ].filter(Boolean).join(' ');
+
   if (!anomaly) {
     return (
       /* ШТАМП «МИН» — В ЛЕВОМ НИЖНЕМ УГЛУ ЯЧЕЙКИ (решение владельца
@@ -238,7 +315,11 @@ export function BidCell({ row, contractor, view, thresholds, bind, note, flash }
          ячейки, а не блока цены: числа выровнены вправо, и слева у них
          пустует ровно то место, где отметка никому не мешает и стоит у всех
          строк на одной вертикали. Позиционируется по .cell--min. */
-      <td className={cx(tableCell.numeric, s.cellMin, flash && s.cellFlash)}>
+      <td
+        className={cx(tableCell.numeric, s.bidCell, s.cellMin, flash && s.cellFlash)}
+        data-cell={cellId}
+        data-marks={marks || undefined}
+      >
         {body}
         {isMin && minData ? (
           <button
@@ -259,7 +340,11 @@ export function BidCell({ row, contractor, view, thresholds, bind, note, flash }
      Обводка перехода ложится ПОВЕРХ штриховки через outline — оба сигнала
      читаются одновременно (05 §7). */
   return (
-    <td className={cx(tableCell.numeric, s.cellAnomaly, flash && s.cellFlash)}>
+    <td
+      className={cx(tableCell.numeric, s.bidCell, s.cellAnomaly, flash && s.cellFlash)}
+      data-cell={cellId}
+      data-marks={marks || undefined}
+    >
       <button
         type="button"
         className={s.anomalyTrigger}

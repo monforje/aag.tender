@@ -53,6 +53,20 @@ const LEAD = {
  *  подпись «Щит распределитель…». Лишние 80px лента и так панорамирует. */
 const TITLE_MIN = 280;
 
+/** То же в РАЗВЁРНУТОМ режиме — тумблер «Развернуть названия позиций»
+ *  (решение владельца 24.08.2026, третья волна). Смету читают двумя разными
+ *  способами: обычно — сравнивая цены столбиком, где длинное имя только
+ *  отнимает место у колонок КП, но иногда — разбираясь, ЧТО именно за работа,
+ *  и тогда «Кабель силовой, не р…» бесполезен.
+ *
+ *  440, а не «сколько влезет»: столько занимает левый блок целиком за вычетом
+ *  трёх своих колонок (102+80+90) и резерва под ключ — верхняя граница,
+ *  названная владельцем. Вместе со второй строкой (`titleLimit(w, 2)`) это
+ *  ~90 знаков против 28 в обычном режиме. Цена честная и предсказуемая: лента
+ *  уходит в панораму на 160px раньше, поэтому режим и сделан тумблером, а не
+ *  автоматикой по длине названий — «иногда» решает человек. */
+const TITLE_WIDE = 440;
+
 /** ШИРИНА КОЛОНКИ КП — одна для всех подрядчиков. Число снято с живого экрана
  *  24.08.2026 как фактическая ширина колонки «АО «МетСнаб»» при прежнем
  *  алгоритме (пол по имени): владелец попросил зафиксировать именно её.
@@ -88,11 +102,24 @@ const TITLE_CHARS_MIN = 14;
 /** Сколько знаков названия помещается в колонку: не длиннее потолка и не
  *  шире 3/4 её ширины — правая четверть остаётся воздухом и местом под
  *  ключ (решение владельца 24.08.2026). `undefined` — кадр до первого
- *  замера: до него берётся потолок. */
-export function titleLimit(titleWidth?: number): number {
-  if (titleWidth == null) return TITLE_CHARS;
-  const fits = Math.floor((titleWidth * 0.75) / TITLE_CHAR_PX);
-  return Math.max(TITLE_CHARS_MIN, Math.min(TITLE_CHARS, fits));
+ *  замера: до него берётся потолок.
+ *
+ *  `lines` — сколько строк отдано названию (2 в развёрнутом режиме). Потолок
+ *  и вместимость растут вместе с ним, а не только вместимость: 40 знаков —
+ *  это потолок ОДНОЙ строки.
+ *
+ *  ponytail: перенос отдан браузеру, третью строку никто не сторожит. Запас
+ *  ровно в той самой четверти ширины: текст, обрезанный по 3/4 вместимости
+ *  двух строк, не набирает третью даже на самых неудачных переносах. Понадобится
+ *  жёсткая гарантия — это `-webkit-line-clamp` на обёртке названия ВМЕСТЕ с
+ *  ключом (иначе ключ уедет на свою строку), и стоить она будет перемера
+ *  текста на каждой смене ширины — того самого, ради ухода от которого лимит
+ *  и заведён. */
+export function titleLimit(titleWidth?: number, lines = 1): number {
+  const ceiling = TITLE_CHARS * lines;
+  if (titleWidth == null) return ceiling;
+  const fits = Math.floor((titleWidth * 0.75) / TITLE_CHAR_PX) * lines;
+  return Math.max(TITLE_CHARS_MIN, Math.min(ceiling, fits));
 }
 
 const LEAD_BASE = LEAD.qty.base + LEAD.unit.base + LEAD.spread.base;
@@ -104,6 +131,9 @@ export interface ColumnLayoutInput {
   available: number;
   /** Колонки КП по порядку таблицы — нужен только состав id. */
   bids: ReadonlyArray<{ id: string }>;
+  /** Развёрнутые названия: колонка-якорь получает TITLE_WIDE вместо
+   *  TITLE_MIN. Тумблер в окне параметров. */
+  wideTitle?: boolean;
 }
 
 export interface ColumnLayout {
@@ -148,25 +178,29 @@ function allocLeads(total: number): { qty: number; unit: number; spread: number 
 }
 
 export function computeColumnLayout({
-  available, bids,
+  available, bids, wideTitle,
 }: ColumnLayoutInput): ColumnLayout {
   const sumFixed = Math.max(bids.length, 1) * BID_FIXED;
   const fixedBids = (): Record<string, number> =>
     Object.fromEntries(bids.map(({ id }) => [id, BID_FIXED]));
+  /* Единственное, что меняет режим, — ПОЛ названия. Ни бюджет левого блока,
+     ни ширины КП его не касаются: развёрнутое название забирает место у
+     панорамы, а не у соседних колонок. */
+  const titleMin = wideTitle ? TITLE_WIDE : TITLE_MIN;
 
   /* Панорама: места нет даже на половах левого блока. */
-  if (available < LEAD_MIN + TITLE_MIN + sumFixed) {
+  if (available < LEAD_MIN + titleMin + sumFixed) {
     return {
       qty: LEAD.qty.min, unit: LEAD.unit.min, spread: LEAD.spread.min,
-      title: TITLE_MIN, bids: fixedBids(), pan: true,
+      title: titleMin, bids: fixedBids(), pan: true,
     };
   }
 
   /* Влезает: левые колонки жмутся от базы вниз ровно настолько, чтобы
      название удержало минимум; весь остаток забирает оно целиком. */
-  const leadTotal = Math.min(LEAD_BASE, available - TITLE_MIN - sumFixed);
+  const leadTotal = Math.min(LEAD_BASE, available - titleMin - sumFixed);
   const { qty, unit, spread } = allocLeads(leadTotal);
   const title = available - qty - unit - spread - sumFixed;
 
-  return { qty, unit, spread, title: Math.max(title, TITLE_MIN), bids: fixedBids(), pan: false };
+  return { qty, unit, spread, title: Math.max(title, titleMin), bids: fixedBids(), pan: false };
 }

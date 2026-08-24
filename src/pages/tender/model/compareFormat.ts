@@ -1,4 +1,6 @@
-import { decimal, type Bid } from '@/entities/comparison';
+import {
+  cellMark, decimal, type Bid, type Contractor, type RowFacts,
+} from '@/entities/comparison';
 import type { Tone } from '@/shared/ui/Badge';
 
 /** Формат и цвет сравнения КП: тон → CSS-токен и обратно, подписи процентов,
@@ -59,4 +61,44 @@ export function clipTitle(title: string, limit: number, hasKey: boolean): string
   const max = Math.max(4, hasKey ? limit - KEY_RESERVE : limit);
   if (title.length <= max) return title;
   return `${title.slice(0, max - 3).trimEnd()}…`;
+}
+
+/** Вид пометки ячейки. Пять значений — те же пять предикатов, что решают, ЧТО
+ *  нарисует <BidCell>; они же уезжают в атрибут `data-marks` каждой ячейки и
+ *  оттуда обслуживают переход «строка перечня → первая такая ячейка колонки».
+ *  Union, а не строки по месту: опечатка в имени пометки дала бы молча пустой
+ *  обход — кнопка есть, число при ней есть, а идти некуда. */
+export type MarkKind = 'min' | 'anomaly' | 'correction' | 'missing' | 'declined';
+
+/** Сводка пометок ОДНОЙ колонки: сколько в ней минимумов, аномалий,
+ *  нерассмотренных корректировок, пробелов данных и отказов.
+ *
+ *  ЖИВЁТ РЯДОМ С ФОРМАТОМ, А НЕ В ENTITIES, потому что это не новая величина,
+ *  а ПЕРЕСКАЗ уже посчитанного: все пять предикатов дословно те же, что решают,
+ *  ЧТО нарисует <BidCell> в ячейке. Разъедься они — в панели колонки
+ *  окажется одно число, а на экране другое, и заметить это будет нечем.
+ *
+ *  Считается по ВСЕМУ срезу, как caption и счётчики фильтров: панель
+ *  отвечает на «что вообще есть в этой колонке», а не «что видно сейчас». */
+export type ColumnMarks = Record<MarkKind, number> & {
+  /** Есть ли хоть что-то: пустая панель говорит словами, а не пустотой. */
+  any: boolean;
+};
+
+export function columnMarks(rows: RowFacts[], contractor: Contractor): ColumnMarks {
+  let min = 0; let anomaly = 0; let correction = 0; let missing = 0; let declined = 0;
+  for (const row of rows) {
+    const { position } = row;
+    if (position.removed) continue;
+    const mark = cellMark(contractor, position.id);
+    if (mark.declined) { declined += 1; continue; }
+    if (contractor.prices[position.id] === undefined) { missing += 1; continue; }
+    if (row.bestId === contractor.id) min += 1;
+    if (row.bids.find((b) => b.contractorId === contractor.id)?.anomaly) anomaly += 1;
+    if (row.corrections.includes(contractor.id)) correction += 1;
+  }
+  return {
+    min, anomaly, correction, missing, declined,
+    any: min + anomaly + correction + missing + declined > 0,
+  };
 }

@@ -12,7 +12,7 @@ import { strict as assert } from 'node:assert';
 import {
   analyzeComparison, bidStatus, cellLines, cellMark, clampThresholds, decimal,
   deviationPct, filterRows, flatten, groupSum, hasAnomaly, isModifiedView, medianOf, money,
-  moneyCompact, predicateCount, predicatePasses, PRESETS, rankBids, spread, sumOf,
+  moneyCompact, pendingCorrection, predicateCount, predicatePasses, PRESETS, rankBids, spread, sumOf,
   SYSTEM_THRESHOLDS, termRows, hasTerms,
   type CellLine, type ComparePosition, type CompareThresholds, type CompareView,
   type Contractor, type PositionGroup,
@@ -386,27 +386,61 @@ for (const p of AXP_POSITIONS) {
 }
 
 // ── вилки вымышленных КП: детерминированная вилка не должна уехать ─────────
-// Материалы множатся на [0.92; 1.08], работы — на [worksLo; worksLo+0.14].
-// Границы в ассерте чуть шире шага хэша: правка seed не должна ронять проверку,
-// а УЕЗД вилку (правка factor) — обязана.
-const WORK_LO: Record<string, number> = { pes: 0.99, mvp: 1.03, sso: 1.05, rek: 0.97 };
+// У каждого подрядчика свой УРОВЕНЬ цен относительно файла; вокруг него
+// материалы гуляют ±8 %, работы ±7 %. Границы в ассерте чуть шире вилки:
+// правка seed не должна ронять проверку, а уезд самой вилки — обязана.
+const LEVEL: Record<string, number> = {
+  pes: 1.04, mvp: 1.03, sso: 1.05, rek: 0.97,
+  ekm: 1.07, nlt: 0.98, vgs: 1.10, lsp: 1.01, usm: 0.96,
+};
 const stmPrices = STM.prices;
 for (const c of MOCK_AXP.contractors) {
   if (c.id === 'stm') continue;
-  const lo: number | undefined = WORK_LO[c.id];
-  assert.ok(lo !== undefined, `${c.id}: вилка известна`);
-  const worksLo: number = lo;
+  const lvl: number | undefined = LEVEL[c.id];
+  assert.ok(lvl !== undefined, `${c.id}: уровень цен известен`);
+  const level: number = lvl;
   for (const p of AXP_POSITIONS) {
     const base: number = stmPrices[p.id];
     const price: number | undefined = c.prices[p.id];
     if (price === undefined) continue; // честный пробел данных
     // Внешний вердикт (аномалия) — осознанное отклонение ОТ вилки, ей не меряется.
     if (hasAnomaly(cellMark(c, p.id))) continue;
-    const [min, max]: [number, number] = base >= 50000
-      ? [worksLo - 0.01, worksLo + 0.15]
-      : [0.9, 1.1];
+    const room: number = base >= 50000 ? 0.08 : 0.09;
+    const [min, max]: [number, number] = [level - room, level + room];
     assert.ok(price >= min * base && price <= max * base,
       `${c.id}/${p.id}: ${price} вне вилки [${min * base}; ${max * base}] от ${base}`);
+  }
+}
+
+/* ГАРАНТИЯ РАНЖИРА — не удача хэша, а условие на уровни: у кого КП ПОЛНОЕ,
+   уровень обязан быть выше единицы (иначе он обгонит колонку файла), у
+   остальных он свободен — `rankBids` и так ставит неполное предложение ниже
+   любого полного. Проверка стоит рядом с самой таблицей уровней, чтобы правка
+   одного не разошлась с другим. */
+for (const [id, level] of Object.entries(LEVEL)) {
+  const c = MOCK_AXP.contractors.find((x) => x.id === id);
+  assert.ok(c, `${id}: подрядчик на месте`);
+  if (c.fill >= 100) {
+    assert.ok(level > 1, `${id}: полное КП с уровнем ${level} обгонит цены файла`);
+  }
+}
+
+/* Две колонки, совпадающие построчно, читаются поломкой таблицы, а не
+   совпадением: до правки вилки 24.08.2026 таких пар было две (pes↔ekm 55
+   позиций из 65, mvp↔rek 49). Глазами это не ловится — числа правдоподобны.
+   Считаются только ЗАМЕТНЫЕ позиции (расценка от 300 ₽): на клемме за 115 ₽
+   разница уровней в 2 % — это два рубля, и совпадение после округления там
+   естественно, а не подозрительно. */
+{
+  const cs = MOCK_AXP.contractors;
+  const notable = AXP_POSITIONS.filter((p) => STM.prices[p.id] >= 300);
+  for (let i = 0; i < cs.length; i++) {
+    for (let j = i + 1; j < cs.length; j++) {
+      const same = notable.filter((p) => cs[i].prices[p.id] !== undefined
+        && cs[i].prices[p.id] === cs[j].prices[p.id]).length;
+      assert.ok(same <= 2,
+        `${cs[i].id} ↔ ${cs[j].id}: одинаковых расценок ${same} из ${notable.length}`);
+    }
   }
 }
 
@@ -474,11 +508,84 @@ for (const id of ['a28', 'b31']) {
   assert.equal(rows.length, 9, 'объединение вопросов — 9 строк матрицы');
   const avans = rows.find((r) => r.label === 'Авансирование');
   assert.deepEqual(avans?.cells.map((c) => c?.value),
-    ['40 %', '20 %', '30 %', '40 %', '50 %'],
+    ['40 %', '20 %', '30 %', '40 %', '50 %', '35 %', '25 %', '0 %', '45 %', '30 %'],
     'ответы стоят под своими колонками, порядок — как в форме №1');
   assert.equal(hasTerms(MOCK_AXP.contractors), true);
   // У демо-шестёрки условия тоже заполнены — матрица живёт на обоих тендерах.
   assert.equal(hasTerms(MOCK_COMPARISON.contractors), true);
+}
+
+/* ═══════════════ КОРРЕКТИРОВКА ОБЪЁМА И ЗНАК ⚠ ═══════════════
+   Десятое тихое место. Знак «требуется твоё решение» не падает — он молча
+   горит там, где решение уже принято, или молча гаснет там, где не принято, и
+   на живом экране обе ошибки выглядят одинаково правдоподобно. Держится всё
+   на одном условии (`pendingCorrection`), и его же складывают ДВА счётчика:
+   строка и шапка колонки. Разойдясь, они дадут «3» в шапке при двух знаках в
+   строках — и это никто не заметит. */
+{
+  // Гейт состояния: знак существует РОВНО в «на рассмотрении».
+  assert.equal(pendingCorrection({}), undefined, 'нет корректировки — нет знака');
+  assert.equal(pendingCorrection({ correction: { qty: 5, status: 'accepted' } }), undefined,
+    'принятая корректировка знака не даёт');
+  assert.equal(pendingCorrection({ correction: { qty: 5, status: 'declined' } }), undefined,
+    'отклонённая — тоже');
+  assert.equal(pendingCorrection({ correction: { qty: 5, status: 'pending' } })?.qty, 5,
+    'на рассмотрении — знак есть, и объём поставщика при нём');
+
+  const facts = analyzeComparison(MOCK_AXP.groups, MOCK_AXP.contractors, SYSTEM_THRESHOLDS);
+  const rowOf = (id: string) => {
+    const row = facts.byId.get(id);
+    assert.ok(row, `${id}: строка на месте`);
+    return row;
+  };
+
+  // Ось СТРОКИ: список — в порядке колонок, и по нему же идёт переход.
+  assert.deepEqual(rowOf('a06').corrections, ['pes', 'mvp'],
+    'две корректировки строки — в порядке колонок (клик ведёт слева направо)');
+  assert.deepEqual(rowOf('b17').corrections, ['pes'], 'одна — голый знак без цифры');
+  assert.deepEqual(rowOf('a23').corrections, ['rek']);
+  assert.deepEqual(rowOf('b05').corrections, [],
+    'решённые корректировки (принята + отклонена) знака строке не дают');
+
+  // Ось КОЛОНКИ: тот же счёт, свёрнутый по подрядчику.
+  assert.equal(facts.correctionsBy.get('pes'), 2, 'у pes две — в шапке встанет цифра');
+  assert.equal(facts.correctionsBy.get('mvp'), 1);
+  assert.equal(facts.correctionsBy.get('rek'), 1, 'принятая b05 в счёт не идёт');
+  assert.equal(facts.correctionsBy.get('ekm'), undefined, 'только отклонённая — знака нет');
+  assert.equal(facts.correctionsBy.get('stm'), undefined);
+
+  /* ДВЕ ОСИ СКЛАДЫВАЮТ ОДНО МНОЖЕСТВО. Это и есть то, ради чего проверка:
+     счётчик шапки обязан быть свёрткой списков строк, а не вторым обходом. */
+  const fromRows = new Map<string, number>();
+  for (const row of facts.rows) {
+    for (const id of row.corrections) fromRows.set(id, (fromRows.get(id) ?? 0) + 1);
+  }
+  assert.deepEqual([...facts.correctionsBy].sort(), [...fromRows].sort(),
+    'счётчик колонки = свёртка знаков строк');
+
+  /* Корректировка при ОТСУТСТВУЮЩЕЙ цене не считается: переход вёл бы к
+     ячейке, где знака нет вовсе (там прочерк или отказ). */
+  const ghost = analyzeComparison(
+    [{ id: 'g', title: 'G', positions: [{ id: 'p1', title: 'P', qty: 10, unit: 'шт' }] }],
+    [
+      { id: 'x', name: 'X', status: 'partial', fill: 0, inn: '1', contact: '-', submitted: '01.01.2026',
+        prices: {}, marks: { p1: { correction: { qty: 12, status: 'pending' } } } },
+    ],
+    SYSTEM_THRESHOLDS,
+  );
+  assert.deepEqual(ghost.rows[0].corrections, [],
+    'корректировка без цены не считается — знака в ячейке всё равно не будет');
+
+  // Снятая позиция решения не требует: её нет в смете.
+  const dropped = analyzeComparison(
+    [{ id: 'g', title: 'G', positions: [{ id: 'p1', title: 'P', qty: 10, unit: 'шт', removed: true }] }],
+    [
+      { id: 'x', name: 'X', status: 'partial', fill: 100, inn: '1', contact: '-', submitted: '01.01.2026',
+        prices: { p1: 100 }, marks: { p1: { correction: { qty: 12, status: 'pending' } } } },
+    ],
+    SYSTEM_THRESHOLDS,
+  );
+  assert.deepEqual(dropped.rows[0].corrections, [], 'по снятой строке решать нечего');
 }
 
 console.log('comparison: ok');

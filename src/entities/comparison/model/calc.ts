@@ -9,7 +9,7 @@
 import type { Tone } from '@/shared/ui/Badge';
 import { POTENTIAL_MIN, type CompareThresholds } from './thresholds';
 import {
-  cellMark, hasAnomaly,
+  cellMark, hasAnomaly, pendingCorrection,
   type ComparePosition, type Contractor, type PositionGroup,
 } from './contract';
 
@@ -130,6 +130,12 @@ export interface RowFacts {
   /** Строка попала в ключевые ПРАВИЛОМ «топ по весу до накопительной доли
    *  keyShare» — независимо от ручной пометки `position.key`. */
   keyDerived: boolean;
+  /** Подрядчики, приславшие по этой работе НЕРАССМОТРЕННУЮ корректировку
+   *  объёма, в порядке колонок. Знак ⚠ в строке — это `length`, а цифра при
+   *  нём — она же, но только от двух (разбор 23.08.2026 §5, §6). Список, а не
+   *  число: клик по знаку ведёт к ПЕРВОЙ такой ячейке слева направо, и «кто
+   *  именно» нужно знать. */
+  corrections: string[];
 }
 
 /** Медиана — по всем закрытым расценкам, включая аномальные: она описывает
@@ -157,6 +163,13 @@ export interface ComparisonFacts {
   /** Σ веса среза: база доли веса. Сумма долей даёт ровно 100 % — в отличие
    *  от сломанного «% среза» демо, делившего вес на чужой итог подрядчика. */
   sumWeight: number;
+  /** Сколько НЕРАССМОТРЕННЫХ корректировок объёма у каждого подрядчика —
+   *  знак ⚠ в шапке его колонки. Считается ОДНИМ проходом здесь, а не в
+   *  карточке: ось строки и ось колонки обязаны складывать одно и то же
+   *  множество ячеек, иначе «3» в шапке и три знака в строках разойдутся.
+   *  Ключа нет — корректировок у подрядчика не осталось, и знака в шапке
+   *  тоже (не ноль: нуля на экране быть не должно вовсе). */
+  correctionsBy: Map<string, number>;
 }
 
 /** Формула аномалии metrics.md §9: ячейка помечается, если её отклонение от
@@ -228,6 +241,17 @@ export function analyzeComparison(
       )),
       weight: position.removed || !prices.length ? 0 : Math.max(...prices) * position.qty,
       keyDerived: false,
+      /* Порядок — как у колонок, потому что клик по знаку строки ведёт к
+         первой ячейке СЛЕВА НАПРАВО. Снятая строка корректировок не берёт:
+         решать по позиции, которой в смете больше нет, нечего. */
+      corrections: position.removed ? [] : contractors
+        /* Корректировка живёт при ЦЕНЕ: поставщик говорит «эта сумма — за
+           другой объём». Без цены (пробел, отказ) говорить не о чем, и
+           считать такую ячейку значило бы обещать переход к знаку, которого
+           на экране нет. */
+        .filter((c) => c.prices[position.id] !== undefined
+          && pendingCorrection(cellMark(c, position.id)) !== undefined)
+        .map((c) => c.id),
     };
   }));
 
@@ -246,7 +270,17 @@ export function analyzeComparison(
     }
   }
 
-  return { rows, byId: new Map(rows.map((r) => [r.position.id, r])), sumWeight };
+  /* Счётчик шапки — свёртка тех же списков, а не второй обход данных. */
+  const correctionsBy = new Map<string, number>();
+  for (const row of rows) {
+    for (const id of row.corrections) {
+      correctionsBy.set(id, (correctionsBy.get(id) ?? 0) + 1);
+    }
+  }
+
+  return {
+    rows, byId: new Map(rows.map((r) => [r.position.id, r])), sumWeight, correctionsBy,
+  };
 }
 
 /* ═══════════════════ ИТОГИ УРОВНЯ ТЕНДЕРА ═══════════════════ */

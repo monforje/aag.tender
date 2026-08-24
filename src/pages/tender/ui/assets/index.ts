@@ -13,6 +13,11 @@
 
 export { AnomalyGlyph } from './AnomalyGlyph';
 export { CoinMark } from './CoinMark';
+export { CorrectionMark } from './CorrectionMark';
 export { KeyMark } from './KeyMark';
 export { MedMark } from './MedMark';
 export { SpreadMark } from './SpreadMark';
+
+/* CorrectionMark из этого ряда выбивается происхождением: в badges.html его не
+   было — знак ⚠ пришёл разбором 23.08.2026 и нарисован здесь по правилам того
+   же ряда (тоновый токен, штрих 1.7, группа data-mk под hover). */

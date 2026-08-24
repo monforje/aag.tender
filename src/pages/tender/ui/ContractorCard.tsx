@@ -4,7 +4,9 @@ import { Badge } from '@/shared/ui/Badge';
 import { Icon } from '@/shared/ui/Icon';
 import { VisuallyHidden } from '@/shared/ui/VisuallyHidden';
 import { bidStatus, money, type Bid } from '@/entities/comparison';
+import type { ColumnMarks, MarkKind } from '../model/compareFormat';
 import { Tooltip } from '@/shared/ui/Tooltip';
+import { CornerTab } from './CornerTab';
 import s from './TenderCompare.module.css';
 
 /**
@@ -35,6 +37,16 @@ import s from './TenderCompare.module.css';
  *         владельца 24.08.2026): полное название всплывает <Tooltip>'ом по
  *         наведению и фокусу — имя контрагента важно, но не ключевое, лучше
  *         уместить больше данных.
+ *         ПОДВАЛ КАРТОЧКИ — ЯЗЫЧОК, СТАТУС, ПАЛИТРА, СТРЕЛКА (решение
+ *         владельца 24.08.2026, четвёртая волна). Знак ⚠ корректировок стоял
+ *         здесь отдельным глифом и спорил со статусом за одно место; теперь
+ *         все пометки колонки — минимумы, аномалии, корректировки, пробелы,
+ *         отказы — собраны в <CornerTab>, кармашке в углу карточки.
+ *         Навигационный смысл ⚠ при переезде не потерян: чип корректировок в
+ *         язычке остался кнопкой перехода к первой нерассмотренной ячейке
+ *         (разбор 23.08.2026 §4, §7). Комментарии в шапку по-прежнему не
+ *         поднимаются вообще: их поставщик оставляет к каждой ячейке, и шапка
+ *         собрала бы «⚠ 47».
  * A11Y:   каждый контрол назван aria-label'ом с именем подрядчика; состояние
  *         звезды — aria-pressed, свёртывания — aria-expanded. Полное имя
  *         читается из текста целиком: многоточие — только визуальная обрезка.
@@ -45,7 +57,7 @@ import s from './TenderCompare.module.css';
  *                 collapsed={collapsed} onFold={toggleCollapsed} />
  */
 export function ContractorCard({
-  bid, total, col, starred, collapsed, onStar, onPaint, onOpen, onFold,
+  bid, total, col, starred, collapsed, marks, onStar, onPaint, onOpen, onFold, onGoToMark,
 }: {
   bid: Bid;
   /** Сколько всего позиций в смете — знаменатель подписи «расценки есть у N
@@ -56,11 +68,17 @@ export function ContractorCard({
   col?: string;
   starred: boolean;
   collapsed: boolean;
+  /** Сводка пометок ВСЕЙ колонки — содержимое язычка. Считает `columnMarks()`
+   *  теми же предикатами, что рисует <BidCell>. */
+  marks: ColumnMarks;
   onStar: () => void;
   /** Отдаёт прямоугольник нажатой кнопки: от него падает выпадашка. */
   onPaint: (from: DOMRect) => void;
   onOpen: () => void;
   onFold: () => void;
+  /** Переход к первой ячейке ЭТОЙ колонки с названной пометкой, сверху вниз
+   *  в текущем порядке строк; повторный клик — к следующей. */
+  onGoToMark: (kind: MarkKind) => void;
 }) {
   const { contractor, filled, percent, sum, rank, rankLabel } = bid;
   const status = bidStatus(contractor.status);
@@ -138,8 +156,14 @@ export function ContractorCard({
           <p className={s.sum}>{money(sum)}</p>
         </div>
 
-        {/* Статус слева, действия справа. */}
+        {/* Язычок, статус, действия. */}
         <div className={s.meta}>
+          <CornerTab
+            name={contractor.name}
+            marks={marks}
+            onGoToMark={onGoToMark}
+          />
+
           <Badge className={s.cardStatus} tone={status.tone} icon={status.icon}>
             {status.label}
           </Badge>

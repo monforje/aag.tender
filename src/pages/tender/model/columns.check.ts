@@ -10,8 +10,10 @@ import { strict as assert } from 'node:assert';
 import { BID_FIXED, TITLE_CHARS, computeColumnLayout, titleLimit } from './columns';
 import { clipTitle } from './compareFormat';
 
-const layoutOf = (available: number, n: number) =>
-  computeColumnLayout({ available, bids: Array.from({ length: n }, (_, i) => ({ id: `c${i}` })) });
+const layoutOf = (available: number, n: number, wideTitle = false) =>
+  computeColumnLayout({
+    available, wideTitle, bids: Array.from({ length: n }, (_, i) => ({ id: `c${i}` })),
+  });
 
 const sum = (l: ReturnType<typeof computeColumnLayout>) =>
   l.qty + l.unit + l.spread + l.title + Object.values(l.bids).reduce((a, b) => a + b, 0);
@@ -113,6 +115,54 @@ assert.deepEqual(bidWidths(solo), [BID_FIXED]);
   assert.equal(clipTitle('Кабель', 40, true), 'Кабель', 'короткое название резерв не режет');
   // Вырожденный лимит не даёт отрицательного среза.
   assert.ok(clipTitle(long, 2, true).length >= 1);
+}
+
+// ── РАЗВЁРНУТЫЕ НАЗВАНИЯ ───────────────────────────────────────────────────
+// Девятое тихое место: режим не падает — он молча отдаёт названию обычные
+// 280px, и тумблер «работает», ничего не меняя.
+{
+  const WIDE = 440;
+  // Пол названия поднят, ширины КП и полы левого блока не тронуты.
+  const pan = layoutOf(900, 6, true);
+  assert.equal(pan.pan, true, 'на 900px с шестью КП это панорама');
+  assert.equal(pan.title, WIDE, 'в панораме название встаёт на РАЗВЁРНУТЫЙ пол');
+  assert.deepEqual([pan.qty, pan.unit, pan.spread], [102, 80, 90],
+    'левый блок остаётся на своих полах — режим забирает место у панорамы');
+  assert.deepEqual(bidWidths(pan), Array(6).fill(BID_FIXED), 'ширины КП не трогаются');
+  assert.equal(layoutOf(900, 6).title, 280, 'без тумблера — обычный пол');
+
+  // Порог панорамы сдвигается ровно на разницу полов (440 − 280).
+  const narrow = 102 + 80 + 90 + 280 + 3 * BID_FIXED;
+  assert.equal(layoutOf(narrow, 3).pan, false, 'обычный режим на пороге ещё влезает');
+  assert.equal(layoutOf(narrow, 3, true).pan, true, 'развёрнутый — уже нет');
+  assert.equal(layoutOf(narrow + (WIDE - 280), 3, true).pan, false,
+    'порог сдвинут ровно на разницу полов');
+
+  // Сходимость и монотонность обязаны держаться и в этом режиме.
+  let prevWide = layoutOf(640, 6, true);
+  for (let available = 690; available <= 2400; available += 10) {
+    const l = layoutOf(available, 6, true);
+    if (!l.pan) assert.equal(sum(l), available, `сходимость (развёрнуто) @${available}`);
+    assert.ok(l.title >= WIDE, `пол развёрнутого названия @${available}: ${l.title}`);
+    assert.ok(l.title >= prevWide.title && l.qty >= prevWide.qty
+      && l.unit >= prevWide.unit && l.spread >= prevWide.spread,
+    `монотонность (развёрнуто) @${available}`);
+    prevWide = l;
+  }
+
+  // Развёрнутая колонка НИКОГДА не уже обычной при той же ленте.
+  for (const available of [800, 1000, 1200, 1600, 2000]) {
+    assert.ok(layoutOf(available, 5, true).title >= layoutOf(available, 5).title,
+      `развёрнутое название не уже обычного @${available}`);
+  }
+
+  // Лимит знаков: две строки — вдвое, потолок тоже вдвое.
+  assert.equal(titleLimit(undefined, 2), TITLE_CHARS * 2, 'до замера — двойной потолок');
+  assert.equal(titleLimit(10_000, 2), TITLE_CHARS * 2, 'широкая колонка не даёт больше');
+  assert.equal(titleLimit(WIDE, 2), titleLimit(WIDE) * 2, 'две строки — ровно вдвое');
+  assert.ok(titleLimit(WIDE, 2) > titleLimit(280), 'режим реально удлиняет название');
+  // Одна строка по умолчанию — старое поведение не тронуто.
+  assert.equal(titleLimit(280, 1), titleLimit(280));
 }
 
 console.log('columns: ok');

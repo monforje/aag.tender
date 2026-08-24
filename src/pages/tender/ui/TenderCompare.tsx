@@ -1,5 +1,5 @@
 import {
-  useEffect, useMemo, useState,
+  useCallback, useEffect, useMemo, useRef, useState,
   type CSSProperties,
 } from 'react';
 import { cx } from '@/shared/lib/cx';
@@ -12,7 +12,7 @@ import { Tooltip } from '@/shared/ui/Tooltip';
 import {
   analyzeComparison, filterRows, flatten, isModifiedView, METRIC_LABEL, metricTotals, rankBids, ROW_VIEW_LABEL, type Bid, type CompareThresholds, type CompareView, type Comparison, type PositionGroup, type PresetId, type RowFacts,
 } from '@/entities/comparison';
-import { choose, resolveTone } from '../model/compareFormat';
+import { choose, columnMarks, resolveTone, type MarkKind } from '../model/compareFormat';
 import { computeColumnLayout, titleLimit } from '../model/columns';
 import { useBandMaxHeight } from '../model/useBandMaxHeight';
 import { useBandWidth } from '../model/useBandWidth';
@@ -147,6 +147,14 @@ export function TenderCompare({
     [groups, contractors, thresholds],
   );
   const totals = useMemo(() => metricTotals(facts.rows, bids), [facts, bids]);
+  /* Сводка пометок по колонкам — содержимое язычков карточек. Один проход по
+     всем строкам на каждую колонку, поэтому мемоизировано ПО ДАННЫМ: поводов
+     перерисоваться у шапки полно (звезда, перекраска, ширина ленты), и ни
+     один из них этих чисел не меняет. */
+  const marksOf = useMemo(
+    () => new Map(contractors.map((c) => [c.id, columnMarks(facts.rows, c)])),
+    [facts, contractors],
+  );
 
   const modified = isModifiedView(view);
 
@@ -171,12 +179,66 @@ export function TenderCompare({
      В `CompareView` ему не место по тем же двум причинам: чип «Изменён»
      поднялся бы на раскраску, а смена пресета её сбрасывала бы. */
   const [rankTint, setRankTint] = useState(false);
+  /* РАЗВЁРНУТЫЕ НАЗВАНИЯ — тумблер того же рода и там же (решение владельца
+     24.08.2026, третья волна): читается это состояние, а не считается, и
+     переживать смену пресета оно обязано ровно так же. */
+  const [wideTitle, setWideTitle] = useState(false);
   const [folded, setFolded] = useState<Record<string, boolean>>({});
   const [tint, setTint] = useState<Record<string, string>>({});
   const [dossier, setDossier] = useState<Bid | null>(null);
   /* Палитра — вторая панель: состояние хранит КП вместе с прямоугольником
      нажатой кнопки. Механика обеих панелей — в <DossierModal> и <ColumnPainter>. */
   const [paint, setPaint] = useState<{ bid: Bid; at: DOMRect } | null>(null);
+
+  /* ── ПЕРЕХОД К ПОМЕТКЕ КОЛОНКИ (разбор 23.08.2026 §7) ────────────────────
+     Клик по строке перечня в уголке колонки — НАВИГАЦИЯ, а не раскрытие:
+     ни списка, ни поповера, экран переходит к ячейке с этой пометкой и
+     подсвечивает её тем же каналом, что и любой другой переход (обводка
+     `flashCells`). Повторный клик ведёт к следующей — строка перечня работает
+     как «следующая такая», и обход всей пометки делается одной точкой.
+
+     РАБОТАЕТ ЭТО ДЛЯ ВСЕХ ПЯТИ ПОМЕТОК, а не для одних корректировок
+     (24.08.2026, решение владельца). Механика у обхода была ровно одна и
+     раньше — упиралась она только в разметку: цели помечались `data-corr`,
+     то есть в DOM существовал ОДИН вид пометки из пяти. Теперь <BidCell>
+     ставит `data-cell` и `data-marks`, и обход отличается только именем
+     пометки в селекторе.
+
+     ОЧЕРЁДНОСТЬ БЕРЁТСЯ ИЗ DOM, а не из данных, и это единственный честный
+     источник: «первая» означает «первая в ТЕКУЩЕМ порядке строк» — том, что
+     человек видит сейчас, — а его задают вид строк, свёрнутые разделы и
+     фильтры сразу. Модель этого порядка не знает вовсе, зато DOM ЕСТЬ этот
+     порядок: сверху вниз для колонки. */
+  const [markAt, setMarkAt] = useState<string | null>(null);
+  const markTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(markTimer.current), []);
+
+  const goToMark = useCallback((kind: MarkKind, contractorId: string) => {
+    const root = dockRef.current;
+    if (!root) return;
+    const cells = [...root.querySelectorAll<HTMLElement>(`[data-marks~="${kind}"]`)]
+      .filter((el) => (el.dataset.cell ?? '').startsWith(`${contractorId}:`));
+    if (!cells.length) return;
+    /* От текущей подсветки — к следующей по кругу. Тупика не возникает: пустая
+       пометка в перечень не попадает, а решённая корректировка гаснет и там. */
+    const at = cells.findIndex((el) => el.dataset.cell === markAt);
+    const next = cells[(at + 1) % cells.length];
+    next.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' });
+    setMarkAt(next.dataset.cell ?? null);
+    window.clearTimeout(markTimer.current);
+    markTimer.current = window.setTimeout(() => setMarkAt(null), 5300);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [markAt]);
+
+  /* Подсветка перехода к пометке живёт в ТОМ ЖЕ множестве, что и обводка
+     «анализ → таблица»: два канала для одного «смотри сюда» дали бы две
+     разные рамки на соседних ячейках. */
+  const flashAll = useMemo(() => {
+    if (!markAt) return flashCells;
+    const all = new Set(flashCells ?? []);
+    all.add(markAt);
+    return all;
+  }, [flashCells, markAt]);
 
   const paintValue = (bid: Bid) => tint[bid.contractor.id] ?? resolveTone(bid.tone);
   const colorOf = (bid: Bid) => choose(tint, bid, rankTint);
@@ -208,17 +270,21 @@ export function TenderCompare({
   const layout = useMemo(
     () => (bandWidth == null
       ? null
-      : computeColumnLayout({ available: bandWidth, bids: contractors })),
-    [bandWidth, contractors],
+      : computeColumnLayout({ available: bandWidth, bids: contractors, wideTitle })),
+    [bandWidth, contractors, wideTitle],
   );
+  /* Левый блок целиком — «Позиция» + «Количество» + «Единица» + «Разброс».
+      Нужен только сумме ширины таблицы: шапка секции берёт то же число из
+      colSpan своей ячейки, без чисел в разметке. */
+  const leadWidth = layout == null ? null
+    : layout.title + layout.qty + layout.unit + layout.spread;
   /* Ширина таблицы = сумма колонок ровно до пикселя: с ней исполняются
       ширины <col> при layout="fixed" (max-content их теряет). Инлайном на
       самой таблице — смена ширины валидирует её РАСКЛАДКУ, но не стиль
       всех ячеек, каких дала бы наследуемая переменная на обёртке. */
-  const tableWidth = useMemo(() => (layout == null ? undefined
-    : layout.qty + layout.unit + layout.spread + layout.title
-      + Object.values(layout.bids).reduce((acc, w) => acc + w, 0)),
-  [layout]);
+  const tableWidth = useMemo(() => (leadWidth == null || layout == null ? undefined
+    : leadWidth + Object.values(layout.bids).reduce((acc, w) => acc + w, 0)),
+  [layout, leadWidth]);
   /* Закреплять имеет смысл ТОЛЬКО в панораме: в двух других режимах columns.ts
      раскладывает колонки ровно в ширину ленты, горизонтального хода нет вовсе,
      и закреплённая колонка ничем не отличалась бы от обычной. `pan` — это и
@@ -227,7 +293,7 @@ export function TenderCompare({
   /* ПОТОЛОК НАЗВАНИЯ В ЗНАКАХ. Целое число, и это условие работы memo у
      <CompareRow>: ширина ленты дрожит каждый кадр анимации панели и ухода
      сайдбара, а лимит меняется раз в несколько десятков пикселей. */
-  const limit = titleLimit(layout?.title);
+  const limit = titleLimit(layout?.title, wideTitle ? 2 : 1);
 
   /* Строки, прошедшие ВСЕ предикаты; секции собирают свои из них же.
      Для ПОДЫТОГОВ узла нужен полный набор его позиций: фильтр прячет строки,
@@ -269,6 +335,8 @@ export function TenderCompare({
           modified={modified}
           rankTint={rankTint}
           onRankTint={setRankTint}
+          wideTitle={wideTitle}
+          onWideTitle={setWideTitle}
           analysisApplied={analysisApplied}
           onRestoreView={onRestoreView}
           onPreset={onPreset}
@@ -296,7 +364,11 @@ export function TenderCompare({
         tabIndex={0}
         onClick={() => { if (focusRowId) onFocusClear(); }}
       >
-        <div className={s.density}>
+        {/* Развёрнутые названия — модификатор ОБЁРТКИ, а не проп каждой
+            строки: перенос включается одной CSS-переменной, наследуемой вниз,
+            и memo пятисот <CompareRow> от этого не ломается — им меняется
+            только целое число лимита. */}
+        <div className={cx(s.density, wideTitle && s.densityWide)}>
         <Table
           stickyHead
           stickyCol={pinned}
@@ -388,9 +460,11 @@ export function TenderCompare({
                   total={positions.length}
                   col={colorOf(bid)}
                   starred={starred.includes(bid.contractor.id)}
+                  marks={marksOf.get(bid.contractor.id)!}
                   onStar={() => onToggleStar(bid.contractor.id)}
                   onPaint={(at) => setPaint({ bid, at })}
                   onOpen={() => setDossier(bid)}
+                  onGoToMark={(kind) => goToMark(kind, bid.contractor.id)}
                   collapsed={collapsed}
                   onFold={() => setCollapsed((on) => !on)}
                 />
@@ -421,25 +495,47 @@ export function TenderCompare({
                const open = !folded[group.id];
                return (
                  <tbody key={group.id}>
-                   {/* Шапка секции — ОДНА ячейка на всю ширину таблицы
-                       (tableCell.fullRow гасит липкость sticky-col): строки
-                       внутри колонок на ней не рисуются, счётчика позиций
-                       больше нет (решение владельца 24.08.2026), это строка-
-                       заголовок блока, а не ряд значений. scope="rowgroup":
-                       заголовок для СТРОК под ним. */}
+                   {/* Шапка секции — ДВЕ ячейки, а не одна на всю таблицу:
+                       левый блок отдан заголовку (его colSpan и задаёт ширину
+                       полосы — ровно до правого края «Разброса»), хвост под
+                       колонками КП несёт только заливку ряда.
+                       tableCell.fullRow здесь НЕ СТАВИТСЯ намеренно: он гасит
+                       липкость колонки-якоря, а ячейка секции первая в своём
+                       ряду — и потому обязана слушаться булавки ровно как
+                       якорь. Своего механизма у заголовка нет (разбор —
+                       .section-toggle в модуле стилей).
+                       COLSPAN СЛЕДУЕТ ЗА БУЛАВКОЙ (решение владельца
+                       24.08.2026). С нажатой булавкой застывает и якорь, и
+                       ячейка секции, но якорь — это ОДНА колонка, а полоса
+                       была четырьмя: заголовок выступал за край якоря на
+                       275px, и вместо одной вертикали получалась лесенка из
+                       двух. Теперь при закреплении полоса ровно колонка
+                       «Позиция» — край один. Отжата булавка — полоса снова
+                       весь левый блок, до правого края «Разброса»: там
+                       выступать не за что и обрезать название раньше времени
+                       незачем.
+                       Счётчика позиций здесь нет — это строка-заголовок блока,
+                       а не ряд значений. scope="rowgroup": заголовок для СТРОК
+                       под ним. */}
                    <tr className={s.groupRow}>
                      <th
                        scope="rowgroup"
-                       colSpan={4 + bids.length}
-                       className={cx(tableCell.card, tableCell.fullRow, s.groupHead)}
+                       colSpan={pinned ? 1 : 4}
+                       className={cx(tableCell.card, s.groupHead)}
                      >
-                       {/* Кнопка-полоса ЛИПНЕТ К ЛЕВОЙ КРОМКЕ видимой области и
-                           стоит её шириной (100cqw — контейнер объявлен на
-                           обёртке таблицы): заголовок центрируется
-                           относительно того, что видит глаз сейчас, а не всей
-                           прокрученной таблицы. Стрелка слева, справа — её
-                           призрак той же ширины: иначе центр названия съезжал
-                           бы на полстрелки. */}
+                       {/* Кнопка занимает свою ячейку целиком — ровно до
+                           правого края «Разброса» (решение владельца
+                           24.08.2026, третья волна): там кончается зона
+                           описания работы, и заголовок раздела описывает
+                           именно её, а не колонки с ценами. Отсюда всё
+                           остальное: название прижато влево, на общую линию
+                           с названиями позиций под ним, а стрелка стоит на
+                           дальнем краю блока и НЕ ДВИГАЕТСЯ от длины
+                           названия. Название длиннее блока режется
+                           многоточием, полное всплывает <Tooltip>'ом.
+                           Ширина больше не приезжает инлайном: её даёт
+                           colSpan={4} самой ячейки — то же число, но без
+                           записи в DOM на каждом кадре анимации панели. */}
                        <button
                          type="button"
                          className={s.sectionToggle}
@@ -447,15 +543,19 @@ export function TenderCompare({
                          aria-label={`${group.title}: ${open ? 'свернуть' : 'развернуть'} секцию`}
                          onClick={() => setFolded((all) => ({ ...all, [group.id]: open }))}
                        >
-                         <span className={cx(s.fold, !open && s.isOn)}>
-                           <Icon name="chevronDown" />
-                         </span>
                          <Tooltip text={group.title}>
                            <span className={s.sectionTitle}>{group.title}</span>
                          </Tooltip>
-                         <span className={s.sectionSpacer} aria-hidden="true" />
+                         <span className={cx(s.fold, !open && s.isOn)}>
+                           <Icon name="chevronDown" />
+                         </span>
                        </button>
                      </th>
+                     {/* Хвост ряда: заливку секции держит правило .group-row td,
+                         содержимого у него нет — заголовку раздела писать под
+                         колонками нечего. Ширина — всё, что не занял
+                         заголовок, поэтому и она следует за булавкой. */}
+                     <td colSpan={(pinned ? 3 : 0) + bids.length} />
                    </tr>
 
                   {/* Итог остаётся и у свёрнутого раздела: ради него и сворачивают.
@@ -475,11 +575,11 @@ export function TenderCompare({
                       bind={popup.bind}
                       focused={focusRowId === row.position.id}
                       noteFor={noteFor}
-                      flashCells={flashCells}
+                      flashCells={flashAll}
                     />
                   )) : null}
 
-                  <TotalRow label="Итого" rows={allRowsOfGroup(group)} bids={bids} metric={view.mainMetric} />
+                  <TotalRow rows={allRowsOfGroup(group)} bids={bids} metric={view.mainMetric} />
                 </tbody>
               );
             })
@@ -502,7 +602,7 @@ export function TenderCompare({
                     bind={popup.bind}
                     focused={focusRowId === row.position.id}
                     noteFor={noteFor}
-                    flashCells={flashCells}
+                    flashCells={flashAll}
                   />
                 ))}
             </tbody>
@@ -513,7 +613,7 @@ export function TenderCompare({
               Обёртка в tbody обязательна: голый tr на уровне таблицы браузер
               пере-вешивает в собственный tbody, и React честно ругается. */}
           <tbody>
-            <TotalRow label="Итого" rows={facts.rows} bids={bids} metric={view.mainMetric} />
+            <TotalRow grand rows={facts.rows} bids={bids} metric={view.mainMetric} />
           </tbody>
 
           {/* Условия поставщиков — матрица ответов формы КП вне цен, выровненная

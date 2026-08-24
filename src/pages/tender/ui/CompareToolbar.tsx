@@ -36,6 +36,10 @@ interface ToolbarProps {
    *  — у <TenderCompare> (эргономика чтения, не ось среза). */
   rankTint: boolean;
   onRankTint: (on: boolean) => void;
+  /** Развёрнутые названия позиций — второй тумблер оформления там же и по той
+   *  же причине: читается это состояние, а не считается. */
+  wideTitle: boolean;
+  onWideTitle: (on: boolean) => void;
   /** Вид перестроен переходом «анализ → таблица»: чип с ВОЗВРАТОМ полного
    *  пользовательского вида (05 §7). Старый «Изменён · Сброс» при этом молчит:
    *  два чипа про один уход от базы — забор. */
@@ -69,7 +73,7 @@ interface ToolbarProps {
  *         closeOnSelect={false}; у свитчей подпись видима и aria-label.
  */
 export function CompareToolbar({
-  view, thresholds, onThresholds, allRows, totals, modified, rankTint, onRankTint,
+  view, thresholds, onThresholds, allRows, totals, modified, rankTint, onRankTint, wideTitle, onWideTitle,
   analysisApplied, onRestoreView, onPreset, onPatch,
 }: ToolbarProps) {
   return (
@@ -200,6 +204,8 @@ export function CompareToolbar({
             allRows={allRows}
             rankTint={rankTint}
             onRankTint={onRankTint}
+            wideTitle={wideTitle}
+            onWideTitle={onWideTitle}
           />
         ) : null}
         <CompareLegend thresholds={thresholds} />
