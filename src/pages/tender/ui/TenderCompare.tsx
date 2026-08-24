@@ -190,12 +190,15 @@ export function TenderCompare({
      нажатой кнопки. Механика обеих панелей — в <DossierModal> и <ColumnPainter>. */
   const [paint, setPaint] = useState<{ bid: Bid; at: DOMRect } | null>(null);
 
-  /* ── ПЕРЕХОД К ПОМЕТКЕ КОЛОНКИ (разбор 23.08.2026 §7) ────────────────────
+  /* ── ПЕРЕХОД К ПОМЕТКЕ КОЛОНКИ (разбор 23.08.2026 §7; подсветка ВСЕХ ячеек
+     пометки — решение владельца 25.08.2026) ─────────────────────────────────
      Клик по строке перечня в уголке колонки — НАВИГАЦИЯ, а не раскрытие:
-     ни списка, ни поповера, экран переходит к ячейке с этой пометкой и
-     подсвечивает её тем же каналом, что и любой другой переход (обводка
-     `flashCells`). Повторный клик ведёт к следующей — строка перечня работает
-     как «следующая такая», и обход всей пометки делается одной точкой.
+     ни списка, ни поповера, экран подсвечивает ОБВОДКОЙ все ячейки колонки
+     с этой пометкой и прокручивает к первой из них. Одна обводка вместо
+     одной ячейки: смысл клика «покажи, ГДЕ они», и семь рамок на семь ячеек
+     отвечают на него за один взгляд, без обхода. Повторный клик ведёт к
+     следующей подсвеченной по кругу — длинный столбец всё равно читают
+     по частям, и обход остаётся одной точкой.
 
      РАБОТАЕТ ЭТО ДЛЯ ВСЕХ ПЯТИ ПОМЕТОК, а не для одних корректировок
      (24.08.2026, решение владельца). Механика у обхода была ровно одна и
@@ -209,7 +212,10 @@ export function TenderCompare({
      человек видит сейчас, — а его задают вид строк, свёрнутые разделы и
      фильтры сразу. Модель этого порядка не знает вовсе, зато DOM ЕСТЬ этот
      порядок: сверху вниз для колонки. */
-  const [markAt, setMarkAt] = useState<string | null>(null);
+  const [markFlash, setMarkFlash] = useState<ReadonlySet<string> | null>(null);
+  /* Курсор обхода — реф, а не состояние: он двигает прокрутку, но не разметку,
+     и лишний проход по всем мемоизированным строкам ему не нужен. */
+  const markCursor = useRef<string | null>(null);
   const markTimer = useRef<number | undefined>(undefined);
   useEffect(() => () => window.clearTimeout(markTimer.current), []);
 
@@ -219,26 +225,34 @@ export function TenderCompare({
     const cells = [...root.querySelectorAll<HTMLElement>(`[data-marks~="${kind}"]`)]
       .filter((el) => (el.dataset.cell ?? '').startsWith(`${contractorId}:`));
     if (!cells.length) return;
-    /* От текущей подсветки — к следующей по кругу. Тупика не возникает: пустая
-       пометка в перечень не попадает, а решённая корректировка гаснет и там. */
-    const at = cells.findIndex((el) => el.dataset.cell === markAt);
-    const next = cells[(at + 1) % cells.length];
-    next.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' });
-    setMarkAt(next.dataset.cell ?? null);
+    const keys = cells.map((el) => el.dataset.cell ?? '');
+    /* Подсветка — ВСЕ такие ячейки колонки сразу, тем же каналом, что и любой
+       другой переход (обводка `flashCells`). */
+    setMarkFlash(new Set(keys));
+    /* Прокрутка — от текущего курсора к следующей по кругу; впервые — к
+       первой. Тупика не возникает: пустая пометка в перечень не попадает,
+       а решённая корректировка гаснет и там. */
+    const at = keys.indexOf(markCursor.current ?? '');
+    const idx = at < 0 ? 0 : (at + 1) % keys.length;
+    cells[idx].scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' });
+    markCursor.current = keys[idx];
     window.clearTimeout(markTimer.current);
-    markTimer.current = window.setTimeout(() => setMarkAt(null), 5300);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [markAt]);
+    markTimer.current = window.setTimeout(() => {
+      setMarkFlash(null);
+      markCursor.current = null;
+    }, 5300);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- dockRef объявлен ниже, реф стабилен
+  }, []);
 
   /* Подсветка перехода к пометке живёт в ТОМ ЖЕ множестве, что и обводка
      «анализ → таблица»: два канала для одного «смотри сюда» дали бы две
      разные рамки на соседних ячейках. */
   const flashAll = useMemo(() => {
-    if (!markAt) return flashCells;
+    if (!markFlash?.size) return flashCells;
     const all = new Set(flashCells ?? []);
-    all.add(markAt);
+    for (const key of markFlash) all.add(key);
     return all;
-  }, [flashCells, markAt]);
+  }, [flashCells, markFlash]);
 
   const paintValue = (bid: Bid) => tint[bid.contractor.id] ?? resolveTone(bid.tone);
   const colorOf = (bid: Bid) => choose(tint, bid, rankTint);

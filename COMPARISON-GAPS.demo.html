@@ -34,6 +34,8 @@
   --cu-tone-danger:rgb(233,61,130); --cu-tone-danger-ink:rgb(197,40,105);--cu-tone-danger-fill:rgba(233,61,130,.1);
   --cu-tone-warning:rgb(214,119,10);--cu-tone-warning-ink:rgb(176,96,6); --cu-tone-warning-fill:rgba(214,119,10,.1);
   --cu-tone-neutral:rgb(150,150,150);--cu-tone-neutral-ink:var(--cu-content-secondary);--cu-tone-neutral-fill:var(--cu-fill);
+  /* П.5.9 — КРАСНЫЙ ошибок (кандидат на --cu-tone-error в global.css) */
+  --err-ink:#d93025;
   --cu-font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",roboto,"Helvetica Neue",helvetica,arial,sans-serif;
   --cu-font-weight-medium:500;
   --cu-font-weight-semibold:600;
@@ -127,8 +129,16 @@ body{
 .titlerow .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .rownum{display:inline-block;width:36px;flex:none;color:var(--cu-content-quaternary);font-size:11px;line-height:20px;font-variant-numeric:tabular-nums}
 .wbar{display:inline-flex;align-items:center;gap:7px;flex:none}
-.wbar .trk{position:relative;width:96px;height:4px;border-radius:666px;background:rgba(0,0,0,.08);overflow:hidden;flex:none}
-.wbar .trk i{position:absolute;inset:0 auto 0 0;border-radius:666px;background:var(--cu-content-secondary)}
+/* П.4.2 — ОДИН прогресс-бар на всё (реюз: полоса вклада, разборы, карточки):
+   трек 6px, заливка-градиент, ручка-точка на конце; тональные варианты */
+.pbar{position:relative;height:6px;border-radius:666px;background:rgba(0,0,0,.08);flex:none}
+.pbar>i{position:absolute;top:2px;bottom:2px;left:0;border-radius:666px;background:linear-gradient(90deg,var(--cu-content-placeholder),var(--cu-content-secondary))}
+.pbar>i::after{content:"";position:absolute;right:0;top:50%;width:9px;height:9px;border-radius:50%;background:var(--cu-content-secondary);border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transform:translate(50%,-50%)}
+.pbar--info>i{background:linear-gradient(90deg,var(--cu-tone-info),var(--cu-tone-info-ink))}
+.pbar--info>i::after{background:var(--cu-tone-info-ink)}
+.pbar--ok>i{background:linear-gradient(90deg,var(--cu-tone-success),var(--cu-tone-success-ink))}
+.pbar--ok>i::after{background:var(--cu-tone-success-ink)}
+.wbar .pbar{width:96px}
 .wbar b{font-size:12px;font-weight:var(--cu-font-weight-medium);color:var(--cu-content-secondary);font-variant-numeric:tabular-nums;min-width:44px}
 
 /* П.1.6 — появление новой колонки */
@@ -141,25 +151,37 @@ body{
 /* ── ЗНАКИ ЯЧЕЙКИ ── */
 .pos{position:relative}
 .tag-min{position:absolute;left:10px;bottom:4px;transform:rotate(-4deg);z-index:3;font-size:9px;font-weight:700;letter-spacing:.08em;line-height:1;padding:2px 5px 1px;border-radius:3px;color:var(--cu-tone-success-ink);background:var(--cu-tone-success-fill)}
-.maxmk{font-size:10px;color:var(--cu-content-quaternary);margin-left:5px;letter-spacing:.04em}
+/* П.2.5 — максимум БЕЗ надписи: засечка над числом + cursor:help;
+   пояснение живёт в сводке ячейки, слова в ячейке нет (правило (в)) */
+.maxv{position:relative;display:inline-block;padding-top:5px;cursor:help}
+.maxv::before{content:"";position:absolute;top:0;left:1px;right:1px;height:2px;border-radius:1px;background:var(--cu-content-placeholder)}
 .riska{position:absolute;left:0;top:calc(50% - 12px);width:3px;height:24px;border-radius:0 2px 2px 0;background:var(--cu-tone-warning)}
-.bang{position:absolute;left:11px;bottom:21px;font-size:11px;font-weight:700;line-height:1;color:var(--cu-tone-warning-ink)}
-/* П.2.3 — штриховка СОХРАНЕНА, к ней добавляются риска и «!» (см. пример 11) */
+/* ═══ ПРАВИЛА ВТОРОЙ ВОЛНЫ (владелец, 25.08) ══════════════════════════════
+   (а) ИКОНКА + ТЕКСТ = flex, align-items:center; margin-top у иконок запрещён.
+   (б) Галочка ВЫБОРА в меню — СПРАВА; левый край текста всегда ровный.
+       Информационные галочки-чеклисты — наоборот, слева (модалка выгрузки).
+   (в) Надписей-слов в ячейках нет: состояния несут знаки и глифы.
+   (г) Счётчиков у маркеров комментариев нет.
+   (д) Прогресс — ОДИН общий компонент .pbar (реюз везде).
+   (е) Текст ошибок — красный (--err-ink), кегль 14. */
 .anomhatch{background-image:repeating-linear-gradient(-45deg,var(--cu-tone-warning-fill) 0 5px,transparent 5px 10px)}
-.corr{display:inline-flex;vertical-align:-3px;margin-left:4px}
-.keym{display:inline-flex;transform:rotate(-24deg);vertical-align:-2px;margin-left:6px}
-.bubble{position:absolute;right:5px;bottom:5px;min-width:15px;height:15px;padding:0 3px;border-radius:666px;background:var(--cu-tone-info);color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;z-index:3}
-/* П.2.4 — маркер комментария правым верхним углом: специальная иконка чата,
-   зона попадания 16×16 при глифе 12px, hover — таблетка рецепта 1 */
-.cmark{position:absolute;top:2px;right:2px;width:16px;height:16px;z-index:3;display:flex;align-items:center;justify-content:center;border-radius:4px;color:var(--cu-content-quaternary)}
+.anomhatch{background-image:repeating-linear-gradient(-45deg,var(--cu-tone-warning-fill) 0 5px,transparent 5px 10px)}
+.corr{display:inline-flex;vertical-align:middle;margin-left:4px}
+.keym{display:inline-flex;transform:rotate(-24deg);vertical-align:middle;margin-left:6px}
+/* П.2.4 — маркер комментария правым верхним углом: Solar bold
+   (chat-round-unread-bold / chat-round-bold), глиф 18px, зона попадания 22×22,
+   ЦЕНТР ПО ВЫСОТЕ ячейки; счётчик-бабл УПРАЗДНЁН — непросмотренность несёт
+   сам глиф unread + тон info; клик по маркеру открывает тред истории */
+.cmark{position:absolute;top:50%;transform:translateY(-50%);right:3px;width:22px;height:22px;z-index:3;display:flex;align-items:center;justify-content:center;border-radius:5px;color:var(--cu-content-quaternary)}
 .cmark:hover{background:var(--cu-state-hover);color:var(--cu-content-primary)}
+.cmark .ic{width:18px;height:18px}
 .waitdots{display:inline-flex;gap:3px;align-items:center;vertical-align:1px}
 .waitdots i{width:4px;height:4px;border-radius:50%;background:var(--cu-content-placeholder);animation:wd 1.2s infinite}
 .waitdots i:nth-child(2){animation-delay:.15s}.waitdots i:nth-child(3){animation-delay:.3s}
 @keyframes wd{0%,60%,100%{opacity:.35}30%{opacity:1}}
 
 /* П.1.8 — разброс: ОДНА линейка, три тона, размер ×1.2, точка «дышит» */
-.spreadv{display:inline-flex;width:29px;height:19px;vertical-align:-4px;margin-left:7px}
+.spreadv{display:inline-flex;width:29px;height:19px;vertical-align:middle;margin-left:7px}
 .spreadv .dotm{animation:dotslide 2.4s var(--cu-ease-standard) infinite alternate}
 @keyframes dotslide{from{transform:translateX(-2.6px)}to{transform:translateX(3.4px)}}
 .sp-low{color:var(--cu-tone-success)}
@@ -172,7 +194,7 @@ body{
 .chip--warn{background:var(--cu-tone-warning-fill);color:var(--cu-tone-warning-ink)}
 .chip--success{background:var(--cu-tone-success-fill);color:var(--cu-tone-success-ink)}
 .chip--info{background:var(--cu-tone-info-fill);color:var(--cu-tone-info-ink)}
-.newpos{display:inline-flex;align-items:center;gap:5px;height:20px;padding:0 8px;margin-left:8px;border-radius:4px;background:var(--cu-tone-warning-fill);color:var(--cu-tone-warning-ink);font-size:11px;font-weight:var(--cu-font-weight-medium);vertical-align:2px}
+.newpos{display:inline-flex;align-items:center;gap:5px;height:20px;padding:0 8px;margin-left:8px;border-radius:4px;background:var(--cu-tone-warning-fill);color:var(--cu-tone-warning-ink);font-size:11px;font-weight:var(--cu-font-weight-medium);vertical-align:middle}
 .newpos.done{background:var(--cu-fill);color:var(--cu-content-secondary)}
 
 /* ── ПОДСКАЗКИ И ПАНЕЛИ ── */
@@ -196,8 +218,6 @@ span.hov,button.hov{display:inline-block}
 .pnote{margin-top:9px;padding-top:8px;border-top:1px solid var(--cu-border-default);color:var(--cu-content-secondary)}
 .pfoot{margin-top:9px;color:var(--cu-content-tertiary)}
 .pquote{margin:6px 0 0;padding:7px 9px;background:var(--cu-fill-subtle);border-left:2px solid var(--cu-border-default);border-radius:0 4px 4px 0;color:var(--cu-content-secondary);font-style:italic}
-.meter{height:4px;border-radius:666px;background:rgba(0,0,0,.08);margin-top:9px;overflow:hidden}
-.meter i{display:block;height:100%;border-radius:666px;background:var(--cu-tone-info)}
 .fsec{margin-top:11px;padding-top:11px;border-top:1px solid var(--cu-border-default)}
 .cap{font-size:10px;line-height:14px;letter-spacing:.06em;text-transform:uppercase;color:var(--cu-content-secondary);font-weight:var(--cu-font-weight-medium)}
 
@@ -235,22 +255,45 @@ span.hov,button.hov{display:inline-block}
 .ta{width:100%;min-height:58px;padding:8px 10px;border:1px solid var(--cu-border-default);border-radius:8px;font-size:13px;line-height:19px;resize:vertical;cursor:text;background:#fff}
 .ta:focus{outline:none;box-shadow:var(--cu-state-ring)}
 .fieldlbl{display:block;margin:10px 0 4px;font-size:12px;color:var(--cu-content-secondary)}
-.note-strip{display:flex;gap:8px;align-items:flex-start;padding:8px 10px;border-radius:8px;background:var(--cu-tone-warning-fill);color:var(--cu-tone-warning-ink);font-size:12px;line-height:17px}
+.note-strip{display:flex;gap:8px;align-items:center;padding:8px 10px;border-radius:8px;background:var(--cu-tone-warning-fill);color:var(--cu-tone-warning-ink);font-size:12px;line-height:17px}
 
-/* П.2.4 — история комментариев: таймлайн */
-.tl{position:relative;margin-top:10px;padding-left:20px}
-.tl::before{content:"";position:absolute;left:5px;top:8px;bottom:8px;width:1px;background:var(--cu-border-default)}
-.tli{position:relative;padding:4px 0 10px}
-.tli:last-child{padding-bottom:2px}
-.tli::before{content:"";position:absolute;left:-19px;top:9px;width:8px;height:8px;border-radius:50%;background:#fff;border:2px solid var(--cu-content-placeholder)}
-.tli.unseen::before{border-color:var(--cu-tone-info)}
-.vtag{display:inline-flex;align-items:center;height:17px;padding:0 6px;border-radius:4px;background:var(--cu-fill);color:var(--cu-content-secondary);font-size:10px;font-weight:var(--cu-font-weight-semibold);letter-spacing:.04em}
+/* П.2.4 — комментарии уровня YouTube: аватар + имя/время, гигантский текст
+   со сворачиванием («Показать полностью»), действия под записью,
+   ответы с отступом и композер ответа */
+.cmt{display:flex;gap:10px;padding:9px 0}
+.cmt-av{width:28px;height:30px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:var(--cu-font-weight-semibold)}
+.av-a{background:var(--cu-tone-info-fill);color:var(--cu-tone-info-ink)}
+.av-b{background:var(--cu-tone-warning-fill);color:var(--cu-tone-warning-ink)}
+.av-c{background:var(--cu-tone-success-fill);color:var(--cu-tone-success-ink)}
+.cmt--reply{margin-left:40px}
+.cmt-body{flex:1;min-width:0}
+.cmt-head{display:flex;align-items:baseline;gap:7px;min-width:0}
+.cmt-name{font-size:13px;font-weight:var(--cu-font-weight-semibold);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cmt-time{font-size:12px;color:var(--cu-content-tertiary);white-space:nowrap}
+.cmt-text{margin-top:2px;font-size:13px;line-height:19px;overflow-wrap:anywhere}
+.cmt-text.is-clamped{display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
+.clamptoggle{display:none}
+.clamptoggle:checked ~ .is-clamped{display:block;-webkit-line-clamp:unset;overflow:visible}
+.more{display:inline-block;margin-top:1px;font-size:12px;color:var(--cu-tone-info-ink);cursor:pointer}
+.more:hover{text-decoration:underline}
+.clamptoggle:checked ~ .more{display:none}
+.cmt-acts{display:flex;align-items:center;gap:2px;margin-top:4px;margin-left:-8px}
+.cact-t{display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 8px;border-radius:6px;font-size:12px;color:var(--cu-content-secondary)}
+.cact-t:hover{background:var(--cu-state-hover-subtle);color:var(--cu-content-primary)}
+/* П.2.2 — композер ответа: БЕЗ кнопок «Отменить/Ответить» — только круглая
+   иконка отправки; поле авторастёт, при 2+ строках кнопка стоит снизу справа */
+.composer{display:flex;gap:10px;align-items:flex-end;margin-top:8px}
+.composer .cwrap{flex:1;min-width:0;display:flex;align-items:flex-end;gap:6px;border:1px solid var(--cu-border-default);border-radius:12px;padding:4px 4px 4px 12px;background:#fff;transition:border-color var(--cu-duration-fast)}
+.composer .cwrap:focus-within{border-color:var(--cu-content-quaternary);box-shadow:var(--cu-state-ring)}
+.composer textarea{flex:1;min-width:0;border:0;outline:none;resize:none;font:inherit;font-size:13px;line-height:19px;padding:4px 0;background:none}
+.composer .send{width:28px;height:28px;border-radius:50%;background:var(--cu-content-primary);color:#fff;display:flex;align-items:center;justify-content:center;flex:none}
+.composer .send:hover{background:#000}
 
 /* П.3.7 — легенда */
 .legend{width:384px;padding:6px}
 .lg{display:flex;gap:10px;padding:7px 8px;border-radius:6px;align-items:flex-start}
 .lg:hover{background:var(--cu-state-hover-subtle)}
-.lg .g{width:28px;display:flex;justify-content:center;flex:none;padding-top:2px}
+.lg .g{width:28px;height:18px;display:flex;align-items:center;justify-content:center;flex:none}
 .lg b{display:block;font-size:13px;font-weight:var(--cu-font-weight-medium)}
 .lg span{display:block;font-size:12px;line-height:16px;color:var(--cu-content-tertiary)}
 
@@ -287,7 +330,7 @@ span.hov,button.hov{display:inline-block}
 .mi:hover{background:var(--cu-state-hover-subtle)}
 .mi .grow{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
 .mi .cnt{font-size:11px;color:var(--cu-content-tertiary);font-variant-numeric:tabular-nums}
-.mi .chk{visibility:hidden;color:var(--cu-tone-info);display:inline-flex}
+.mi .chk{visibility:hidden;color:var(--cu-tone-info);display:inline-flex;order:99;width:16px;justify-content:center}
 .mi.on .chk{visibility:visible}
 .msep{height:1px;background:var(--cu-border-default);margin:4px 6px}
 .mhint{padding:6px 8px 4px;font-size:11px;line-height:16px;color:var(--cu-content-tertiary)}
@@ -307,9 +350,17 @@ span.hov,button.hov{display:inline-block}
 .fillb span{font-size:10px;line-height:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--cu-content-secondary)}
 .sumv{margin-left:auto;font-size:16px;line-height:21px;font-weight:var(--cu-font-weight-semibold);font-variant-numeric:tabular-nums;white-space:nowrap}
 /* П.5.0 — facts: три строки служебных чисел между ценой и кнопками */
-.facts{display:flex;flex-direction:column;gap:3px;border-top:1px solid var(--cu-border-default);padding-top:7px}
-.facts .fr{display:flex;justify-content:space-between;gap:8px;font-size:11px;line-height:15px;color:var(--cu-content-secondary);font-variant-numeric:tabular-nums}
-.facts .fr b{font-weight:var(--cu-font-weight-medium);color:var(--cu-content-primary)}
+/* П.5.0 — facts РАСКРЫВАЮТСЯ: свёрнуто — одна строка-ключ (Δ к лидеру),
+   раскрыто — аккуратная сетка подпись/значение; chevron рецепта 11 */
+details.cfacts{border-top:1px solid var(--cu-border-default);padding-top:7px}
+details.cfacts>summary{list-style:none;display:flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;line-height:15px;color:var(--cu-content-secondary);border-radius:4px}
+details.cfacts>summary::-webkit-details-marker{display:none}
+details.cfacts>summary:hover{color:var(--cu-content-primary)}
+details.cfacts>summary .caret{transition:transform var(--cu-duration-fast) var(--cu-ease-standard);margin-left:auto}
+details.cfacts[open]>summary .caret{transform:rotate(180deg)}
+details.cfacts .fgrid{display:grid;grid-template-columns:1fr auto;gap:5px 12px;margin-top:8px}
+details.cfacts .fk{font-size:10px;line-height:14px;letter-spacing:.06em;text-transform:uppercase;color:var(--cu-content-quaternary);align-self:center}
+details.cfacts .fv{font-size:12px;font-weight:var(--cu-font-weight-medium);text-align:right;font-variant-numeric:tabular-nums;color:var(--cu-content-primary)}
 .delta-ln{color:var(--cu-tone-danger-ink)}
 .meta2{display:flex;align-items:center;gap:4px;margin-top:auto}
 .meta2 .badge{margin-right:auto}
@@ -320,7 +371,7 @@ span.hov,button.hov{display:inline-block}
 .b-neutral{background:var(--cu-fill);color:var(--cu-content-secondary)}
 .cact{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:6px;color:var(--cu-content-tertiary)}
 .cact:hover{background:var(--cu-state-hover);color:var(--cu-content-primary)}
-.corrbig{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:var(--cu-font-weight-medium);color:var(--cu-tone-warning-ink)}
+.corrbig{display:inline-flex;align-items:center;gap:4px;vertical-align:middle;font-size:12px;font-weight:var(--cu-font-weight-medium);color:var(--cu-tone-warning-ink)}
 .ccard.is-locked .dim{color:var(--cu-content-quaternary)}
 .hdrrow{display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap}
 .star-on{color:var(--cu-content-primary)}
@@ -339,20 +390,24 @@ span.hov,button.hov{display:inline-block}
 .stat .n{margin-left:auto;font-weight:var(--cu-font-weight-medium);color:var(--cu-tone-info-ink);font-variant-numeric:tabular-nums}
 .stat .n:hover{text-decoration:underline}
 .minilist{margin:0 0 6px 14px;padding-left:12px;border-left:2px solid var(--cu-border-default)}
-.minilist .mi{height:28px;font-size:12px}
-.urlbar{display:flex;align-items:center;gap:8px;background:var(--cu-global-sidebar-background);border-radius:8px;padding:9px 12px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;overflow:auto}
-.u-dom{color:var(--cu-content-tertiary)}
-.up{padding:1px 5px;border-radius:4px}
-.up-k{background:var(--cu-tone-info-fill);color:var(--cu-tone-info-ink)}
-.up-v{background:var(--cu-fill);color:var(--cu-content-secondary)}
-.toast{display:inline-flex;align-items:center;gap:7px;height:30px;padding:0 12px;border-radius:8px;background:var(--cu-content-primary);color:#fff;font-size:12px}
-.errstrip{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;background:var(--cu-tone-danger-fill);color:var(--cu-tone-danger-ink);font-size:13px}
+.minilist .mi{height:30px;font-size:13px}
+/* П.3.5 — копирование ссылки как в Figma/Claude Design: один пилюль-блок
+   [иконка ссылки · усечённый URL · кнопка копирования], без параметрики */
+.linkpill{display:inline-flex;align-items:center;gap:8px;height:36px;padding-left:12px;border-radius:8px;box-shadow:var(--cu-elevation-border-1);max-width:440px}
+.linkpill .lnk{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;color:var(--cu-content-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.linkpill .cp{width:30px;height:30px;border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--cu-content-secondary);flex:none}
+.linkpill .cp:hover{background:var(--cu-state-hover-subtle);color:var(--cu-content-primary)}
+/* П.5.9 — красный (не бордовый), 14px, иконка по центру высоты */
+.errstrip{--err-ink:#d93025;display:flex;align-items:center;gap:10px;padding:11px 12px;border-radius:8px;background:var(--cu-tone-danger-fill);color:var(--err-ink);font-size:14px;line-height:20px}
+.errstrip .ic{flex:none;align-self:center}
 .stale{opacity:.45}
 .backdrop{position:relative;border-radius:12px;background:rgba(32,32,32,.38);padding:28px;display:flex;justify-content:center}
 .modal{width:400px;max-width:100%;background:#fff;border-radius:12px;box-shadow:var(--cu-elevation-4);padding:16px}
 .modal h4{font-size:16px;font-weight:var(--cu-font-weight-semibold)}
-.checkln{display:flex;gap:8px;align-items:flex-start;padding:5px 0;font-size:13px;color:var(--cu-content-secondary)}
-.checkln .ic{color:var(--cu-tone-success-ink);margin-top:1px}
+.checkln{display:flex;gap:8px;align-items:center;padding:5px 0;font-size:13px;line-height:18px;color:var(--cu-content-secondary)}
+/* галочка справа — то же правило ровного левого края, что и в меню */
+.checkln .grow{flex:1;min-width:0}
+.checkln .ic{color:var(--cu-tone-success-ink);flex:none}
 .fname{margin-top:10px;padding:8px 10px;border-radius:8px;background:var(--cu-global-sidebar-background);font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--cu-content-secondary)}
 .flashcell{animation:flash 2.6s ease-out .4s infinite alternate}
 @keyframes flash{0%,12%{box-shadow:inset 0 0 0 2px var(--cu-tone-info)}55%,100%{box-shadow:inset 0 0 0 2px rgba(29,110,220,.1)}}
@@ -368,7 +423,8 @@ span.hov,button.hov{display:inline-block}
 
 <!-- СПРАЙТ ГЛИФОВ: геометрия один в один из pages/tender/ui/assets/*.tsx;
      i-spreadv — та же линейка на currentColor (П.1.8: цвет = состояние);
-     i-chat (П.2.4), i-aright (П.2.1) — новые глифы того же штриха 1.4–1.7 -->
+     i-chat-unread / i-chat-read (П.2.4, геометрия Solar bold: chat-round-unread-bold
+     и chat-round-bold), i-aright (П.2.1) — новые глифы того же штриха -->
 <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
   <symbol id="i-corr" viewBox="0 0 20 18"><g fill="none" stroke="var(--cu-tone-warning)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M10 1.9 L18.6 16.1 H1.4 Z"/><path d="M10 6.6 V10.6"/><circle cx="10" cy="13.3" r=".95" fill="var(--cu-tone-warning)" stroke="none"/></g></symbol>
   <symbol id="i-coin" viewBox="0 0 24 24"><g fill="none" stroke="var(--cu-tone-info)" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="6.6" stroke-opacity=".4" stroke-width="1"/><text x="12" y="15.4" text-anchor="middle" fill="var(--cu-tone-info)" stroke="none" font-size="9" font-weight="700">₽</text></g></symbol>
@@ -387,8 +443,11 @@ span.hov,button.hov{display:inline-block}
   <symbol id="i-gear" viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M8 1.8v2M8 12.2v2M1.8 8h2M12.2 8h2M3.6 3.6L5 5M11 11l1.4 1.4M12.4 3.6L11 5M5 11l-1.4 1.4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></symbol>
   <symbol id="i-q" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M6.4 6.2A1.7 1.7 0 019.6 6.7c0 1-1.6 1.2-1.6 2.3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><circle cx="8" cy="11.3" r=".9" fill="currentColor"/></symbol>
   <symbol id="i-doc" viewBox="0 0 16 16"><path d="M4 2.5h5.5L12.5 5.5V13.5H4z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M9.5 2.5v3h3M6 8h4M6 10.5h4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></symbol>
-  <symbol id="i-chat" viewBox="0 0 16 16"><path d="M3 3.5h8.5A1.5 1.5 0 0113 5v4a1.5 1.5 0 01-1.5 1.5H7L4.5 13V10.5H3A1.5 1.5 0 011.5 9V5A1.5 1.5 0 013 3.5z" transform="translate(.75)" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M4.5 6h6M4.5 8h3.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></symbol>
+  <symbol id="i-chat-unread" viewBox="0 0 24 24"><path d="M12 22C17.5228 22 22 17.5228 22 12C22 11.094 21.8795 10.2162 21.6537 9.38161C21.5684 9.06633 21.1987 8.94083 20.9028 9.0791C20.3248 9.34916 19.68 9.5 19 9.5C16.5147 9.5 14.5 7.48528 14.5 5C14.5 4.31996 14.6508 3.67516 14.9209 3.09722C15.0592 2.80131 14.9337 2.4316 14.6184 2.3463C13.7838 2.12048 12.906 2 12 2C6.47715 2 2 6.47715 2 12C2 13.5997 2.37562 15.1116 3.04346 16.4525C3.22094 16.8088 3.28001 17.2161 3.17712 17.6006L2.58151 19.8267C2.32295 20.793 3.20701 21.677 4.17335 21.4185L6.39939 20.8229C6.78393 20.72 7.19121 20.7791 7.54753 20.9565C8.88837 21.6244 10.4003 22 12 22Z" fill="currentColor"/><circle cx="19" cy="5" r="3" fill="currentColor"/></symbol>
+  <symbol id="i-chat-read" viewBox="0 0 24 24"><path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 13.5997 2.37562 15.1116 3.04346 16.4525C3.22094 16.8088 3.28001 17.2161 3.17712 17.6006L2.58151 19.8267C2.32295 20.793 3.20701 21.677 4.17335 21.4185L6.39939 20.8229C6.78393 20.72 7.19121 20.7791 7.54753 20.9565C8.88836 21.6244 10.4003 22 12 22Z" fill="currentColor"/></symbol>
   <symbol id="i-aright" viewBox="0 0 16 16"><path d="M3 8h9.5M9.5 5L12.5 8l-3 3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-send" viewBox="0 0 16 16"><path d="M14.2 1.8L7.3 8.7M14.2 1.8L9.8 14.2 7.3 8.7 1.8 6.2z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-link" viewBox="0 0 16 16"><path d="M6.5 9.5l3-3M5.2 7.2L3.6 8.8a2.4 2.4 0 003.4 3.4l1.6-1.6M10.8 8.8l1.6-1.6a2.4 2.4 0 00-3.4-3.4L7.4 5.4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></symbol>
 </svg>
 
 <div class="wrap">
@@ -521,15 +580,15 @@ span.hov,button.hov{display:inline-block}
       <tbody>
         <tr><td>
           <span class="crumbs"><a href="#ex04">Отделка</a><span class="sep">›</span><a href="#ex04">Полы</a><span class="sep">›</span></span>
-          <span class="titlerow"><span class="nm">Устройство наливных полов</span><span class="wbar"><span class="trk"><i style="width:66%"></i></span><b>12,4 %</b></span></span>
+          <span class="titlerow"><span class="nm">Устройство наливных полов</span><span class="wbar"><span class="pbar"><i style="width:66%"></i></span><b>12,4 %</b></span></span>
         </td><td class="num bid">1 692 000 ₽</td><td class="num bid">1 707 000 ₽</td></tr>
         <tr><td>
           <span class="crumbs"><a href="#ex04">Фасад</a><span class="sep">›</span></span>
-          <span class="titlerow"><span class="nm">Вентилируемый фасад</span><span class="wbar"><span class="trk"><i style="width:81%"></i></span><b>15,2 %</b></span></span>
+          <span class="titlerow"><span class="nm">Вентилируемый фасад</span><span class="wbar"><span class="pbar"><i style="width:81%"></i></span><b>15,2 %</b></span></span>
         </td><td class="num bid">2 104 000 ₽</td><td class="num bid">1 988 000 ₽</td></tr>
         <tr><td>
           <span class="crumbs"><a href="#ex04">Инженерные сети</a><span class="sep">›</span></span>
-          <span class="titlerow"><span class="nm">Коллектор узла ввода</span><span class="wbar"><span class="trk"><i style="width:74%"></i></span><b>13,9 %</b></span></span>
+          <span class="titlerow"><span class="nm">Коллектор узла ввода</span><span class="wbar"><span class="pbar"><i style="width:74%"></i></span><b>13,9 %</b></span></span>
         </td><td class="num bid">984 000 ₽</td><td class="num bid">1 102 000 ₽</td></tr>
       </tbody>
     </table>
@@ -553,9 +612,9 @@ span.hov,button.hov{display:inline-block}
           <button class="quiet"><span class="qcap">Сортировка:</span><span class="qval">По разбросу</span><span class="xreset" title="Сбросить сортировку"><svg class="ic s10"><use href="#i-x"/></svg></span></button>
         </div>
         <div class="menu" style="margin-top:10px">
-          <div class="mi"><span class="chk"><svg class="ic s12"><use href="#i-check"/></svg></span><span class="grow">По весу</span></div>
-          <div class="mi"><span class="chk"><svg class="ic s12"><use href="#i-check"/></svg></span><span class="grow">По потенциалу</span></div>
-          <div class="mi on"><span class="chk"><svg class="ic s12"><use href="#i-check"/></svg></span><span class="grow">По разбросу</span></div>
+          <div class="mi"><span class="grow">По весу</span><span class="chk"><svg class="ic s12"><use href="#i-check"/></svg></span></div>
+          <div class="mi"><span class="grow">По потенциалу</span><span class="chk"><svg class="ic s12"><use href="#i-check"/></svg></span></div>
+          <div class="mi on"><span class="grow">По разбросу</span><span class="chk"><svg class="ic s12"><use href="#i-check"/></svg></span></div>
           <div class="msep"></div>
           <div class="mhint">«По разделам» — исходное состояние таблицы, пунктом сортировки не является.</div>
         </div>
@@ -710,8 +769,8 @@ span.hov,button.hov{display:inline-block}
 
 <!--
   П.2.1 — Карточка ячейки по клику. Доработки владельца:
-    · шапка: воздух между «Ячейка · МонолитСтрой» и статусом увеличен (fsec-отступ),
-      статус переработан — капительная строка с точкой тона вместо пилюли;
+    · шапка: воздух до статуса увеличен; статус — ПРОСТО ТЕКСТ secondary,
+      без точки и капители (правка владельца 25.08); техтрейс справа;
     · распределение разброса v2: дорожка с концевыми делениями, полые точки
       предложений, медиана — высокий штрих, открытая цена — ромб info с ореолом;
     · изменение к раунду: зачёркнутая старая → стрелка → новая + дельта-капсула;
@@ -728,10 +787,9 @@ span.hov,button.hov{display:inline-block}
       <div class="pad">
         <h4>Устройство бетонного пола · МонолитСтрой</h4>
         <div class="sub">версия КП 3 · 24.08.2026</div>
-        <div style="margin-top:12px;display:flex;align-items:center;gap:7px">
-          <span class="dot d-success"></span>
-          <span class="cap" style="color:var(--cu-tone-success-ink)">Участвует в расчёте</span>
-          <span class="mini mut" style="margin-left:auto">work_id 4128 · contractor_id 207</span>
+        <div style="margin-top:11px;display:flex;align-items:center;justify-content:space-between;gap:10px">
+          <span style="font-size:12px;color:var(--cu-content-secondary)">Участвует в расчёте</span>
+          <span class="mini mut">work_id 4128 · contractor_id 207</span>
         </div>
         <div class="fsec">
           <div class="prow"><span class="plbl">Стоимость позиции</span><span><b>1 692 000 ₽</b></span></div>
@@ -814,81 +872,119 @@ span.hov,button.hov{display:inline-block}
 </section>
 
 <!--
-  П.2.3 — Аномалия. Решение владельца: ШТРИХОВКУ СОХРАНЯЕМ, к ней добавляются
-  риска левой кромки и компактный «!» над зоной бейджа «мин». Оба знака видны
-  одновременно с штриховкой; направление цветом не кодируется.
-  Продакшн: BidCell.tsx ветка anomaly получает .riska+.bang поверх существующего
+  П.2.3 — Аномалия. Решение владельца: ШТРИХОВКУ СОХРАНЯЕМ + риска на левой
+  кромке. Знак «!» УБРАН (правка 25.08); направление цветом не кодируется.
+  Максимум в ячейках — тихая засечка .maxv БЕЗ СЛОВ (правило (в)).
+  Продакшн: BidCell.tsx ветка anomaly получает .riska поверх существующего
   .cellAnomaly; классы уже описаны в TenderCompare.module.css.
 -->
 <section class="ex" id="ex11">
-  <div class="ex-head"><span class="ex-num">11</span><span class="mk mk--w">⚠</span><h2>§2.3 · Аномалия: штриховка + риска и «!»</h2></div>
+  <div class="ex-head"><span class="ex-num">11</span><span class="mk mk--w">⚠</span><h2>§2.3 · Аномалия: штриховка + риска</h2></div>
   <p class="ex-ref">Канон: cell.md §1.2 &nbsp;·&nbsp; Реестр: COMPARISON-GAPS.md §2.3 · <span class="mk mk--ok">штриховку не убираем</span></p>
-  <p class="ex-note">Финальный вид: наша штриховка остаётся фоном состояния, к ней добавлены янтарная риска на левой кромке и компактный «!» над зоной «мин» — знак читается и при выключенной подсветке, направление цветом не кодируется.</p>
+  <p class="ex-note">Финальный вид: наша штриховка остаётся фоном состояния, к ней добавлена янтарная риска на левой кромке — читается при выключенной подсветке; знак «!» убран по правке владельца, направление цветом не кодируется.</p>
   <div class="stage stage--tight">
     <table class="tbl"><colgroup><col style="width:44%"><col></colgroup>
     <thead><tr><th>Монтаж вентфасада</th><th class="num">ПромАльянс</th></tr></thead>
-    <tbody><tr><td class="mut">штриховка + риска + «!» + верхняя граница</td>
+    <tbody><tr><td class="mut">штриховка + риска · максимум — засечка без слов</td>
       <td class="num bid pos anomhatch">
-        <span class="riska"></span><span class="bang">!</span>
-        3 204 000 ₽<span class="maxmk">верхняя граница</span>
+        <span class="riska"></span>
+        <span class="maxv" title="Верхняя граница строки">3 204 000 ₽</span>
         <span class="sub">аномальная цена, проверить</span>
       </td></tr></tbody></table>
   </div>
 </section>
 
 <!--
-  П.2.4 — Комментарий поставщика. Решения владельца:
-    · история переписана ТАЙМЛАЙНОМ (рельса + узлы, непросмотренное — инфо-узел),
-      футер — две кнопки 50/50 (.act2), выравнивание починено;
-    · маркер в ячейке — правый верхний угол, СПЕЦИАЛЬНАЯ иконка чата (i-chat,
-      глиф того же штриха 1.3), hit-area 16×16, hover-таблетка;
-    · бабл непросмотренного остаётся правым нижним углом.
-  Продакшн: элементы CommentMark/CommentBubble + CommentHistoryPanel.tsx;
-  сущность истории — tender/position-comments (подключение позже, UI готов).
+  П.2.4 — Комментарий поставщика. Правки владельца 25.08:
+    · маркер ячейки — глифы Solar bold РОВНО ПО ИМЕНАМ:
+        chat-round-unread-bold — есть непросмотренное (тон info-ink);
+        chat-round-bold        — всё просмотрено (tertiary);
+    · панель истории — тред уровня YouTube: аватар + имя + время;
+      текст может быть ОГРОМНЫМ — сворачивание «Показать полностью»
+      чекбоксом без JS (clamp 4 строки);
+    · действия под записью: Ответить · Копировать; ответ — с отступом;
+    · композер БЕЗ кнопок «Отменить/Ответить» — только круглая иконка
+      отправки; поле авторастёт, при 2+ строках кнопка снизу справа;
+    · счётчик-бабл УПРАЗДНЁН (решение владельца): состояние непросмотренности
+      несёт сам глиф unread + тон info; иконка увеличена до 18px и стоит
+      ПО ЦЕНТРУ ВЫСОТЫ ячейки (зона попадания 22×22);
+    · клик по маркеру открывает тред истории — роль бывшего бабла.
+  Продакшн: CommentMark(unread) рендерит ChatRoundUnreadIcon/ChatRoundIcon из
+  @solar-icons/react/bold; CommentThread.tsx; просмотренность и ответы —
+  сущность tender/position-comments (ответ хранит parent_id).
 -->
 <section class="ex" id="ex12">
-  <div class="ex-head"><span class="ex-num">12</span><span class="mk mk--x">❌</span><h2>§2.4 · Комментарий: маркер-чат и таймлайн истории</h2></div>
-  <p class="ex-ref">Канон: comment.md &nbsp;·&nbsp; Реестр: COMPARISON-GAPS.md §2.4 · <span class="mk mk--ok">доработано по правкам</span></p>
-  <p class="ex-note">Правый верхний угол — иконка чата (специальный глиф, hover-таблетка, зона 16×16). Правый нижний — бабл непросмотренного. История — таймлайн версий с рельсой: непросмотренная запись подсвечена синим узлом; копирование и отметка просмотренности — двумя кнопками 50/50.</p>
+  <div class="ex-head"><span class="ex-num">12</span><span class="mk mk--x">❌</span><h2>§2.4 · Комментарий: маркеры Solar и тред уровня YouTube</h2></div>
+  <p class="ex-ref">Канон: comment.md &nbsp;·&nbsp; Реестр: COMPARISON-GAPS.md §2.4 · <span class="mk mk--ok">переработано по правкам</span></p>
+  <p class="ex-note">Без счётчика: непрочитанные — <code>chat-round-unread-bold</code>, прочитанные — <code>chat-round-bold</code>; глиф 18px, центр по высоте ячейки. Панель — тред как в YouTube: аватар, автор и время над текстом; гигантский комментарий сворачивается «Показать полностью»; под записью — «Ответить» и «Копировать»; ответ идёт с отступом, внизу — композер с иконкой отправки (без кнопок Отмена/Ответить).</p>
   <div class="duo">
-    <div class="cellbox"><div class="stage-cap">ячейка · наведение на маркер чата</div>
+    <div class="cellbox"><div class="stage-cap">ячейка · два состояния маркера</div>
       <div class="stage stage--tight">
-        <table class="tbl"><colgroup><col style="width:48%"><col></colgroup>
-        <tbody><tr><td>Укладка ламината</td>
-          <td class="num bid pos hov" tabindex="0">
-            <span class="cmark"><svg class="ic s14"><use href="#i-chat"/></svg></span>
-            <span class="bubble">2</span>
-            1 188 000 ₽
-            <div class="pop pop-t w320 pad">
-              <h4><span class="dot d-neutral"></span>Последний комментарий</h4>
-              <div class="prow"><span class="plbl">Автор</span><span>снабжение МонолитСтроя</span></div>
-              <div class="prow"><span class="plbl">Версия и время</span><span>v3 · сегодня 11:42</span></div>
-              <div class="pquote">Материалы заказчика, в цене только работа.</div>
-              <div class="pfoot">ещё 1 в истории — панель открывается кликом по баблу</div>
-            </div>
-          </td></tr></tbody></table>
+        <table class="tbl"><colgroup><col style="width:46%"><col></colgroup>
+        <tbody>
+          <tr><td>Укладка ламината</td>
+            <td class="num bid pos hov" tabindex="0">
+              <span class="cmark" style="color:var(--cu-tone-info-ink)" title="Есть непросмотренные комментарии"><svg class="ic"><use href="#i-chat-unread"/></svg></span>
+              1 188 000 ₽
+              <div class="pop pop-t w320 pad">
+                <h4><span class="dot d-info"></span>Последний комментарий</h4>
+                <div class="prow"><span class="plbl">Автор</span><span>снабжение МонолитСтроя · сегодня 11:42</span></div>
+                <div class="pquote">Материалы заказчика, в цене только работа.</div>
+                <div class="pfoot">ещё 1 в истории — тред открывается кликом по маркеру</div>
+              </div>
+            </td></tr>
+          <tr><td>Монтаж перегородок</td>
+            <td class="num bid pos">
+              <span class="cmark" title="Всё просмотрено"><svg class="ic"><use href="#i-chat-read"/></svg></span>
+              96 000 ₽
+            </td></tr>
+        </tbody></table>
       </div>
     </div>
-    <div class="cellbox"><div class="stage-cap">клик по баблу — таймлайн истории</div>
+    <div class="cellbox"><div class="stage-cap">клик по маркеру — тред комментариев</div>
       <div class="stage">
-        <div class="pop w360" style="position:relative;box-shadow:var(--cu-elevation-4)">
+        <div class="pop w400" style="position:relative;box-shadow:var(--cu-elevation-4)">
           <div class="pad">
-            <h4>История комментариев</h4>
-            <div class="sub">Укладка ламината · МонолитСтрой · 2 записи</div>
-            <div class="tl">
-              <div class="tli unseen">
-                <div class="prow"><span><span class="vtag">V3</span>&nbsp;&nbsp;<b>Материалы заказчика, в цене только работа.</b></span></div>
-                <div class="mini mut" style="margin-top:2px">снабжение МонолитСтроя · сегодня 11:42 · непросмотрено</div>
-              </div>
-              <div class="tli">
-                <div class="prow"><span><span class="vtag">V2</span>&nbsp;&nbsp;Цена предварительная, уточним после замеров.</span></div>
-                <div class="mini mut" style="margin-top:2px">проектный офис · 12.07 16:05 · просмотрено</div>
+            <div class="prow" style="align-items:baseline">
+              <h4 style="margin:0">Комментарии · 3</h4>
+              <button class="linklike" style="font-size:12px">Отметить всё просмотренным</button>
+            </div>
+            <div class="sub">Укладка ламината · МонолитСтрой</div>
+
+            <div class="cmt">
+              <span class="cmt-av av-a">СМ</span>
+              <div class="cmt-body">
+                <input type="checkbox" class="clamptoggle" id="ct12a">
+                <div class="cmt-head"><span class="cmt-name">Снабжение МонолитСтроя</span><span class="cmt-time">сегодня, 11:42 · v3</span></div>
+                <div class="cmt-text is-clamped">Прошли обмеры по этажам 2–4: фактическая площадь под ламинат разошлась с проектом — часть помещений ушла под стяжку другой толщины, и считать по старым планам нельзя. Материалы заказчика подтверждаем ещё раз: подложка и плинтус приходят вашей поставкой, поэтому в расценке сидят только работа, клей и подрезка. Если подтвердите объём до конца недели — удержим цену версии 3 по всему этажу целиком. При росте свыше пяти процентов вернёмся с корректировкой ставки: согласуем отдельной строкой и не будем пересчитывать всю смету из-за одного помещения. Акт обмеров приложим к следующей подаче вместе с пояснениями по каждому этажу отдельно.</div>
+                <label class="more" for="ct12a">Показать полностью</label>
+                <div class="cmt-acts">
+                  <button class="cact-t">Ответить</button>
+                  <button class="cact-t"><svg class="ic s12"><use href="#i-copy"/></svg>Копировать</button>
+                </div>
               </div>
             </div>
-            <div class="act2">
-              <button class="btn btn-sec"><svg class="ic s14"><use href="#i-copy"/></svg>Копировать текст</button>
-              <button class="btn btn-pri">Отметить просмотренным</button>
+
+            <div class="cmt cmt--reply">
+              <span class="cmt-av av-c">ПО</span>
+              <div class="cmt-body">
+                <div class="cmt-head"><span class="cmt-name">Проектный офис</span><span class="cmt-time">вчера, 18:20 · v2</span></div>
+                <div class="cmt-text">Обмеры приняли, расхождение по этажу 3 подтверждаю — ждём акт от ПТО.</div>
+                <div class="cmt-acts">
+                  <button class="cact-t">Ответить</button>
+                  <button class="cact-t"><svg class="ic s12"><use href="#i-copy"/></svg>Копировать</button>
+                </div>
+              </div>
             </div>
+
+            <div class="composer">
+              <span class="cmt-av av-b">ЗК</span>
+              <div class="cwrap">
+                <textarea rows="2" placeholder="Ответить снабжению МонолитСтроя…">Подтверждаем объём по обмерам, акт приложим завтра.</textarea>
+                <button class="send" title="Отправить (Enter)"><svg class="ic s14"><use href="#i-send"/></svg></button>
+              </div>
+            </div>
+            <div class="mini mut" style="margin-top:6px;text-align:right">Enter — отправить · поле растёт, кнопка остаётся снизу справа</div>
           </div>
         </div>
       </div>
@@ -899,12 +995,12 @@ span.hov,button.hov{display:inline-block}
 <!--
   П.2.5 — Максимум строки и совместный минимум. Согласовано владельцем.
   Продакшн: calc.ts — maxId рядом с bestId (+совместный случай при равных);
-  CompareRow/BidCell рендерят .maxmk у значения максимума.
+  Максимум рендерится засечкой .maxv БЕЗ надписей в ячейке (правило (в)).
 -->
 <section class="ex" id="ex13">
   <div class="ex-head"><span class="ex-num">13</span><span class="mk mk--x">❌</span><h2>§2.5 · Максимум строки и совместный минимум</h2></div>
   <p class="ex-ref">Канон: cell.md §1.2, §2 &nbsp;·&nbsp; Реестр: COMPARISON-GAPS.md §2.5 · <span class="mk mk--ok">согласовано</span></p>
-  <p class="ex-note">Минимум — бейджем «мин», максимум — слабее, тихой подписью у числа: это верхняя граница, а не точка действия. Равные значения дают совместный min — штамп у обеих ячеек.</p>
+  <p class="ex-note">Минимум — каноническим бейджем «мин»; максимум — БЕЗ НАДПИСЕЙ В ЯЧЕЙКЕ: тихая засечка над числом, пояснение по наведению и в сводке. Равные значения дают совместный min — штамп у обеих ячеек.</p>
   <div class="stage stage--tight">
     <table class="tbl">
       <colgroup><col style="width:30%"><col><col><col></colgroup>
@@ -914,7 +1010,7 @@ span.hov,button.hov{display:inline-block}
           <td class="mut">различимые края</td>
           <td class="num bid pos">618 000 ₽<span class="tag-min">мин</span></td>
           <td class="num bid">649 000 ₽</td>
-          <td class="num bid">774 000 ₽<span class="maxmk">верхняя граница</span></td>
+          <td class="num bid"><span class="maxv" title="Верхняя граница строки">774 000 ₽</span></td>
         </tr>
       </tbody>
       <tbody>
@@ -922,7 +1018,7 @@ span.hov,button.hov{display:inline-block}
           <td class="mut">равные значения — совместный мин</td>
           <td class="num bid pos">640 000 ₽<span class="tag-min">мин</span></td>
           <td class="num bid pos">640 000 ₽<span class="tag-min">мин</span></td>
-          <td class="num bid">774 000 ₽<span class="maxmk">верхняя граница</span></td>
+          <td class="num bid"><span class="maxv" title="Верхняя граница строки">774 000 ₽</span></td>
         </tr>
       </tbody>
     </table>
@@ -996,7 +1092,7 @@ span.hov,button.hov{display:inline-block}
           <label class="fieldlbl" style="margin-top:0">Комментарий решения — обязателен</label>
           <textarea class="ta" placeholder="Причина отклонения…"></textarea>
           <div class="mhint" style="padding-left:0;padding-right:0">Принятие изменённого объёма требует отдельного подтверждения:</div>
-          <div class="note-strip"><svg class="ic s14" style="flex:none;margin-top:1px"><use href="#i-corr"/></svg><span>Новую цену под 135 м² понадобится назвать ещё 4 участникам. Продолжить?</span></div>
+          <div class="note-strip"><svg class="ic s14" style="flex:none"><use href="#i-corr"/></svg><span>Новую цену под 135 м² понадобится назвать ещё 4 участникам. Продолжить?</span></div>
           <div class="act2">
             <button class="btn btn-sec">Отмена</button>
             <button class="btn btn-danger">Отклонить с комментарием</button>
@@ -1072,9 +1168,9 @@ span.hov,button.hov{display:inline-block}
           <span class="quiet"><span class="qcap">Показано:</span><span class="qval">Потенциал</span></span>
           <span class="sat on"><span class="sw"></span>Отклонение</span>
           <span class="quiet"><span class="qcap">Сортировка:</span><span class="qval">По потенциалу</span></span>
-          <span class="quiet"><span class="qcap">Фильтры:</span><span class="qval">есть потенциал</span></span>
+          <span class="chip chip--info">Фильтры · 1</span>
         </div>
-        <div class="mhint" style="padding-left:0;padding-right:0">со второго раунда доливается «Динамика»; столбец появляется следствием сортировки (пример 06)</div>
+        <div class="mhint" style="padding-left:0;padding-right:0">со второго раунда доливается «Динамика»; столбец появляется следствием сортировки (пример 06). Фильтры пресета включает ОТДЕЛЬНЫЙ контрол «Фильтры» — кнопка-глиф правого блока полосы (примеры 19–20), это не селектор показателя</div>
       </div>
     </div>
     <div class="cellbox"><div class="stage-cap">Аномалии</div>
@@ -1084,7 +1180,7 @@ span.hov,button.hov{display:inline-block}
           <span class="quiet"><span class="qcap">Показано:</span><span class="qval">Стоимость</span></span>
           <span class="sat on"><span class="sw"></span>Отклонение</span>
           <span class="quiet"><span class="qcap">Сортировка:</span><span class="qval">По разбросу</span></span>
-          <span class="quiet"><span class="qcap">Фильтры:</span><span class="qval">аномальные цены</span></span>
+          <span class="chip chip--info">Фильтры · 1</span>
         </div>
         <div class="mhint" style="padding-left:0;padding-right:0">перевод с «По весу» зафиксирован каноном: наверху расходящиеся, а не самые дорогие</div>
       </div>
@@ -1104,10 +1200,10 @@ span.hov,button.hov{display:inline-block}
   <div class="stage">
     <div class="bar" style="margin-bottom:10px"><button class="quiet"><span class="qcap">Фильтры:</span><span class="qval">2</span><svg class="ic s12 caret"><use href="#i-chev"/></svg></button></div>
     <div class="menu" style="width:300px">
-      <div class="mi on"><span class="chk"><svg class="ic s12"><use href="#i-check"/></svg></span><span class="grow">Ключевые позиции</span><span class="cnt">9</span></div>
-      <div class="mi"><span class="chk"><svg class="ic s12"><use href="#i-check"/></svg></span><span class="grow">Высокий разброс</span><span class="cnt">14</span></div>
-      <div class="mi on"><span class="chk"><svg class="ic s12"><use href="#i-check"/></svg></span><span class="grow">Есть потенциал</span><span class="cnt">112</span></div>
-      <div class="mi"><span class="chk"><svg class="ic s12"><use href="#i-check"/></svg></span><span class="grow">Аномальные цены</span><span class="cnt">5</span></div>
+      <div class="mi on"><span class="grow">Ключевые позиции</span><span class="cnt">9</span><span class="chk"><svg class="ic s12"><use href="#i-check"/></svg></span></div>
+      <div class="mi"><span class="grow">Высокий разброс</span><span class="cnt">14</span><span class="chk"><svg class="ic s12"><use href="#i-check"/></svg></span></div>
+      <div class="mi on"><span class="grow">Есть потенциал</span><span class="cnt">112</span><span class="chk"><svg class="ic s12"><use href="#i-check"/></svg></span></div>
+      <div class="mi"><span class="grow">Аномальные цены</span><span class="cnt">5</span><span class="chk"><svg class="ic s12"><use href="#i-check"/></svg></span></div>
       <div class="msep"></div>
       <div class="mhint">Несколько фильтров комбинируются по И. Полный набор = отсутствие активных фильтров.</div>
     </div>
@@ -1132,7 +1228,9 @@ span.hov,button.hov{display:inline-block}
 </section>
 
 <!--
-  П.3.5 — Ссылка коллеге. Решение владельца по РАЗМЕЩЕНИЮ ЗАФИКСИРОВАНО:
+  П.3.5 — Ссылка коллеге. ФОРМА (правка владельца): один пилюль-блок как в
+  Figma / Claude Design — [иконка ссылки · усечённый URL · кнопка копирования],
+  без разбора параметров и тостов. РАЗМЕЩЕНИЕ ЗАФИКСИРОВАНО:
   действие живёт НА СТРОКЕ ВКЛАДОК рабочего места
   (Обзор · Сравнение · КП · Раунды · …), справа, за разделителем.
   Сейчас вкладок в приложении нет (страницы: реестр + карточка) — строка ниже
@@ -1155,14 +1253,13 @@ span.hov,button.hov{display:inline-block}
       <span class="sp"></span>
       <button class="quiet" style="height:28px;margin-block:4px"><svg class="ic s14"><use href="#i-copy"/></svg><span class="qval">Скопировать ссылку на срез</span></button>
     </div>
-    <div class="urlbar" style="margin-top:12px">
-      <span class="u-dom">aag.tender/tender/T-2026-050/sravnenie?</span>
-      <span><span class="up up-k">p=bidding</span> <span class="up up-k">m=potential</span> <span class="up up-v">dev=1</span> <span class="up up-k">sort=potential</span> <span class="up up-k">pot=1</span> <span class="up up-k">f=key,pot</span></span>
+
+    <div class="linkpill" style="margin-top:12px">
+      <svg class="ic s14" style="color:var(--cu-content-quaternary)"><use href="#i-link"/></svg>
+      <span class="lnk">aag.tender/tender/T-2026-050/sravnenie?p=bidding&amp;m=potential&amp;sort=potential&amp;f=key,pot</span>
+      <button class="cp" title="Скопировать ссылку"><svg class="ic s14"><use href="#i-copy"/></svg></button>
     </div>
-    <div class="bar" style="margin-top:10px">
-      <span class="toast"><svg class="ic s14"><use href="#i-check"/></svg>Ссылка скопирована — вид воспроизведётся у коллеги</span>
-      <span class="mini mut">права на тендер и версии повторно проверяет сервер</span>
-    </div>
+    <div class="mini mut" style="margin-top:8px">Скопировано — вид воспроизведётся у коллеги · права повторно проверяет сервер</div>
   </div>
 </section>
 
@@ -1185,7 +1282,7 @@ span.hov,button.hov{display:inline-block}
           <div class="lg"><span class="g"><span class="tag-min" style="position:static;display:inline-flex">мин</span></span><span><b>Минимальная стоимость строки</b><span>факт, без оценки «лучше»; способ подсветки не настраивается</span></span></div>
           <div class="lg"><span class="g"><svg class="ic s14"><use href="#i-corr"/></svg></span><span><b>Корректировка объёма</b><span>цена названа за другой объём — нужно решение</span></span></div>
           <div class="lg"><span class="g"><svg class="spreadv sp-high" style="margin:0" viewBox="0 0 24 16"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M3 4.8 V11.2"/><path d="M3 8 H21" stroke-linecap="butt"/><path d="M21 4.8 V11.2"/><circle cx="10.2" cy="8" r="2.1" fill="currentColor" stroke="none"/></g></svg></span><span><b>Разброс цен</b><span>тон линейки = степень: низкий · заметный · высокий</span></span></div>
-          <div class="lg"><span class="g"><span class="riska" style="position:static;width:3px;height:16px"></span><span class="bang" style="position:static;margin-left:4px">!</span></span><span><b>Аномальная цена</b><span>выбивается из строки — проверить, направление цветом не кодируется</span></span></div>
+          <div class="lg"><span class="g"><span class="riska" style="position:static;width:3px;height:18px"></span></span><span><b>Аномальная цена</b><span>риска на кромке + штриховка: выбивается из строки — проверить</span></span></div>
           <div class="lg"><span class="g"><svg class="ic" style="width:22px;height:14px"><use href="#i-key"/></svg></span><span><b>Ключевая позиция</b><span>входит в верхнюю долю стоимости тендера</span></span></div>
           <div class="lg"><span class="g"><svg class="ic s14"><use href="#i-med"/></svg></span><span><b>Дороже медианы</b><span>цена выше типичной строки больше допуска</span></span></div>
           <div class="msep"></div>
@@ -1260,9 +1357,9 @@ span.hov,button.hov{display:inline-block}
       <div class="stage stage--tight">
         <table class="tbl"><colgroup><col style="width:58%"><col></colgroup>
         <tbody>
-          <tr><td><span class="titlerow"><span class="nm">Монолитные стены</span><span class="wbar"><span class="trk"><i style="width:100%"></i></span><b>18,7 %</b></span></span></td><td class="num bid">2 580 000 ₽</td></tr>
-          <tr><td><span class="titlerow"><span class="nm">Фасадные работы</span><span class="wbar"><span class="trk"><i style="width:81%"></i></span><b>15,2 %</b></span></span></td><td class="num bid">2 104 000 ₽</td></tr>
-          <tr><td><span class="titlerow"><span class="nm">Устройство наливных полов</span><span class="wbar"><span class="trk"><i style="width:66%"></i></span><b>12,4 %</b></span></span></td><td class="num bid">1 712 000 ₽</td></tr>
+          <tr><td><span class="titlerow"><span class="nm">Монолитные стены</span><span class="wbar"><span class="pbar"><i style="width:100%"></i></span><b>18,7 %</b></span></span></td><td class="num bid">2 580 000 ₽</td></tr>
+          <tr><td><span class="titlerow"><span class="nm">Фасадные работы</span><span class="wbar"><span class="pbar"><i style="width:81%"></i></span><b>15,2 %</b></span></span></td><td class="num bid">2 104 000 ₽</td></tr>
+          <tr><td><span class="titlerow"><span class="nm">Устройство наливных полов</span><span class="wbar"><span class="pbar"><i style="width:66%"></i></span><b>12,4 %</b></span></span></td><td class="num bid">1 712 000 ₽</td></tr>
         </tbody></table>
       </div>
     </div>
@@ -1273,7 +1370,7 @@ span.hov,button.hov{display:inline-block}
       <div class="stage">
         <div class="pop w360" style="position:relative;box-shadow:var(--cu-elevation-4)"><div class="pad">
           <h4>Вклад позиции в стоимость тендера</h4>
-          <div class="meter"><i style="width:66%;background:var(--cu-content-secondary)"></i></div>
+          <div class="pbar" style="width:100%;flex:none"><i style="width:66%"></i></div>
           <div class="prow" style="margin-top:5px"><span class="plbl">12,4 %</span><span>1 707 000 ₽ из 13,8 млн ₽ по медианам</span></div>
           <div class="fsec"><div class="prow"><span class="plbl">место</span><span>5-е из 137 позиций · входит в ключевые</span></div></div>
           <div class="fsec">
@@ -1373,7 +1470,7 @@ span.hov,button.hov{display:inline-block}
     </div>
     <div class="cellbox"><div class="stage-cap">цель скрыта фильтром — выход, а не тишина</div>
       <div class="stage">
-        <div class="note-strip"><svg class="ic s14" style="flex:none;margin-top:1px"><use href="#i-q"/></svg>
+        <div class="note-strip"><svg class="ic s14" style="flex:none"><use href="#i-q"/></svg>
           <span>Позиция «Укладка ламината» скрыта активным фильтром&nbsp;&nbsp;<button class="btn btn-sec" style="height:24px;padding:0 9px;font-size:12px">Показать все</button></span>
         </div>
         <div class="mini mut" style="margin-top:8px">свёрнутый раздел перед этим раскрывается автоматически</div>
@@ -1405,11 +1502,11 @@ span.hov,button.hov{display:inline-block}
         <table class="tbl"><colgroup><col style="width:40%"><col></colgroup>
         <tbody><tr><td>Укладка ламината</td>
           <td class="num bid pos">
-            <span class="hitdemo" style="left:auto;right:26px;top:2px"><span class="hitra"></span></span>
-            <span class="cmark"><svg class="ic s14"><use href="#i-chat"/></svg></span><span class="bubble">1</span>
+            <span class="hitdemo" style="left:auto;right:-1px;top:50%;margin-top:-11px;width:22px;height:22px"><span class="hitra"></span></span>
+            <span class="cmark"><svg class="ic"><use href="#i-chat-unread"/></svg></span>
             1 188 000 ₽
           </td></tr></tbody></table>
-        <div class="mini mut" style="margin-top:8px">пунктир — зона касания; тач: чат открывает последний текст, бабл — историю</div>
+        <div class="mini mut" style="margin-top:8px">пунктир — зона касания 22×22; тач: тап по маркеру открывает тред истории</div>
       </div>
     </div>
   </div>
@@ -1450,12 +1547,10 @@ span.hov,button.hov{display:inline-block}
 <h2 class="grp" id="g5">5 · Колонка подрядчика и обвязка</h2>
 
 <!--
-  П.5.0 + П.5.1 — Шапка подрядчика. ПОРЯДОК БЛОКОВ ЗАФИКСИРОВАН (решение владельца):
-      имя → figures(заполнено · цена) → facts(НОВЫЙ БЛОК: Δ к лидеру, мин. цен,
-      без цены) → meta(статус · ⚠ · кнопки)
-    Новый блок стоит МЕЖДУ блоком процентов/цены и блоком кнопок; отделён
-    хэйрлайном, строки 11/15 tabular.
-  Продакшн: ContractorCard.tsx — вставить .facts между .figures и .meta;
+  П.5.0 + П.5.1 — Шапка подрядчика. ПОРЯДОК ЗАФИКСИРОВАН:
+      имя → figures → facts(details: свёрнуто строка-ключ, раскрыто сетка
+      CAP→значение) → meta. Вёрстка инфы переработана (правка владельца).
+  Продакшн: ContractorCard.tsx — details.cfacts между .figures и .meta;
   данные: Δ к лидеру и место — rankBids (сосед по ранжиру), мин. цены —
   analyzeComparison счётчик bestId, «без цены» — prices undefined.
 -->
@@ -1471,11 +1566,13 @@ span.hov,button.hov{display:inline-block}
           <span class="fillb"><b>100 %</b><span>заполнено</span></span>
           <span class="sumv">16 980 000 ₽</span>
         </div>
-        <div class="facts">
-          <span class="fr"><span class="b-success" style="display:inline-flex;align-items:center;height:16px;padding:0 6px;border-radius:666px;background:var(--cu-tone-success-fill);color:var(--cu-tone-success-ink);font-size:10px;font-weight:600">минимальный итог</span><span>&nbsp;</span></span>
-          <span class="fr"><span>мин. цен</span><b>14 из 21</b></span>
-          <span class="fr"><span>без цены</span><b>0</b></span>
-        </div>
+        <details class="cfacts">
+          <summary><span><span class="b-success" style="display:inline-flex;align-items:center;height:17px;padding:0 7px;border-radius:666px;background:var(--cu-tone-success-fill);color:var(--cu-tone-success-ink);font-size:10px;font-weight:600">минимальный итог</span></span><svg class="ic s12 caret"><use href="#i-chev"/></svg></summary>
+          <div class="fgrid">
+            <span class="fk">мин. цен</span><span class="fv">14 из 21</span>
+            <span class="fk">без цены</span><span class="fv">0</span>
+          </div>
+        </details>
         <div class="meta2">
           <span class="badge b-neutral">получено</span>
           <span class="cact" title="Цвет колонки"><svg class="ic s14"><use href="#i-gear"/></svg></span>
@@ -1488,11 +1585,14 @@ span.hov,button.hov{display:inline-block}
           <span class="fillb"><b>95 %</b><span>заполнено</span></span>
           <span class="sumv">18 420 000 ₽</span>
         </div>
-        <div class="facts">
-          <span class="fr delta-ln"><span>2 место · к лидеру</span><b>+8,5 % · +1 440 000 ₽</b></span>
-          <span class="fr"><span>мин. цен</span><b>4 из 21</b></span>
-          <span class="fr"><span>без цены</span><b>1</b></span>
-        </div>
+        <details class="cfacts">
+          <summary><span>2 место · <b class="delta-ln">+8,5 % к лидеру</b></span><svg class="ic s12 caret"><use href="#i-chev"/></svg></summary>
+          <div class="fgrid">
+            <span class="fk">Δ в деньгах</span><span class="fv delta-ln">+1 440 000 ₽</span>
+            <span class="fk">мин. цен</span><span class="fv">4 из 21</span>
+            <span class="fk">без цены</span><span class="fv">1</span>
+          </div>
+        </details>
         <div class="meta2">
           <span class="badge b-neutral">получено</span>
           <span class="corrbig"><svg class="ic s14"><use href="#i-corr"/></svg>3</span>
@@ -1556,9 +1656,9 @@ span.hov,button.hov{display:inline-block}
       <div class="stage stage--tight">
         <div class="menu" style="width:320px;margin-left:auto">
           <div class="mtitle">Корректировки СтройГрада · 3 на рассмотрении</div>
-          <div class="mi"><span class="grow">Штукатурка стен</span><span class="chip chip--warn" style="height:17px">иной объём</span><span class="cnt">→</span></div>
-          <div class="mi"><span class="grow">Демонтаж перегородок</span><span class="chip chip--warn" style="height:17px">новая позиция</span><span class="cnt">→</span></div>
-          <div class="mi"><span class="grow">Устройство стяжки</span><span class="chip chip--warn" style="height:17px">иной объём</span><span class="cnt">→</span></div>
+          <div class="mi"><span class="grow">Штукатурка стен</span><span class="chip chip--warn" style="height:19px;font-size:11px">иной объём</span><span class="cnt">→</span></div>
+          <div class="mi"><span class="grow">Демонтаж перегородок</span><span class="chip chip--warn" style="height:19px;font-size:11px">новая позиция</span><span class="cnt">→</span></div>
+          <div class="mi"><span class="grow">Устройство стяжки</span><span class="chip chip--warn" style="height:19px;font-size:11px">иной объём</span><span class="cnt">→</span></div>
         </div>
       </div>
     </div>
@@ -1612,9 +1712,9 @@ span.hov,button.hov{display:inline-block}
         <div style="display:flex;gap:12px;align-items:flex-start;justify-content:center">
           <button class="quiet" style="box-shadow:var(--cu-elevation-border-1)"><span class="qcap">КП</span><span class="qval">v3 · 24.07.2026</span><svg class="ic s12 caret"><use href="#i-chev"/></svg></button>
           <div class="menu" style="width:290px">
-            <div class="mi on"><span class="chk"><svg class="ic s12"><use href="#i-check"/></svg></span><span class="grow">v3 · 24.07.2026</span><span class="cnt">16 980 000 ₽</span></div>
-            <div class="mi"><span class="chk"></span><span class="grow">v2 · 03.06.2026&nbsp;<span class="chip" style="height:16px;font-size:10px">неактуальная</span></span><span class="cnt">17 240 000 ₽</span></div>
-            <div class="mi"><span class="chk"></span><span class="grow">v1 · 21.05.2026</span><span class="cnt">—</span></div>
+            <div class="mi on"><span class="grow">v3 · 24.07.2026</span><span class="cnt">16 980 000 ₽</span><span class="chk"><svg class="ic s12"><use href="#i-check"/></svg></span></div>
+            <div class="mi"><span class="grow">v2 · 03.06.2026&nbsp;<span class="chip" style="height:16px;font-size:10px">неактуальная</span></span><span class="cnt">17 240 000 ₽</span><span class="chk"></span></div>
+            <div class="mi"><span class="grow">v1 · 21.05.2026</span><span class="cnt">—</span><span class="chk"></span></div>
             <div class="msep"></div>
             <div class="mhint">Переключение пересчитывает только эту колонку; новая версия делает сохранённый анализ устаревшим.</div>
           </div>
@@ -1699,7 +1799,9 @@ span.hov,button.hov{display:inline-block}
 </section>
 
 <!--
-  П.5.8 — Выгрузка в Excel. Добавляем.
+  П.5.8 — Выгрузка в Excel. Добавляем. Правки владельца: кнопки 50/50 (.act2);
+  галочки чеклиста — СПРАВА, текст слева с ровным краем (единое правило меню),
+  иконка по центру высоты строки.
   Продакшн: кнопка в правом блоке полосы; модалка на <Modal>; генерация —
   серверный endpoint (xlsx), полный состав независимо от фильтров; экспорт —
   событие ИБ; имя файла: сущность + дата + время.
@@ -1718,14 +1820,14 @@ span.hov,button.hov{display:inline-block}
         <h4>Выгрузка сравнения</h4>
         <div class="sub" style="color:var(--cu-content-secondary)">Тендер Т-2026-050 · 137 позиций · 6 поставщиков</div>
         <div style="margin-top:10px">
-          <div class="checkln"><svg class="ic s14"><use href="#i-check"/></svg><span>Все позиции ФКП, условия и уровни разделов; вложенность различима</span></div>
-          <div class="checkln"><svg class="ic s14"><use href="#i-check"/></svg><span>Выбранные версии зафиксированы: Технострой v3, СтройГрад v3, ПромАльянс v2</span></div>
-          <div class="checkln"><svg class="ic s14"><use href="#i-check"/></svg><span>Ставки материалов и работ + ставка за единицу для каждого предложения</span></div>
-          <div class="checkln"><svg class="ic s14"><use href="#i-check"/></svg><span>Ноль, пропуск, отказ и корректировка экспортируются различимо</span></div>
-          <div class="checkln"><svg class="ic s14"><use href="#i-check"/></svg><span>Свёртка разделов → группировка строк Excel; подсветка и легенда сохраняются</span></div>
+          <div class="checkln"><span class="grow">Все позиции ФКП, условия и уровни разделов; вложенность различима</span></div>
+          <div class="checkln"><span class="grow">Выбранные версии зафиксированы: Технострой v3, СтройГрад v3, ПромАльянс v2</span></div>
+          <div class="checkln"><span class="grow">Ставки материалов и работ + ставка за единицу для каждого предложения</span></div>
+          <div class="checkln"><span class="grow">Ноль, пропуск, отказ и корректировка экспортируются различимо</span></div>
+          <div class="checkln"><span class="grow">Свёртка разделов → группировка строк Excel; подсветка и легенда сохраняются</span></div>
         </div>
         <div class="fname">T-2026-050_sravnenie_2026-08-24_1432.xlsx</div>
-        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+        <div class="act2" style="margin-top:14px">
           <button class="btn btn-sec">Отмена</button>
           <button class="btn btn-pri"><svg class="ic s14"><use href="#i-dl"/></svg>Выгрузить</button>
         </div>

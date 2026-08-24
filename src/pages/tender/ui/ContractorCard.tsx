@@ -76,8 +76,9 @@ export function ContractorCard({
   onPaint: (from: DOMRect) => void;
   onOpen: () => void;
   onFold: () => void;
-  /** Переход к первой ячейке ЭТОЙ колонки с названной пометкой, сверху вниз
-   *  в текущем порядке строк; повторный клик — к следующей. */
+  /** Подсветить ВСЕ ячейки ЭТОЙ колонки с названной пометкой (обводкой) и
+   *  прокрутить к первой из них сверху вниз в текущем порядке строк;
+   *  повторный клик — к следующей подсвеченной. */
   onGoToMark: (kind: MarkKind) => void;
 }) {
   const { contractor, filled, percent, sum, rank, rankLabel } = bid;
