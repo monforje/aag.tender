@@ -1,21 +1,15 @@
-/* ПИЛЮЛЯ ССЫЛКИ НА СРЕЗ (§3.5). Форма — по образцу капсулы ПОИСКА
-   (shared/ui/SearchInput), но радиус СДЕРЖАННЫЙ --cu-radii-4: полная капсула
-   на строке вкладок читалась декорацией. Белая поверхность, граница первым
-   слоем хэйрлайн-тени — отдельная рамка дала бы двойной край.
-   Кнопка копирования — «крестик поиска»: тихий глиф без коробки, отвечает
-   цветом и кольцом фокуса; подтверждение копирования живёт в ней же. */
+/* ПИЛЮЛЯ ССЫЛКИ НА СРЕЗ (§3.5). Форма — как в Figma / Claude Design (правка
+   владельца 25.08.2026): один блок «иконка · адрес · копирование», без
+   разбора параметров и без тоста. */
 .pill{
-  display: inline-flex; align-items: center; gap: 7px;
-  height: var(--cu-size-8); padding-inline: 12px;
+  display: inline-flex; align-items: center; gap: 8px;
+  height: 30px; padding-left: 10px; padding-right: 2px;
   border-radius: var(--cu-radii-4);
   box-shadow: var(--cu-elevation-border-1);
   background: var(--cu-background-main);
   max-width: 420px; min-width: 0;
 }
-/* Фокус внутри капсулы — кольцо состояния поверх хэйрлайна, как у поля
-   поиска: один рецепт на все капсулы с текстом. */
-.pill:focus-within{ box-shadow: var(--cu-elevation-border-1), var(--cu-state-ring); }
-.link-icon{ flex: none; color: var(--cu-content-quaternary); --icon-size: 15px; }
+.link-icon{ width: 14px; height: 14px; flex: none; color: var(--cu-content-quaternary); }
 /* Адрес МОНО: его читают посимвольно, когда сверяют. Усечение визуальное —
    в буфер уходит строка целиком. */
 .url{
@@ -28,14 +22,13 @@
 }
 .copy{
   display: flex; align-items: center; justify-content: center;
-  width: var(--cu-size-6); height: var(--cu-size-6); flex: none;
+  width: 26px; height: 26px; flex: none;
   border-radius: var(--cu-radii-3);
-  color: var(--cu-content-quaternary); --icon-size: 15px;
-  transition: background-color var(--cu-animation-duration) var(--cu-animation-timing),
-              color var(--cu-animation-duration) var(--cu-animation-timing);
+  color: var(--cu-content-secondary);
 }
-.copy:hover{ background: var(--cu-state-hover); color: var(--cu-content-primary); }
-.copy:focus-visible{ outline: var(--cu-focus-ring); outline-offset: 2px; }
+.copy:hover{ background: var(--cu-state-hover-subtle); color: var(--cu-content-primary); }
+.copy:focus-visible{ outline: var(--cu-focus-ring); outline-offset: 1px; }
+.copy svg{ width: 15px; height: 15px; }
 /* Подтверждение живёт В КНОПКЕ, там же, куда человек смотрел. Две секунды —
    ровно чтобы заметить и не ждать. */
 .is-done{ color: var(--cu-tone-success-ink); }
@@ -43,10 +36,10 @@
 /* ── §5.8 КНОПКА ВЫГРУЗКИ НА СТРОКЕ ВКЛАДОК ───────────────────────────────
    Живёт в этом модуле, а не в своём, по той же причине, по какой карточка
    подрядчика живёт в модуле таблицы: она делит место и ритм с пилюлей ссылки
-   рядом — оба действия «унести отсюда наружу», и форма у них обязана быть
-   одной. Радиус --cu-radii-4, как у пилюли; высоту и внутренности даёт
-   сам <Button>. */
-.export-btn{ flex: none; border-radius: var(--cu-radii-4); padding-inline: 14px; white-space: nowrap; }
+   рядом — оба действия «унести отсюда наружу», и высота у них обязана
+   совпадать. Разъехавшись по модулям, эти два числа рано или поздно
+   разъедутся и на экране. */
+.export-btn{ flex: none; height: 30px; gap: 6px; white-space: nowrap; }
 .export-icon{ width: 15px; height: 15px; flex: none; }
 /* Стрелка ныряет вниз и возвращается — движение называет действие: «файл
    уходит с экрана вниз, в загрузки». Кадры, а не transition: движение обязано
