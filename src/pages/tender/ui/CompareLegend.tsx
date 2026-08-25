@@ -3,7 +3,7 @@ import { IconButton } from '@/shared/ui/IconButton';
 import { Icon } from '@/shared/ui/Icon';
 import { Popover } from '@/shared/ui/Popover';
 import { decimal, type CompareThresholds } from '@/entities/comparison';
-import { AnomalyGlyph, CoinMark, KeyMark } from './assets';
+import { AnomalyGlyph, CoinMark, CommentMark, KeyMark, MedMark, SpreadMark } from './assets';
 import s from './CompareLegend.module.css';
 
 /**
@@ -84,20 +84,49 @@ export function CompareLegend({ thresholds }: { thresholds: CompareThresholds })
             text="Осознанный отказ подрядчика от позиции."
           />
           <Item
-            sample={<span className={s.sampleCorrected}><s>920</s> → 840</span>}
-            name="Правка объёма"
-            text="Объём скорректирован по сверке сметы; показаны оба значения."
+            sample={<span className={s.riska} />}
+            name="Аномалия — риска на кромке"
+            text="Второй канал к штриховке: читается и при выключенной цветовой подсветке."
+          />
+          <Item
+            sample={<span className={s.sampleMax}>1 200</span>}
+            name="Верхняя граница строки"
+            text="Тихая засечка над числом: самое дорогое честное предложение. Слабее минимума — это контекст торга, а не вердикт."
+          />
+          <Item
+            sample={<span className={s.sampleComment}><CommentMark unread /></span>}
+            name="Комментарий поставщика"
+            text="Закрашенный пузырь с точкой — есть непросмотренное; клик открывает тред истории."
+          />
+          <Item
+            sample={<span className={s.sampleWait}><i /><i /><i /></span>}
+            name="Ждём ответ"
+            text="Запрос ушёл, ответа нет. Не то же, что пробел данных: там запрашивают, здесь напоминают."
+          />
+          <Item
+            sample={<MedMark />}
+            name="Отклонение к медиане"
+            text="Суффикс процента по галочке «Отклонение»: насколько цена выше или ниже типичной в строке."
           />
           <Item
             name="Разброс строки"
-            text="Расхождение цен внутри позиции по трём ярусам шкалы."
+            text="Одна линейка в трёх тонах: низкий · заметный · высокий. Процент рядом текстом — цвет не единственный носитель."
             sample={spreadTiers(thresholds)}
           />
           <Item
             sample={<span className={s.shareTrack}><i style={{ width: '33%' }} /></span>}
-            name="Доля веса"
-            text="Вклад строки в закупку; вид строк «По весу», сумма долей = 100 %."
+            name="Вклад позиции"
+            text="Доля строки в стоимости тендера; длина нормирована по самой тяжёлой позиции, а не по сотне."
           />
+
+          {/* ПОДВАЛ РАЗВОДИТ ДВА СПРАВОЧНЫХ СЛОЯ. Их путают постоянно: человек
+              наводится на ячейку и ждёт словарь, наводится на легенду и ждёт
+              число. Правило названо словами один раз здесь и больше нигде не
+              повторяется. */}
+          <p className={s.rule}>
+            Легенда — словарь знаков. Конкретное число объясняет наведение на
+            саму ячейку, а «почему именно так и откуда оно» — клик по ней.
+          </p>
         </div>
       </Popover>
     </div>
@@ -108,15 +137,18 @@ export function CompareLegend({ thresholds }: { thresholds: CompareThresholds })
    фильтр ([R4]): разъехаться подписи и цвету неоткуда. */
 function spreadTiers(thresholds: CompareThresholds): ReactNode {
   const { spreadNoticeable: lo, spreadHigh: hi } = thresholds;
+  /* Образец — ТА ЖЕ линейка, что стоит в колонке разброса, в тех же трёх
+     тонах: с 25.08.2026 степень несёт ЦВЕТ ОДНОГО глифа, и легенда обязана
+     показывать именно его, а не абстрактные полоски. */
   return (
     <span className={s.spreadDemo}>
       {([
-        ['none', `< ${decimal(lo)} %`],
-        ['noticeable', `${decimal(lo)}–${decimal(hi)} %`],
+        ['low', `< ${decimal(lo)} %`],
+        ['not', `${decimal(lo)}–${decimal(hi)} %`],
         ['high', `≥ ${decimal(hi)} %`],
       ] as const).map(([tone, cap]) => (
         <span key={tone} className={s.spreadRow}>
-          <span className={s.spreadTrack}><i data-tone={tone} /></span>
+          <span className={s.spreadGlyph} data-tone={tone}><SpreadMark /></span>
           <span className={s.spreadCap}>{cap}</span>
         </span>
       ))}

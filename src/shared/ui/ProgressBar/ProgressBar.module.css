@@ -1,0 +1,62 @@
+/* ПОЛОСА ВЕЛИЧИНЫ. Трек 6px, заливка тонкой линией внутри него и ручка-точка
+   на конце — геометрия макета §4.2 (COMPARISON-GAPS.demo.html, класс .pbar).
+
+   ЗАЛИВКА ТОНЬШЕ ТРЕКА НАМЕРЕННО (2px в 6px): полоса стоит В СТРОКЕ рядом с
+   названием позиции, и сплошная шестипиксельная плашка читалась вторым
+   элементом строки. Тонкая линия с точкой читается ШКАЛОЙ — тем же жестом,
+   что засечка на линейке, — и не спорит с текстом за взгляд.
+
+   ГРАДИЕНТ, А НЕ ПЛОСКИЙ ЦВЕТ: у величины есть направление («откуда
+   набралось»), и градиент от светлой ступени к тёмной показывает его без
+   единой подписи. Точка на конце — то место, где величина кончается: без неё
+   короткие полосы (3–4 %) неотличимы от пустого трека.
+
+   ТОЧКА ОБВЕДЕНА ФОНОМ СТРАНИЦЫ (2px border): полоса ложится и на белую
+   строку, и на заливку ховера, и на подкрашенную колонку — без канта она
+   слипается с фоном ровно там, где фон темнее. */
+.pbar{
+  position: relative;
+  height: 6px;
+  border-radius: var(--cu-radii-round);
+  background: rgba(0,0,0,.08);
+  /* flex:none — полоса живёт во флекс-строке названия и сжиматься не имеет
+     права: её длина ЕСТЬ значение. */
+  flex: none;
+}
+
+.pbar__fill{
+  position: absolute;
+  top: 2px; bottom: 2px; left: 0;
+  border-radius: var(--cu-radii-round);
+  background: linear-gradient(90deg, var(--cu-content-placeholder), var(--cu-content-secondary));
+  /* Ширина едет ступенью отклика: значение меняется от фильтра и версии КП,
+     и мгновенный скачок читался бы перерисовкой, а не пересчётом. */
+  transition: width var(--cu-duration-base) var(--cu-ease-standard);
+}
+
+.pbar__fill::after{
+  content: "";
+  position: absolute;
+  right: 0; top: 50%;
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  background: var(--cu-content-secondary);
+  border: 2px solid var(--cu-background-main);
+  box-shadow: 0 1px 3px rgba(0,0,0,.3);
+  transform: translate(50%,-50%);
+}
+
+/* ТОНА — ТРИ, И ЭТО ЗАКРЫТЫЙ СОСТАВ (решение владельца 25.08.2026). Полоса
+   величины отвечает на «сколько», а не на «хорошо ли»: warning и danger ей
+   не нужны — тревога живёт в знаках, а не в шкале. Остаются нейтральный
+   (вклад, доля — величина без оценки), info (выделенная величина: «здесь»,
+   потенциал) и success (достигнутое: заполненность, лучший результат). */
+.pbar--info .pbar__fill{
+  background: linear-gradient(90deg, var(--cu-tone-info), var(--cu-tone-info-ink));
+}
+.pbar--info .pbar__fill::after{ background: var(--cu-tone-info-ink); }
+
+.pbar--success .pbar__fill{
+  background: linear-gradient(90deg, var(--cu-tone-success), var(--cu-tone-success-ink));
+}
+.pbar--success .pbar__fill::after{ background: var(--cu-tone-success-ink); }

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { cx } from '@/shared/lib/cx';
 import { plural } from '@/shared/lib/plural';
 import { Badge } from '@/shared/ui/Badge';
@@ -32,25 +32,59 @@ import s from './DossierModal.module.css';
  * @example
  * <DossierModal bid={dossier} total={positions.length} onClose={() => setDossier(null)} />
  */
-export function DossierModal({ bid, total, onClose }: {
+export function DossierModal({ bid, total, onClose, stats, onGoToCell }: {
   /** КП, чьё досье открыто; null — окно закрыто. */
   bid: Bid | null;
   total: number;
   onClose: () => void;
+  /** КЛИКАБЕЛЬНАЯ СТАТИСТИКА КОЛОНКИ (§5.2, `contractor.md` §3). Каждое
+   *  число раскрывает мини-список своих позиций, строка ведёт к ячейке тем
+   *  же контрактом перехода, что и всё остальное (§4.5). Без списка панель
+   *  «не ведёт к данным», и путь «увидел аномалию → открыл его строки»
+   *  проходится руками. */
+  stats?: SupplierStats;
+  onGoToCell?: (positionId: string) => void;
 }) {
   return (
     <Modal open={bid !== null} onClose={onClose}>
       {/* Содержимое рисуется, только когда окно открыто. */}
-      {bid ? <Dossier bid={bid} total={total} onClose={onClose} /> : null}
+      {bid ? (
+        <Dossier
+          bid={bid}
+          total={total}
+          onClose={onClose}
+          stats={stats}
+          onGoToCell={onGoToCell}
+        />
+      ) : null}
     </Modal>
   );
 }
 
+/** Персональный срез колонки: числа плюс ПОИМЁННЫЕ позиции за каждым.
+ *  Список, а не только счёт: число отвечает «сколько», а следующий вопрос
+ *  всегда «где». */
+export interface SupplierStats {
+  groups: Array<{
+    id: string;
+    label: string;
+    /** Показывается вместо счётчика, когда величина не штучная («+1,24 млн ₽»). */
+    display?: string;
+    items: Array<{ positionId: string; title: string; hint?: string }>;
+  }>;
+}
+
 /** Тело досье. Окно с пустотой внутри хуже отсутствия окна, поэтому здесь
  *  стоит то, что УЖЕ известно из сравнения. */
-function Dossier({ bid, total, onClose }: { bid: Bid; total: number; onClose: () => void }) {
+function Dossier({ bid, total, onClose, stats, onGoToCell }: {
+  bid: Bid; total: number; onClose: () => void;
+  stats?: SupplierStats; onGoToCell?: (positionId: string) => void;
+}) {
   const { contractor, percent, filled, sum, rankLabel } = bid;
   const status = bidStatus(contractor.status);
+  /* Какая группа раскрыта. ОДНА на панель: два открытых списка превращают
+     срез в простыню, а вопрос у человека в моменте ровно один. */
+  const [open, setOpen] = useState<string | null>(null);
 
   return (
     <>
@@ -83,6 +117,50 @@ function Dossier({ bid, total, onClose }: { bid: Bid; total: number; onClose: ()
               </Fact>
             ))}
           </dl>
+        </>
+      ) : null}
+
+      {/* ── ПЕРСОНАЛЬНЫЙ СРЕЗ КОЛОНКИ (§5.2) ────────────────────────────────
+          Канон называет панель заменой фильтра по подрядчику: «увидел
+          аномалию у СтройГрада → открыл его строки» обязано проходиться
+          кликом, а не глазами по колонке. Число — кнопка, список — переходы;
+          сам переход НЕ меняет ни фильтры, ни сортировку, ни версии таблицы:
+          человек вернётся в тот же вид, из которого ушёл. */}
+      {stats?.groups.length ? (
+        <>
+          <h3 className={s.subhead}>В этой колонке</h3>
+          <div className={s.stats}>
+            {stats.groups.map((g) => (
+              <div key={g.id}>
+                <button
+                  type="button"
+                  className={s.stat}
+                  aria-expanded={open === g.id}
+                  disabled={!g.items.length}
+                  onClick={() => setOpen((cur) => (cur === g.id ? null : g.id))}
+                >
+                  <span className={s.statLabel}>{g.label}</span>
+                  <span className={s.statValue}>{g.display ?? g.items.length}</span>
+                </button>
+                {open === g.id ? (
+                  <div className={s.miniList}>
+                    {g.items.map((item) => (
+                      <button
+                        key={item.positionId}
+                        type="button"
+                        className={s.miniItem}
+                        onClick={() => { onClose(); onGoToCell?.(item.positionId); }}
+                      >
+                        <span className={s.miniName}>{item.title}</span>
+                        {item.hint ? <span className={s.miniHint}>{item.hint}</span> : null}
+                        <span className={s.miniArrow} aria-hidden="true">→</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ))}
+          </div>
         </>
       ) : null}
 

@@ -60,6 +60,13 @@ import { ShareIcon } from '@solar-icons/react/linear/share';
 import { SidebarIcon } from '@solar-icons/react/linear/sidebar';
 import { SledgehammerIcon } from '@solar-icons/react/linear/sledgehammer';
 import { Palette2Icon } from '@solar-icons/react/linear/palette-2';
+import { ArrowRightIcon } from '@solar-icons/react/linear/arrow-right';
+import { CopyIcon } from '@solar-icons/react/linear/copy';
+import { DangerTriangleIcon } from '@solar-icons/react/linear/danger-triangle';
+import { DownloadMinimalisticIcon } from '@solar-icons/react/linear/download-minimalistic';
+import { LinkMinimalisticIcon } from '@solar-icons/react/linear/link-minimalistic';
+import { LockKeyholeMinimalisticIcon } from '@solar-icons/react/linear/lock-keyhole-minimalistic';
+import { Plane3Icon } from '@solar-icons/react/linear/plane-3';
 import { SliderHorizontalIcon } from '@solar-icons/react/linear/slider-horizontal';
 import { StarIcon } from '@solar-icons/react/linear/star';
 import { StarsIcon } from '@solar-icons/react/linear/stars';
@@ -173,6 +180,32 @@ export const ICONS = {
      интерфейсе означает раскрытие НА МЕСТЕ (дерево, разделы сметы,
      свёртывание карточек), а здесь уход в отдельное окно. */
   arrowRightUp: ArrowRightUpIcon,
+
+  /* ── ДОБАВЛЕНО СО СРАВНЕНИЕМ КП, 25.08.2026 ────────────────────────────
+     Ни одного из этих символов в спрайте эталона не было — экраны вне
+     эталона рисуются Solar напрямую (см. CLAUDE.md, «Иконки»). */
+  /* Переход «старое → новое» в карточке ячейки: ПРЯМАЯ стрелка, а не
+     диагональная (та означает уход в отдельное окно) и не шеврон (тот
+     означает раскрытие на месте). Здесь — движение значения во времени. */
+  arrowRight: ArrowRightIcon,
+  /* Копирование ссылки на срез и текста комментария — один глиф на оба:
+     действие буквально одно и то же. */
+  copy: CopyIcon,
+  /* Ошибка расчёта в полосе над лентой. Треугольник, а не круг: круглый
+     danger-circle в этом интерфейсе уже занят вопросом (questionCircle) и
+     закрытием (closeCircle), и третий круг в том же ряду не различался бы. */
+  dangerTriangle: DangerTriangleIcon,
+  /* Выгрузка .xlsx. Minimalistic-вариант: полный download несёт подложку-
+     лоток, которая на 16px превращается в кляксу. */
+  download: DownloadMinimalisticIcon,
+  /* Ссылка на срез — звено цепи в пилюле копирования. */
+  link: LinkMinimalisticIcon,
+  /* Закрытый доступ к КП: данные справочно, в расчёте не участвуют. */
+  lock: LockKeyholeMinimalisticIcon,
+  /* Отправка комментария — бумажный самолётик (solar:plane-3-linear, тот, у
+     которого нос смотрит вправо-вверх). Стоит в круглой кнопке композера
+     треда: стрелка там читалась бы «перейти», а не «отправить». */
+  send: Plane3Icon,
 } satisfies Record<string, IconComponent>;
 
 export type IconName = keyof typeof ICONS;

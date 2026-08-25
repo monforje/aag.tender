@@ -15,6 +15,9 @@ import { useAsync } from '@/shared/lib/useAsync';
 import { useComparisonData } from '../model/useComparisonData';
 import { useCompareScreen } from '../model/useCompareScreen';
 import { RoundsPanel } from './RoundsPanel';
+import { InviteDialog } from './InviteDialog';
+import { SliceLink } from './SliceLink';
+import { ExportButton } from './ExportButton';
 import { TenderCompare } from './TenderCompare';
 import { TenderSummary } from './TenderSummary';
 import s from './TenderPage.module.css';
@@ -94,6 +97,11 @@ export function TenderPage() {
   const tenderQuery = useAsync(() => fetchTender(id), [id]);
   const tender = tenderQuery.data;
   const data = useComparisonData(id ?? '');
+  /* Приглашение участника — сценарий уровня тендера, общий с шапкой рабочего
+     места и вкладкой «Контрагенты» (§5.7). Экран сравнения его только
+     ЗАПУСКАЕТ: колонка-призрак в конце ленты и кнопка в пустом состоянии
+     ведут в одно и то же место. */
+  const [invite, setInvite] = useState(false);
 
   /* Срез сравнения, ★ и переход из разбора — общий слой таблицы и дока. */
   const screen = useCompareScreen();
@@ -179,6 +187,7 @@ export function TenderPage() {
        знает — потому и переживёт подмену мока запросом. */
     <TenderCompare
       {...data.comparison}
+      tenderId={tender.id}
       view={screen.view}
       onPreset={screen.selectPreset}
       onPatch={screen.patchView}
@@ -196,6 +205,18 @@ export function TenderPage() {
       /* Липкая шапка встала на линию — бирка «Анализ ИИ» складывается
          до иконки (см. compact у <AiTrigger> ниже). */
       onHeadStuckChange={setHeadStuck}
+      /* ОШИБКА РАСЧЁТА НЕ ОЧИЩАЕТ ТАБЛИЦУ (§5.9): пока есть хоть один
+         подтверждённый срез, он остаётся на экране приглушённым, а причина и
+         повтор живут полосой над лентой. Полный <ErrorState> вместо данных
+         остаётся только там, где показывать НЕЧЕГО, — на первой загрузке. */
+      error={data.comparison && data.error ? String(data.error) : null}
+      onRetry={data.reload}
+      sliceTime={data.sliceTime}
+      /* Запись: решение по корректировке и выбор версии КП меняют ОТВЕТ, а
+         не показ, поэтому обе идут через api и перечитывают снимок. */
+      onDecideCorrection={data.decideCorrection}
+      onPickVersion={data.pickVersion}
+      onInvite={() => setInvite(true)}
     />
   );
 
@@ -214,7 +235,31 @@ export function TenderPage() {
           и без своей полосы над линией (см. .module.css). */}
       <ScrollArea variant="page" className={s.scroll}>
         <TenderSummary tender={tender} />
-        <SecondaryHeader tabs={TABS} activeId={tab} onChange={setTab} variant="canvas" />
+        {/* Действие ссылки живёт НА СТРОКЕ ВКЛАДОК (место зафиксировано
+            владельцем 25.08.2026, §3.5): контекст копируют, не уходя со
+            сравнения. В других разделах его нет — копировать там нечего. */}
+        <SecondaryHeader
+          tabs={TABS}
+          activeId={tab}
+          onChange={setTab}
+          variant="canvas"
+          actions={tab === 'compare' && data.comparison ? (
+            <>
+              <SliceLink />
+              {/* ВЫГРУЗКА — ЯВНОЙ КНОПКОЙ И В ОТДЕЛЬНОМ МЕСТЕ (правка
+                  владельца 25.08.2026). В правом блоке полосы сравнения она
+                  была четвёртым глифом подряд и читалась настройкой вида,
+                  тогда как это единственное действие экрана, создающее
+                  документ для обмена вне системы. Рядом со ссылкой на срез
+                  ей и место: оба действия про «унести отсюда наружу». */}
+              <ExportButton
+                tenderId={tender.id}
+                contractors={data.comparison.contractors}
+                rows={data.comparison.groups.reduce((n, g) => n + g.positions.length, 0)}
+              />
+            </>
+          ) : undefined}
+        />
         {tab === 'compare' ? compare
           : tab === 'rounds' && data.comparison ? (
             <RoundsPanel comparison={data.comparison} onSimulateSubmission={data.submitNext} />
@@ -232,6 +277,10 @@ export function TenderPage() {
           полной остановки колонки бирка морфирует в вертикальный язычок, а
           когда липкая шапка таблицы встаёт на её линию — складывается до
           иконки (compact, только в закрытом состоянии). */}
+      {/* Приглашение участника — общий сценарий для колонки-призрака в конце
+          ленты и кнопки пустого состояния (§5.7). */}
+      <InviteDialog open={invite} onClose={() => setInvite(false)} />
+
       <AiTrigger
         open={aiOpen}
         compact={headStuck && !aiOpen}

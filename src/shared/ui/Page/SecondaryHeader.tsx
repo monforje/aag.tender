@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, type ReactNode } from 'react';
 import { cx } from '@/shared/lib/cx';
 import { rovingTabsKeyDown } from '@/shared/lib/roving';
 import s from './Page.module.css';
@@ -41,12 +41,16 @@ export interface SecondaryTab {
  *   activeId={tab} onChange={setTab}
  * />
  */
-export function SecondaryHeader({ tabs, activeId, onChange, variant = 'header' }: {
+export function SecondaryHeader({ tabs, activeId, onChange, variant = 'header', actions }: {
   tabs: SecondaryTab[];
   activeId: string;
   onChange: (id: string) => void;
   /** header — второй слот шапки экрана; canvas — полоса в теле страницы. */
   variant?: 'header' | 'canvas';
+  /** Действие НАД РАЗДЕЛОМ, справа за распоркой: «Скопировать ссылку на
+   *  срез» (§3.5). ВНЕ таблиста намеренно — это не вкладка: попав внутрь
+   *  `role="tablist"`, кнопка сломала бы и роль, и обход стрелками. */
+  actions?: ReactNode;
 }) {
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -76,6 +80,7 @@ export function SecondaryHeader({ tabs, activeId, onChange, variant = 'header' }
           );
         })}
       </div>
+      {actions ? <div className={s.tabActions}>{actions}</div> : null}
     </div>
   );
 }

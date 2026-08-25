@@ -85,7 +85,12 @@ async function scenario(name, fn) {
 }
 
 const nav0 = await metrics();
-await page.goto(URL, { waitUntil: 'networkidle0' });
+/* ЖДЁМ РАЗМЕТКУ, А НЕ ТИШИНУ В СЕТИ. `networkidle0` требует нуля соединений
+   подряд полсекунды и на preview-сервере с keep-alive перестал наступать
+   вовсе — прогон падал по таймауту, ничего не измерив. Ориентир здесь и так
+   не сеть: настоящая готовность экрана это ЛЕНТА в DOM, её и ждём строкой
+   ниже, а потом даём 1200 мс на доводку раскладки. */
+await page.goto(URL, { waitUntil: 'domcontentloaded' });
 await page.waitForSelector(BAND, { timeout: 20000 });
 await sleep(1200);
 const nav1 = await metrics();
@@ -184,6 +189,41 @@ const fold = await page.$$('button[aria-expanded]:not([aria-controls])');
 if (fold.length) {
   await scenario('раздел: свернуть+развернуть ×3', async () => {
     for (let i = 0; i < 3; i++) { await fold[0].click(); await sleep(450); await fold[0].click(); await sleep(450); }
+  });
+}
+
+/* ── СЦЕНАРИИ ВТОРОЙ ВОЛНЫ (25.08.2026) ────────────────────────────────────
+   Обе новинки трогают то, что раньше не трогалось: тред открывает <dialog>
+   поверх таблицы (верхний слой, свой стек), а галочка «Потенциал» ДОБАВЛЯЕТ
+   КОЛОНКУ — то есть меняет colgroup, ширины и разметку всей ленты разом.
+   Именно такие правки и роняют кадры незаметно. */
+const thread = await page.$('[aria-label^="Комментарии"]');
+if (thread) {
+  await scenario('тред комментариев: открыть+закрыть ×20', async () => {
+    for (let i = 0; i < 20; i++) {
+      await thread.click();
+      await sleep(60);
+      await page.keyboard.press('Escape');
+      await sleep(60);
+    }
+  });
+}
+
+/* Галочка «Потенциал» — кнопка-чип с aria-pressed и своей подписью. */
+const potToggle = await page.$$eval('button[aria-pressed]', (els) => {
+  const i = els.findIndex((e) => e.textContent.trim() === 'Потенциал');
+  if (i >= 0) els[i].setAttribute('data-profile', 'pot');
+  return i;
+});
+if (potToggle >= 0) {
+  const pot = await page.$('button[data-profile="pot"]');
+  await scenario('колонка «Потенциал»: включить+выключить ×10', async () => {
+    for (let i = 0; i < 10; i++) {
+      await pot.click();
+      await sleep(120);
+      await pot.click();
+      await sleep(120);
+    }
   });
 }
 

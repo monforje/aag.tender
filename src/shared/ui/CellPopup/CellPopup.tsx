@@ -1,6 +1,6 @@
 import {
   useCallback, useEffect, useId, useLayoutEffect, useRef, useState,
-  type ComponentPropsWithoutRef, type ReactNode, type RefCallback,
+  type FocusEventHandler, type MouseEventHandler, type ReactNode, type RefCallback,
 } from 'react';
 import { cx } from '@/shared/lib/cx';
 import type { Tone } from '@/shared/ui/Badge';
@@ -17,6 +17,13 @@ export interface CellPopupData {
   meter?: { label: string; value: ReactNode; fraction: number };
   /** Всё, что пояснение, а не число — причина аномалии, критерий минимума. */
   note?: string;
+  /** ФАКТ, а не пояснение: «есть комментарий», «ещё 2 в истории». Отдельно от
+   *  `note`, потому что читается иначе — это подпись о наличии чего-то за
+   *  пределами подсказки, и текста того, на что она указывает, здесь нет
+   *  намеренно (`cell.md` §3: подвал называет факт комментария, не цитирует
+   *  его). Стоит ПОСЛЕ пояснения: сначала «почему так», потом «где ещё
+   *  смотреть». */
+  fact?: string;
 }
 
 export interface CellPopupTarget {
@@ -25,17 +32,45 @@ export interface CellPopupTarget {
   data: CellPopupData;
 }
 
-/** Обработчики цели подсказки — общий тип всех брелоков ячеек: вешается
- *  развёртыванием на кнопку-триггер рядом с пометкой. */
-export type CellPopupBind = (data: CellPopupData) => ComponentPropsWithoutRef<'button'>;
+/** Обработчики цели подсказки. Типизированы по `HTMLElement`, а не по
+ *  `'button'`: с §2.2 цель наведения — ТЕЛО ЯЧЕЙКИ, а оно бывает и кнопкой
+ *  (обычная ячейка), и самой `<td>` (состояния без интерактива). React делает
+ *  обработчики событий бивариантными, поэтому `HTMLElement`-версия
+ *  раскладывается и на `<button>`, и на `<td>` без приведений. */
+export type CellPopupBind = (data: CellPopupData) => {
+  onMouseEnter: MouseEventHandler<HTMLElement>;
+  onMouseLeave: MouseEventHandler<HTMLElement>;
+  onFocus: FocusEventHandler<HTMLElement>;
+  onBlur: FocusEventHandler<HTMLElement>;
+  /** Раскрытие касанием — только на грубом указателе (§4.6). */
+  onClick: MouseEventHandler<HTMLElement>;
+};
 
 /* Тайминги NN/g «Timing Guidelines for Exposing Hidden Content» (Д.5 аудита):
    показ после остановки курсора 350 мс — проход по столбцу не хлопает
    попапами; переезд между соседними целями мгновенный; сокрытие через 500 мс —
-   этого хватает на мост курсора цель → панель. */
+   этого хватает на мост курсора цель → панель.
+
+   ОРИЕНТИР КАНОНА — ~500 мс (`interactions.md` §1), и 350 от него отличается
+   сознательно: канон называет ОДНУ величину на экран, чтобы подсказки не
+   появлялись вразнобой, а не конкретное число. 350 выбраны по замеру прохода
+   по колонке из 65 строк: на 500 мс подсказка не успевала за курсором и
+   читалась «сломанной», на 250 — хлопала при каждом проносе. Величина ОДНА на
+   весь экран, что канон и требует. */
 const SHOW_DELAY = 350;
 const HIDE_DELAY = 500;
 const ANIM_MS = 130;
+
+/* ТАЧ: НАВЕДЕНИЯ НЕ БЫВАЕТ (§4.6, README §6). Браузер эмулирует hover после
+   тапа нестабильно — где-то он приходит, где-то нет, где-то остаётся висеть
+   до следующего тапа. Поэтому на грубом указателе цель раскрывается
+   КАСАНИЕМ, и это не «ещё один обработчик на всякий случай»: без него канал
+   тача не обеспечен вовсе, а канон делает его сквозным требованием.
+
+   Проверка — медиа-запрос, а не userAgent: гибрид с мышью и сенсором
+   получает оба канала честно, по тому, чем в него сейчас тычут. */
+const coarsePointer = (): boolean =>
+  typeof window !== 'undefined' && window.matchMedia?.('(hover: none)').matches === true;
 
 /**
  * Подсказка-объяснение пометки: нативный `<dialog>`, светлая карточка,
@@ -150,6 +185,12 @@ export function useCellPopup() {
     },
     onFocus: (e) => show(e.currentTarget, data),
     onBlur: () => close(),
+    /* Клик РАСКРЫВАЕТ на тач-устройстве и НЕ мешает мыши: на грубом
+       указателе он единственный канал, на точном — цель обычно и так уже
+       раскрыта наведением, а повторный show() лишь обновляет содержимое.
+       Собственный onClick цели (карточка ячейки) при этом продолжает
+       работать: два обработчика на одном элементе не конфликтуют. */
+    onClick: (e) => { if (coarsePointer()) show(e.currentTarget, data); },
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }), []);
 
@@ -231,7 +272,20 @@ function CellPopupPanel({ id, target, open, register }: {
       top = rect.top - h - 2;
       el.classList.add(s.isAbove);
     }
-    left = Math.max(EDGE, Math.min(left, window.innerWidth - w - EDGE));
+    /* ЗАЖИМ — ПО ОБЛАСТИ КОНТЕНТА, А НЕ ПО ОКНУ (правка 25.08.2026). По окну
+       подсказка первой колонки уезжала левым краем на рейл и сайдбар — то
+       есть на КАРКАС, поверх которого ей делать нечего, — и там же пропадала
+       под ним по слою. Хозяин области находится по самой цели (`closest`), а
+       не приходит пропом: <CellPopup> обслуживает все цели экрана одним
+       экземпляром, и знать про них он не обязан. Окно остаётся внешней
+       границей: у области, которая шире экрана или уходит за него, побеждает
+       она. */
+    const host = shown.el.closest('main')?.getBoundingClientRect();
+    const winMin = EDGE;
+    const winMax = window.innerWidth - w - EDGE;
+    const min = host ? Math.max(winMin, host.left + 4) : winMin;
+    const max = host ? Math.min(winMax, host.right - w - 4) : winMax;
+    left = Math.max(min, Math.min(left, Math.max(min, max)));
     el.style.left = `${left}px`;
     el.style.top = `${top}px`;
     /* Хвостик целится в центр цели, даже когда край экрана сдвинул панель. */
@@ -280,8 +334,13 @@ function CellPopupPanel({ id, target, open, register }: {
         <span className={s.title}>{data.title}</span>
       </div>
       <div className={s.body}>
-        {data.fields.map((field) => (
-          <div key={field.label} className={s.field}>
+        {/* Ключ — ИНДЕКС, а не подпись: у перечислений («кто отказался»,
+            «кто пропустил») подпись пустая и повторяется, и ключ по ней
+            схлопнул бы такие строки в одну. Порядок полей задаёт вызывающий
+            и внутри одного показа не меняет — перестановок, ради которых
+            нужен стабильный ключ, здесь не бывает. */}
+        {data.fields.map((field, i) => (
+          <div key={i} className={s.field}>
             <span className={s.label}>{field.label}</span>
             {field.tone ? (
               <span className={cx(s.value, s.valueTone)}>{field.value}</span>
@@ -302,9 +361,10 @@ function CellPopupPanel({ id, target, open, register }: {
           </div>
         ) : null}
       </div>
-      {data.note ? (
+      {data.note || data.fact ? (
         <div className={s.foot}>
-          <span className={s.note}>{data.note}</span>
+          {data.note ? <span className={s.note}>{data.note}</span> : null}
+          {data.fact ? <span className={s.fact}>{data.fact}</span> : null}
         </div>
       ) : null}
     </dialog>

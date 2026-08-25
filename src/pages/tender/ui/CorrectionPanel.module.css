@@ -1,0 +1,73 @@
+/* ПАНЕЛЬ РЕШЕНИЯ ПО КОРРЕКТИРОВКЕ (§2.7). Язык проекта: капительные секции,
+   поля парами, цитата поставщика, два действия разного веса. */
+.pop{ --pop-width: 360px; padding: 0; }
+.panel{ padding: 14px 16px 16px; text-align: left; }
+
+.title{
+  display: flex; align-items: center; gap: 7px;
+  font-size: 13px; line-height: 18px; font-weight: var(--cu-font-weight-semibold);
+}
+/* Точка тона — единственный цветной элемент шапки: она называет РОД события
+   («требуется решение»), а слова называют само событие. */
+.dot{
+  width: 8px; height: 8px; border-radius: 50%; flex: none;
+  background: var(--cu-tone-warning);
+}
+.sub{ margin-top: 3px; font-size: 12px; color: var(--cu-content-tertiary); }
+
+.sec{ margin-top: 11px; padding-top: 11px; border-top: 1px solid var(--cu-border-default); }
+.cap{
+  margin-bottom: 6px;
+  font-size: 10px; line-height: 14px; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--cu-content-secondary); font-weight: var(--cu-font-weight-medium);
+}
+.row{ display: flex; justify-content: space-between; gap: 12px; }
+.row + .row{ margin-top: 3px; }
+.row-label{ color: var(--cu-content-secondary); font-size: 12px; line-height: 18px; }
+.row-value{ font-size: 12px; line-height: 18px; font-variant-numeric: tabular-nums; }
+
+.quote{
+  padding: 7px 9px;
+  background: var(--cu-fill-subtle);
+  border-left: 2px solid var(--cu-border-default);
+  border-radius: 0 var(--cu-radii-2) var(--cu-radii-2) 0;
+  color: var(--cu-content-secondary);
+  font-size: 12px; line-height: 17px; font-style: italic;
+}
+
+.field-label{
+  display: block; margin: 12px 0 4px;
+  font-size: 12px; color: var(--cu-content-secondary);
+}
+
+/* Предупреждение о числе участников — полоса тона warning: она не запрещает
+   действие, а называет его цену. */
+.note-strip{
+  display: flex; gap: 8px; align-items: center;
+  margin-top: 12px; padding: 8px 10px;
+  border-radius: var(--cu-radii-4);
+  background: var(--cu-tone-warning-fill); color: var(--cu-tone-warning-ink);
+  font-size: 12px; line-height: 17px;
+}
+/* Иконка рядом с текстом — flex + align-items:center, margin-top ЗАПРЕЩЁН
+   (правило второй волны, владелец 25.08.2026). */
+.strip-icon{ width: 15px; height: 15px; flex: none; }
+
+/* ДВЕ КНОПКИ 50/50: они противоположны по смыслу и равны по площади —
+   разный размер читался бы подсказкой, что выбрать. */
+.actions{ display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 13px; }
+.actions > *{ justify-content: center; white-space: nowrap; }
+
+/* КОНТУР ПРОТИВ ЗАЛИВКИ. Отклонение — контур danger: действие обратимое и
+   не двигающее смету. Принятие — заливка success: оно двигает. */
+.decline-btn{
+  box-shadow: inset 0 0 0 1px var(--cu-tone-danger);
+  color: var(--cu-tone-danger-ink);
+}
+.decline-btn:hover{ background: var(--cu-tone-danger-fill); }
+.accept-btn{ background: var(--cu-tone-success-ink); }
+.accept-btn:hover{ background: var(--cu-tone-success); }
+/* Подтверждение отказа — уже залитый danger: на втором шаге это ГЛАВНОЕ
+   действие формы, и контур рядом с «Отмена» не отличал бы их вовсе. */
+.decline-confirm{ background: var(--cu-tone-danger-ink); }
+.decline-confirm:hover{ background: var(--cu-tone-danger); }

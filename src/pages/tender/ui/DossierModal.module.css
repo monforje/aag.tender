@@ -36,3 +36,40 @@
   font-size: 13px; line-height: 18px; color: var(--cu-content-tertiary);
 }
 .note-icon{ --icon-size: 20px; color: var(--cu-content-quaternary); }
+
+/* ── §5.2 ПЕРСОНАЛЬНЫЙ СРЕЗ КОЛОНКИ ───────────────────────────────────────
+   Число — кнопка, за ней мини-список позиций, строка ведёт к ячейке. Канон
+   называет это заменой фильтра по подрядчику: панель обязана ВЕСТИ К ДАННЫМ,
+   иначе она только пересказывает то, что и так видно в колонке. */
+.stats{ margin-top: 6px; }
+.stat{
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 7px 8px; border-radius: var(--cu-radii-3);
+  font-size: 13px; text-align: left;
+}
+.stat:hover:not(:disabled){ background: var(--cu-state-hover-subtle); }
+.stat:disabled{ color: var(--cu-content-placeholder); cursor: default; }
+.stat-label{ flex: 1; min-width: 0; }
+/* Число тоном ссылки: оно и есть точка входа в список. */
+.stat-value{
+  flex: none; font-weight: var(--cu-font-weight-medium);
+  color: var(--cu-tone-info-ink);
+  font-variant-numeric: tabular-nums;
+}
+.stat:disabled .stat-value{ color: var(--cu-content-placeholder); }
+
+/* Список с отбивкой слева: он подчинён своему числу и читается как его
+   раскрытие, а не как соседний раздел. */
+.mini-list{
+  margin: 0 0 6px 14px; padding-left: 12px;
+  border-left: 2px solid var(--cu-border-default);
+}
+.mini-item{
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 6px 8px; border-radius: var(--cu-radii-3);
+  font-size: 13px; text-align: left;
+}
+.mini-item:hover{ background: var(--cu-state-hover-subtle); }
+.mini-name{ flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mini-hint{ flex: none; font-size: 11px; color: var(--cu-content-tertiary); }
+.mini-arrow{ flex: none; color: var(--cu-content-tertiary); }

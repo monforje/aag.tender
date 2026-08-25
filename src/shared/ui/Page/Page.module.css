@@ -131,3 +131,13 @@
   color: var(--cu-content-tertiary); font-size: 13px;
 }
 .screen-placeholder-icon{ --icon-size: 32px; color: var(--cu-content-quaternary); }
+
+/* Действия НАД РАЗДЕЛОМ на строке вкладок — справа за распоркой (§3.5).
+   Вне таблиста намеренно: это не вкладка, и внутри `role="tablist"` кнопка
+   сломала бы и роль, и обход стрелками. */
+.tab-actions{
+  margin-inline-start: auto;
+  display: inline-flex; align-items: center; gap: 8px;
+  padding-inline-end: 12px;
+  min-width: 0;
+}

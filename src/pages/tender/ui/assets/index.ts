@@ -13,6 +13,7 @@
 
 export { AnomalyGlyph } from './AnomalyGlyph';
 export { CoinMark } from './CoinMark';
+export { CommentMark } from './CommentMark';
 export { CorrectionMark } from './CorrectionMark';
 export { KeyMark } from './KeyMark';
 export { MedMark } from './MedMark';

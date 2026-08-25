@@ -4,31 +4,48 @@ import {
 } from 'react';
 import { cx } from '@/shared/lib/cx';
 import { Button } from '@/shared/ui/Button';
-import { useCellPopup } from '@/shared/ui/CellPopup';
+import { useCellPopup, type CellPopupData } from '@/shared/ui/CellPopup';
 import { Icon } from '@/shared/ui/Icon';
 import { ScreenPlaceholder } from '@/shared/ui/Page';
+import { Popover } from '@/shared/ui/Popover';
 import { Table, tableCell } from '@/shared/ui/Table';
 import { Tooltip } from '@/shared/ui/Tooltip';
+import { plural } from '@/shared/lib/plural';
 import {
-  analyzeComparison, filterRows, flatten, isModifiedView, METRIC_LABEL, metricTotals, rankBids, ROW_VIEW_LABEL, type Bid, type CompareThresholds, type CompareView, type Comparison, type PositionGroup, type PresetId, type RowFacts,
+  analyzeComparison, cellMark, decimal, moneyCompact, filterRows, flatten, isModifiedView, isWaiting, METRIC_LABEL, metricTotals, money, pendingCorrection, rankBids, ROW_VIEW_LABEL, sectionPathOf, withVersion, type Bid, type CompareThresholds, type CompareView, type Comparison, type PositionGroup, type PresetId, type RowFacts,
 } from '@/entities/comparison';
 import { choose, columnMarks, resolveTone, type MarkKind } from '../model/compareFormat';
 import { computeColumnLayout, titleLimit } from '../model/columns';
 import { useBandMaxHeight } from '../model/useBandMaxHeight';
 import { useBandWidth } from '../model/useBandWidth';
+import { useCellComments } from '../model/useCellComments';
 import { useTableDock } from '../model/useTableDock';
 import { CompareToolbar } from './CompareToolbar';
+import { CellCard } from './CellCard';
 import { ColumnPainter } from './ColumnPainter';
+import { CommentThread } from './CommentThread';
 import { CompareRow } from './CompareRow';
 import { ContractorCard } from './ContractorCard';
-import { DossierModal } from './DossierModal';
+import { CorrectionPanel } from './CorrectionPanel';
+import { CutLine, TailRow } from './CutLine';
+import { DossierModal, type SupplierStats } from './DossierModal';
+import { GhostColumn } from './GhostColumn';
 import { TermsBand } from './TermsBand';
-import { TotalRow } from './TotalRow';
+import { ShownRow, TotalRow } from './TotalRow';
+import type { CellAction } from './BidCell';
 import s from './TenderCompare.module.css';
 
 /** Ширина на <col> инлайном; undefined — кадр до первого замера. */
 const pxStyle = (w?: number): { width: string } | undefined =>
   w == null ? undefined : { width: `${w}px` };
+
+/** Псевдо-id колонки-призрака «Пригласить» (§5.7). Она участвует в РАСЧЁТЕ
+ *  ШИРИН на общих правах: без своего <col> ячейка забирала «остаток», а
+ *  остатка при `width` таблицы, равной сумме колонок, нет вовсе — колонка
+ *  выходила нулевой ширины и складывалась в невидимую полоску (замер
+ *  25.08.2026: 0px при 212 у соседей). Приглашение — такая же колонка, просто
+ *  без чисел (решение владельца 25.08.2026). */
+const INVITE_COL = '__invite';
 
 /**
  * Сравнение коммерческих предложений: позиции сметы строками, подрядчики —
@@ -98,6 +115,9 @@ export function TenderCompare({
   onHeadStuckChange,
   noteFor, flashCells, flashCols,
   analysisApplied, onRestoreView,
+  tenderId, error, onRetry, sliceTime,
+  onPickVersion, onInvite, onDecideCorrection,
+  roundNumber,
 }: Comparison & {
   /* Состояние среза ПОДНЯТО на страницу: им делятся таблица и панель «Анализ»
      (сценарий просит пресет, карточка ведёт к строке). Компонент остаётся
@@ -130,6 +150,28 @@ export function TenderCompare({
   /** Вид перестроен разбором: чип «Вернуть мой вид» вместо обычного сброса. */
   analysisApplied?: boolean;
   onRestoreView?: () => void;
+  /** Номер тендера — адрес переписки, выгрузки и ссылки на срез. */
+  tenderId: string;
+  /** ОШИБКА РАСЧЁТА НЕ ОЧИЩАЕТ ТАБЛИЦУ (§5.9, `table.md` §6): приходит сюда
+   *  причиной, а последний подтверждённый срез остаётся на экране приглушённым
+   *  и прокручиваемым. Пустой экран вместо данных — худшее, что можно сделать
+   *  с человеком, который уже что-то на них решил. */
+  error?: string | null;
+  onRetry?: () => void;
+  /** Время последнего успешного среза — подпись под приглушённой таблицей. */
+  sliceTime?: string;
+  /** Выбор версии КП в шапке колонки (§5.5). Не задан — версий у данных нет,
+   *  и триггер в карточке не рисуется. */
+  onPickVersion?: (contractorId: string, versionId: string) => void;
+  /** Приглашение нового участника (§5.7). Не задано — прав нет, и колонки-
+   *  призрака в конце ленты тоже. */
+  onInvite?: () => void;
+  /** Решение по корректировке объёма (§2.7). Не задано — прав на решение
+   *  нет, и панель открывается только на чтение. */
+  onDecideCorrection?: (
+    contractorId: string, positionId: string,
+    decision: 'accepted' | 'declined', note?: string,
+  ) => Promise<void> | void;
 }) {
   /* Плоский список позиций и ранжир ВЫВОДЯТСЯ из пришедшего, а не приходят
       полями: два перечня одних и тех же строк разъехались бы на первой правке.
@@ -141,10 +183,27 @@ export function TenderCompare({
       панели 208 → 30 мс, на прокрутку окна 396 → 26 мс. Ссылочная
       стабильность `bids` — ещё и условие memo у <CompareRow>. */
   const positions = useMemo(() => flatten(groups), [groups]);
-  const bids = useMemo(() => rankBids(contractors, positions), [contractors, positions]);
+  /* ВЫБРАННАЯ ВЕРСИЯ КП ПОДМЕНЯЕТ РАСЦЕНКИ ОДИН РАЗ — НА ВХОДЕ В РАСЧЁТ (§5.5).
+     Сделай это позже, у каждого читателя, — и половина экрана считала бы по
+     старшей версии, а половина по выбранной. Снимок при этом остаётся честным
+     архивом всех версий: подменяется вид, а не данные. */
+  const snapshot = useMemo(() => contractors.map(withVersion), [contractors]);
+
+  /* ★ МЕНЯЕТ И ИЗБРАННОСТЬ, И ПОРЯДОК КОЛОНОК (§5.4, `contractor.md` §2, §5):
+     это ЕДИНСТВЕННЫЙ механизм приоритизации колонок — без него важный
+     подрядчик может стоять последним на панораме из двенадцати. Между собой
+     избранные держат свой ранжир: звезда поднимает группу, а не
+     перетасовывает её. Сортировка стабильна (`Array.prototype.sort` в ES2019
+     и новее), поэтому равные по звезде сохраняют порядок ранжира. */
+  const bids = useMemo(() => {
+    const ranked = rankBids(snapshot, positions);
+    const star = (id: string) => (starred.includes(id) ? 0 : 1);
+    return [...ranked].sort((a, b) => star(a.contractor.id) - star(b.contractor.id));
+  }, [snapshot, positions, starred]);
+
   const facts = useMemo(
-    () => analyzeComparison(groups, contractors, thresholds),
-    [groups, contractors, thresholds],
+    () => analyzeComparison(groups, snapshot, thresholds),
+    [groups, snapshot, thresholds],
   );
   const totals = useMemo(() => metricTotals(facts.rows, bids), [facts, bids]);
   /* Сводка пометок по колонкам — содержимое язычков карточек. Один проход по
@@ -152,9 +211,24 @@ export function TenderCompare({
      перерисоваться у шапки полно (звезда, перекраска, ширина ленты), и ни
      один из них этих чисел не меняет. */
   const marksOf = useMemo(
-    () => new Map(contractors.map((c) => [c.id, columnMarks(facts.rows, c)])),
-    [facts, contractors],
+    () => new Map(snapshot.map((c) => [c.id, columnMarks(facts.rows, c)])),
+    [facts, snapshot],
   );
+
+  /* Имя подрядчика по id — стабильный колбэк: уходит в КАЖДУЮ строку (края
+     диапазона поимённо, разбор потенциала), и массив вместо него отменял бы
+     memo при любой перекраске колонки. */
+  const nameOf = useCallback(
+    (id: string) => contractors.find((c) => c.id === id)?.name ?? id,
+    [contractors],
+  );
+
+  /* Видимый срез считается ЗДЕСЬ, до всего остального: его читают и рендер, и
+     переход к пометке (тот обязан отличить «скрыта фильтром» от «свёрнута
+     секция», а для этого — знать состав видимого раньше, чем строится
+     разметка). */
+  const visible = useMemo(() => filterRows(facts.rows, view.filters), [facts, view.filters]);
+  const visibleIds = useMemo(() => new Set(visible.map((r) => r.position.id)), [visible]);
 
   const modified = isModifiedView(view);
 
@@ -162,6 +236,13 @@ export function TenderCompare({
       по одной. Разделы сворачиваются ПООДИНОЧКЕ. Цвет колонки — CSS-строка,
       отсутствие ключа значит «по ранжиру». */
   const [collapsed, setCollapsed] = useState(false);
+  /* РАСКРЫТЫЕ ЧИСЛА КАРТОЧЕК — ТОЖЕ ОДНО СОСТОЯНИЕ НА ВСЕ КОЛОНКИ (решение
+     владельца 25.08.2026). Раскрытость жила у каждой карточки собственным
+     <details>, и это была ошибка того же рода, что и раздельная свёрнутость:
+     блок отвечает «мин. цен N из M», то есть число, которое ЧИТАЮТ РЯДОМ с
+     соседним, — а раскрытое поодиночке оно сравнивается с пустотой. Заодно
+     ушла разъезжающаяся высота: раскрывается вся шапка целиком. */
+  const [factsOpen, setFactsOpen] = useState(false);
   /* ЗАКРЕПЛЕНИЕ КОЛОНКИ-ЯКОРЯ — ВЫКЛЮЧЕНО ПО УМОЛЧАНИЮ (решение владельца
      23.08.2026) и живёт ЗДЕСЬ, а не в CompareView, хотя выглядит как ещё одна
      ось вида. Причины две, и обе про поведение соседних контролов.
@@ -183,9 +264,34 @@ export function TenderCompare({
      24.08.2026, третья волна): читается это состояние, а не считается, и
      переживать смену пресета оно обязано ровно так же. */
   const [wideTitle, setWideTitle] = useState(false);
+  /* СТРОКИ «ПОКАЗАНО» (§1.1) — тумблер того же рода и там же (решение
+      владельца 25.08.2026): под фильтром строки появляются сами, а гасить их
+      можно из окна параметров. Ось вида им не место по общим причинам
+      семейства: чип «Изменён» на сводку среза подниматься не должен, пресеты
+      строки не трогают — это эргономика чтения, а не нарезка данных.
+      ДЕФОЛТ ВКЛЮЧЁН: строки — часть канона фильтра («сколько стоят именно
+      эти позиции» рядом с полным итогом), выключатель существует для тех,
+      кому хватает счётчика скрытых над лентой. */
+  const [shownRows, setShownRows] = useState(true);
   const [folded, setFolded] = useState<Record<string, boolean>>({});
   const [tint, setTint] = useState<Record<string, string>>({});
   const [dossier, setDossier] = useState<Bid | null>(null);
+  /* ХВОСТ ЗА ЛИНИЕЙ ОТСЕЧКИ (§1.3) — эргономика чтения, там же, где `folded`
+     и `collapsed`: переживает смену пресета, не переживает уход со страницы. */
+  const [tailOpen, setTailOpen] = useState(false);
+  /* Панели ячейки: карточка (§2.1), тред (§2.4), решение (§2.7). Каждая
+     помнит СВОЙ адрес и свой якорь — панели не мешают друг другу и не
+     закрываются взаимно. */
+  const [cell, setCell] = useState<
+    { action: CellAction; contractorId: string; positionId: string; at: DOMRect } | null
+  >(null);
+  const [deciding, setDeciding] = useState(false);
+  /* «Цель скрыта фильтром» (§4.5) — источник обязан сказать это словами и
+     дать выход; молчаливый промах читается поломкой. */
+  const [filterMiss, setFilterMiss] = useState<string | null>(null);
+  /* Список корректировок колонки (§5.3): один — сразу переход, несколько —
+     мини-список. Держит и КП, и якорь: панель падает от нажатого чипа. */
+  const [corrList, setCorrList] = useState<{ bid: Bid; at: DOMRect } | null>(null);
   /* Палитра — вторая панель: состояние хранит КП вместе с прямоугольником
      нажатой кнопки. Механика обеих панелей — в <DossierModal> и <ColumnPainter>. */
   const [paint, setPaint] = useState<{ bid: Bid; at: DOMRect } | null>(null);
@@ -219,12 +325,61 @@ export function TenderCompare({
   const markTimer = useRef<number | undefined>(undefined);
   useEffect(() => () => window.clearTimeout(markTimer.current), []);
 
+  /* ── ПОВТОР ЗАХОДА ПОСЛЕ РАСКРЫТИЯ СЕКЦИИ ────────────────────────────────
+     Цель в свёрнутой секции не существует в DOM вовсе, поэтому переход идёт
+     в два шага: раскрыть — и зайти снова. Второй шаг обязан случиться ПОСЛЕ
+     того, как строки реально отрисованы.
+
+     ЭФФЕКТ, А НЕ requestAnimationFrame. Двойной rAF выглядел достаточным и
+     не работал: коммит 780 ячеек (65 строк × 12 колонок) не укладывается в
+     два кадра, повтор находил ту же пустоту, и симптом получался ровно тот,
+     ради устранения которого раскрытие и заведено, — секция раскрылась,
+     обводка не пришла. Эффект по `folded` привязан к КОММИТУ, а не к
+     времени, и потому не зависит ни от размера сметы, ни от нагрузки. */
+  const pendingJump = useRef<(() => void) | null>(null);
+  useEffect(() => {
+    const job = pendingJump.current;
+    if (!job) return;
+    pendingJump.current = null;
+    job();
+  }, [folded]);
+
   const goToMark = useCallback((kind: MarkKind, contractorId: string) => {
     const root = dockRef.current;
     if (!root) return;
     const cells = [...root.querySelectorAll<HTMLElement>(`[data-marks~="${kind}"]`)]
       .filter((el) => (el.dataset.cell ?? '').startsWith(`${contractorId}:`));
-    if (!cells.length) return;
+    /* ── КОНТРАКТ ПЕРЕХОДА, ДВЕ НЕДОСТАЮЩИЕ ПОЛОВИНЫ (§4.5,
+       `interactions.md` §3) ────────────────────────────────────────────────
+       Прокрутка и обводка работали и раньше; молча промахивался переход в
+       двух случаях, и оба читались как поломка — «кликнул, ничего не
+       произошло».
+
+       ПЕРВЫЙ: цель в СВЁРНУТОЙ секции. Её строки не существуют в DOM вовсе,
+       и querySelector честно не находил ничего. Секция раскрывается ДО
+       прокрутки — иначе scrollIntoView целится в элемент, которого ещё нет.
+       Прокрутка при этом уходит в следующий кадр: раскрытие меняет высоту
+       ленты, и мерить её в том же кадре бессмысленно.
+
+       ВТОРОЙ: цель СКРЫТА ФИЛЬТРОМ. Здесь молчать нельзя тем более —
+       пользователь сам поставил фильтр и мог про него забыть. Источник
+       говорит словами и даёт выход «Показать все». */
+    if (!cells.length) {
+      const target = facts.rows.find((r) => hasMark(kind, r, contractorId));
+      if (!target) return;
+      const hiddenByFilter = !visibleIds.has(target.position.id);
+      if (hiddenByFilter) {
+        setFilterMiss(target.position.title);
+        return;
+      }
+      /* Не фильтр — значит свёрнутая секция: раскрываем и повторяем заход. */
+      const group = groups.find((g) => g.positions.some((x) => x.id === target.position.id));
+      if (!group || !folded[group.id]) return;
+      setFolded((all) => ({ ...all, [group.id]: false }));
+      pendingJump.current = () => goToMarkRef.current?.(kind, contractorId);
+      return;
+    }
+    setFilterMiss(null);
     const keys = cells.map((el) => el.dataset.cell ?? '');
     /* Подсветка — ВСЕ такие ячейки колонки сразу, тем же каналом, что и любой
        другой переход (обводка `flashCells`). */
@@ -242,7 +397,42 @@ export function TenderCompare({
       markCursor.current = null;
     }, 5300);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- dockRef объявлен ниже, реф стабилен
-  }, []);
+  }, [facts, groups, folded, visibleIds]);
+
+  /* Повторный заход после раскрытия секции — через реф: колбэк вызывает сам
+     себя из rAF, а сослаться на себя по имени в собственном теле замыкания
+     нельзя, не поймав вчерашнюю версию. */
+  const goToMarkRef = useRef<typeof goToMark>(goToMark);
+  goToMarkRef.current = goToMark;
+
+  /* Переход к ОДНОЙ названной ячейке — из мини-списка корректировок (§5.3).
+     Контракт тот же, что у обхода пометок: раскрыть секцию, прокрутить,
+     обвести; скрытая фильтром цель не молчит. Отдельная функция, а не флаг
+     у goToMark: там адрес — «пометка в колонке», здесь — конкретная пара. */
+  const goToPosition = useCallback((contractorId: string, positionId: string) => {
+    const key = `${contractorId}:${positionId}`;
+    const root = dockRef.current;
+    const el = root?.querySelector<HTMLElement>(`[data-cell="${key}"]`);
+    if (!el) {
+      if (!visibleIds.has(positionId)) {
+        setFilterMiss(facts.byId.get(positionId)?.position.title ?? positionId);
+        return;
+      }
+      const group = groups.find((g) => g.positions.some((x) => x.id === positionId));
+      if (!group || !folded[group.id]) return;
+      setFolded((all) => ({ ...all, [group.id]: false }));
+      pendingJump.current = () => goToPositionRef.current?.(contractorId, positionId);
+      return;
+    }
+    setFilterMiss(null);
+    setMarkFlash(new Set([key]));
+    el.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' });
+    window.clearTimeout(markTimer.current);
+    markTimer.current = window.setTimeout(() => setMarkFlash(null), 5300);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- dockRef объявлен ниже, реф стабилен
+  }, [facts, groups, folded, visibleIds]);
+  const goToPositionRef = useRef<typeof goToPosition>(goToPosition);
+  goToPositionRef.current = goToPosition;
 
   /* Подсветка перехода к пометке живёт в ТОМ ЖЕ множестве, что и обводка
      «анализ → таблица»: два канала для одного «смотри сюда» дали бы две
@@ -265,6 +455,24 @@ export function TenderCompare({
   useEffect(() => { popup.close(true); },
     [view.mainMetric, view.showDeviation, view.showRate, view.rowView, view.filters]);
 
+  /* ПЕРЕПИСКА ПО ЯЧЕЙКАМ живёт у таблицы, а не у страницы: тред рисует она,
+     отправляет она, а страница панели не видит вовсе (разбор — в JSDoc хука). */
+  const comments = useCellComments(tenderId);
+
+  /* ОДИН КОЛБЭК НА ТРИ ДЕЙСТВИЯ ЯЧЕЙКИ. Стабилен без зависимостей: внутри
+     только setState — а значит memo пятисот <CompareRow> его переживает.
+     Прямоугольник снимается ЗДЕСЬ, в момент клика: панель падает от живой
+     цели, а не от координат, посчитанных когда-то раньше. */
+  const onCellAction = useCallback((
+    action: CellAction, contractorId: string, positionId: string, at: HTMLElement,
+  ) => {
+    setCell({ action, contractorId, positionId, at: at.getBoundingClientRect() });
+    /* Открытая панель и висящая подсказка — два объяснения одной ячейки
+       разом; подсказка уступает. */
+    popup.close(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- popup пересоздаётся каждый рендер, close читает рефы
+  }, []);
+
   /* Липкая шапка + автосайдбар + доскролл к строке из «Анализа». Правило
      автосайдбара и история решения — в JSDoc хука. */
   const { dockRef } = useTableDock({ focusRowId, onHeadStuckChange });
@@ -281,17 +489,23 @@ export function TenderCompare({
       длиннее константы обрезает <ContractorCard>, полное название всплывает
       по наведению. Расчёт — чистая функция от видимой ширины блока; null —
       кадр до первого замера ширины. */
+  const layoutBids = useMemo(
+    () => (onInvite ? [...contractors, { id: INVITE_COL }] : contractors),
+    [contractors, onInvite],
+  );
   const layout = useMemo(
     () => (bandWidth == null
       ? null
-      : computeColumnLayout({ available: bandWidth, bids: contractors, wideTitle })),
-    [bandWidth, contractors, wideTitle],
+      : computeColumnLayout({
+        available: bandWidth, bids: layoutBids, wideTitle, potential: view.showPotential,
+      })),
+    [bandWidth, layoutBids, wideTitle, view.showPotential],
   );
   /* Левый блок целиком — «Позиция» + «Количество» + «Единица» + «Разброс».
       Нужен только сумме ширины таблицы: шапка секции берёт то же число из
       colSpan своей ячейки, без чисел в разметке. */
   const leadWidth = layout == null ? null
-    : layout.title + layout.qty + layout.unit + layout.spread;
+    : layout.title + layout.qty + layout.unit + layout.spread + (layout.potential ?? 0);
   /* Ширина таблицы = сумма колонок ровно до пикселя: с ней исполняются
       ширины <col> при layout="fixed" (max-content их теряет). Инлайном на
       самой таблице — смена ширины валидирует её РАСКЛАДКУ, но не стиль
@@ -309,16 +523,241 @@ export function TenderCompare({
      сайдбара, а лимит меняется раз в несколько десятков пикселей. */
   const limit = titleLimit(layout?.title, wideTitle ? 2 : 1);
 
+  /* ЧИСЛО КОЛОНОК СЧИТАЕТСЯ ОДИН РАЗ И ЧИТАЕТСЯ ВЕЗДЕ. Раньше по разметке
+     были рассыпаны литералы 4 и 3 — colSpan шапки секции, добор пустых
+     ячеек в итоге, ширина пустого результата. С условным столбцом
+     «Потенциал» и колонкой-призраком любое забытое число уводит всю строку
+     на клетку вбок, причём МОЛЧА: таблица остаётся валидной, просто кривой. */
+  const leadCols = 4 + (view.showPotential ? 1 : 0);
+  const tailCols = bids.length + (onInvite ? 1 : 0);
+  const allCols = leadCols + tailCols;
+
   /* Строки, прошедшие ВСЕ предикаты; секции собирают свои из них же.
      Для ПОДЫТОГОВ узла нужен полный набор его позиций: фильтр прячет строки,
      но суммы не двигает. */
-  const visible = useMemo(() => filterRows(facts.rows, view.filters), [facts, view.filters]);
-  const visibleIds = useMemo(() => new Set(visible.map((r) => r.position.id)), [visible]);
   const byIdOf = (p: { id: string }): RowFacts | undefined => facts.byId.get(p.id);
   const rowsOfGroup = (group: PositionGroup): RowFacts[] =>
     group.positions.map(byIdOf).filter((r): r is RowFacts => !!r && visibleIds.has(r.position.id));
   const allRowsOfGroup = (group: PositionGroup): RowFacts[] =>
     group.positions.map(byIdOf).filter((r): r is RowFacts => !!r);
+
+  /* ── ВКЛАД ПОЗИЦИИ (§4.2) ────────────────────────────────────────────────
+     Номер строки, её место по весу и топ-3 среза — три величины, которые
+     читает КАЖДАЯ строка и не может посчитать сама: они про весь набор.
+     Мемоизированы по данным и уходят вниз стабильными ссылками, иначе memo
+     строки не переживёт ни одного движения родителя.
+
+     НОМЕР — В ПОРЯДКЕ СМЕТЫ, а не текущей сортировки: «строка 47» обязана
+     означать одно и то же в любом виде, иначе ссылаться на неё словами
+     нельзя. МЕСТО — по весу, потому что вопрос у полосы именно про вес. */
+  const numberOf = useMemo(
+    () => new Map(facts.rows.map((r, i) => [r.position.id, i + 1])),
+    [facts],
+  );
+  const placeOf = useMemo(() => {
+    const sorted = [...facts.rows].sort((a, b) => b.weight - a.weight);
+    return new Map(sorted.map((r, i) => [r.position.id, i + 1]));
+  }, [facts]);
+  const topRows = useMemo(() => [...facts.rows]
+    .sort((a, b) => b.weight - a.weight)
+    .slice(0, 3)
+    .map((r) => ({
+      title: r.position.title,
+      share: facts.sumWeight ? (r.weight / facts.sumWeight) * 100 : 0,
+      weight: r.weight,
+    })), [facts]);
+
+  /* ── ПАСПОРТ ПОЗИЦИИ (§4.1) ──────────────────────────────────────────────
+     Наведение на название раскрывает то, чего нет в строке: полный путь ФКП,
+     единицу и шаблонный объём, медианную стоимость, УЧАСТИЕ ПОИМЁННО
+     (сколько подано из скольких, кто отказался, кто пропустил, кого ждём) и
+     ожидающие корректировки. Только чтение — кнопок в нём нет.
+
+     Собирается ЗДЕСЬ, а не в строке: участие считается по КП, а строка о них
+     не знает — ей приходят только `bids` своих ячеек. */
+  const passportFor = useCallback((positionId: string): CellPopupData => {
+    const row = facts.byId.get(positionId);
+    const position = row?.position;
+    if (!row || !position) return { title: 'Позиция', fields: [] };
+
+    const path = sectionPathOf(position, groups);
+    const declined: string[] = [];
+    const skipped: string[] = [];
+    const waiting: string[] = [];
+    const pending: string[] = [];
+    let counted = 0;
+    for (const bid of bids) {
+      const c = bid.contractor;
+      if (!bid.counts) continue;
+      counted += 1;
+      const mark = cellMark(c, positionId);
+      if (mark.declined) declined.push(c.name);
+      else if (c.prices[positionId] === undefined) {
+        (isWaiting(c, positionId) ? waiting : skipped).push(c.name);
+      }
+      if (pendingCorrection(mark)) pending.push(c.name);
+    }
+    const fair = row.bids.filter((b) => !b.anomaly).length;
+
+    return {
+      title: position.title,
+      fields: [
+        ...(path.length ? [{ label: 'ФКП', value: path.join(' › ') }] : []),
+        { label: 'единица · объём', value: `${position.unit} · ${decimal(position.qty)}` },
+        {
+          label: 'медианная стоимость',
+          value: row.median === null ? '—' : money(row.median * position.qty),
+        },
+        {
+          label: 'цен подано',
+          value: `${row.bids.length} из ${counted} · сопоставимо ${fair}`,
+        },
+        ...declined.map((name) => ({ label: '', value: `${name} — отказ от позиции` })),
+        ...skipped.map((name) => ({ label: '', value: `${name} — позиция пропущена` })),
+        ...waiting.map((name) => ({ label: '', value: `${name} — ждём ответ` })),
+        ...(pending.length
+          ? [{ label: 'на рассмотрении', value: `иной объём — ${pending.join(', ')}` }]
+          : []),
+      ],
+      note: position.key || row.keyDerived
+        ? 'Ключевая позиция — входит в верхнюю долю стоимости тендера.'
+        : undefined,
+    };
+  }, [facts, groups, bids]);
+
+  /* ── СОДЕРЖИМОЕ ПАНЕЛЕЙ ЯЧЕЙКИ ─────────────────────────────────────────
+     Собирается ДО раннего возврата (пустой ответ ниже), потому что после
+     него собирать было бы негде, а до хуков — нельзя. Каждая панель падает
+     от своего якоря и закрывается одинаково: `setCell(null)`. */
+  const openRow = cell ? facts.byId.get(cell.positionId) : undefined;
+  const openContractor = cell
+    ? snapshot.find((c) => c.id === cell.contractorId)
+    : undefined;
+  const openCorrection = openRow && openContractor
+    ? pendingCorrection(cellMark(openContractor, cell!.positionId))
+    : undefined;
+
+  const closeCell = () => setCell(null);
+
+  /* ПЕРСОНАЛЬНЫЙ СРЕЗ КОЛОНКИ (§5.2). Считается ПО ТРЕБОВАНИЮ — только когда
+     досье открыто: пять списков на каждого из двенадцати подрядчиков на
+     каждом рендере стоили бы дороже всего остального экрана, а смотрят их
+     по одному и редко. */
+  const statsOf = (contractorId: string): SupplierStats => {
+    const c = snapshot.find((x) => x.id === contractorId);
+    const pick = (test: (r: RowFacts) => boolean, hint?: (r: RowFacts) => string) =>
+      facts.rows.filter((r) => !r.position.removed && test(r)).map((r) => ({
+        positionId: r.position.id,
+        title: r.position.title,
+        ...(hint ? { hint: hint(r) } : {}),
+      }));
+    const potRows = facts.rows.filter((r) => !r.position.removed
+      && r.pots.some((p) => p.contractorId === contractorId));
+    const potSum = potRows.reduce(
+      (acc, r) => acc + (r.pots.find((p) => p.contractorId === contractorId)?.value ?? 0), 0,
+    );
+    return {
+      groups: [
+        {
+          id: 'anomaly',
+          label: 'Аномальные цены',
+          items: pick((r) => r.bids.some((b) => b.contractorId === contractorId && b.anomaly)),
+        },
+        {
+          id: 'min',
+          label: 'Минимальные цены',
+          items: pick((r) => r.bestIds.includes(contractorId)),
+        },
+        {
+          id: 'correction',
+          label: 'Корректировки на рассмотрении',
+          items: pick((r) => r.corrections.includes(contractorId), () => 'иной объём'),
+        },
+        {
+          id: 'pot',
+          label: 'Общий потенциал',
+          display: potSum ? `+${moneyCompact(potSum)}` : '—',
+          items: potRows.map((r) => ({
+            positionId: r.position.id,
+            title: r.position.title,
+            hint: `+${moneyCompact(r.pots.find((p) => p.contractorId === contractorId)!.value)}`,
+          })),
+        },
+        {
+          id: 'missing',
+          label: 'Позиции без цены',
+          items: c ? pick((r) => c.prices[r.position.id] === undefined
+            && cellMark(c, r.position.id).declined !== true
+            && !isWaiting(c, r.position.id)) : [],
+        },
+        {
+          id: 'declined',
+          label: 'Отказы',
+          items: c ? pick((r) => cellMark(c, r.position.id).declined === true) : [],
+        },
+      ],
+    };
+  };
+
+  const cellPanels = !cell || !openRow || !openContractor ? null : (
+    <>
+      {cell.action === 'card' ? (
+        <CellCard
+          at={cell.at}
+          row={openRow}
+          contractor={openContractor}
+          contractors={snapshot}
+          roundNumber={roundNumber ?? 1}
+          /* Прошлая расценка ЕГО ЖЕ КП — она уже приходит в контракте
+             подрядчика (`prevPrices`), и заводить ради неё проп значило бы
+             провезти через страницу то, что и так лежит в данных. */
+          prevPrice={openContractor.prevPrices?.[cell.positionId]}
+          onClose={closeCell}
+          onOpenSupplier={() => {
+            const bid = bids.find((b) => b.contractor.id === cell.contractorId);
+            closeCell();
+            if (bid) setDossier(bid);
+          }}
+        />
+      ) : null}
+
+      {cell.action === 'thread' ? (
+        <CommentThread
+          at={cell.at}
+          title={openRow.position.title}
+          subtitle={openContractor.name}
+          comments={comments.threadOf(cell.contractorId, cell.positionId)}
+          author={comments.author}
+          onClose={closeCell}
+          onSend={(text, parentId) =>
+            void comments.send(cell.contractorId, cell.positionId, text, parentId)}
+          onSeen={() => void comments.markSeen(cell.contractorId, cell.positionId)}
+        />
+      ) : null}
+
+      {cell.action === 'correction' && openCorrection ? (
+        <CorrectionPanel
+          at={cell.at}
+          position={openRow.position}
+          contractor={openContractor}
+          correction={openCorrection}
+          busy={deciding}
+          /* «Ещё N участникам» — те, кто ДЕЙСТВИТЕЛЬНО назвал цену по этой
+             строке, кроме самого автора корректировки: переспрашивать того,
+             кто позицию пропустил или от неё отказался, не о чем. */
+          others={openRow.bids.filter((b) => b.contractorId !== cell.contractorId).length}
+          onDecide={async (decision, note) => {
+            if (!onDecideCorrection) return;
+            setDeciding(true);
+            await onDecideCorrection(cell.contractorId, cell.positionId, decision, note);
+            setDeciding(false);
+            closeCell();
+          }}
+          onClose={closeCell}
+        />
+      ) : null}
+    </>
+  );
 
   /* Пустой ответ — штатное состояние, а не сбой. Проверка стоит после хуков:
      до них ранний возврат менял бы их число между рендерами. */
@@ -351,12 +790,54 @@ export function TenderCompare({
           onRankTint={setRankTint}
           wideTitle={wideTitle}
           onWideTitle={setWideTitle}
+          shownRows={shownRows}
+          onShownRows={setShownRows}
           analysisApplied={analysisApplied}
           onRestoreView={onRestoreView}
           onPreset={onPreset}
           onPatch={onPatch}
+          visible={visible.length}
+          total={facts.rows.length}
+          hasPrevRound={snapshot.some((c) => c.prevPrices !== undefined)}
         />
       </div>
+
+      {/* ── ОШИБКА РАСЧЁТА НАД ЛЕНТОЙ (§5.9, `table.md` §6) ─────────────────
+          Причина и повтор — полосой, а НЕ вместо таблицы: последний
+          подтверждённый срез остаётся на экране, приглушённый и
+          прокручиваемый. Человек, который уже что-то на этих числах решил,
+          не должен получить пустой экран вместо них.
+          ТЕКСТ КРАСНЫЙ, а не бордовый (правка владельца 25.08.2026): наш
+          danger — розово-малиновый, он значит «худшее место в ранжире», то
+          есть оценку, и на слове «не удался» читается оттенком бренда, а не
+          сбоем. Иконка по центру высоты строки — flex, без margin-top. */}
+      {error ? (
+        <div className={s.errStrip} role="alert">
+          <Icon name="dangerTriangle" className={s.errIcon} />
+          <span>{error}</span>
+          {onRetry ? (
+            <Button variant="secondary" className={s.errRetry} onClick={onRetry}>
+              Повторить
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+
+      {/* ЦЕЛЬ ПЕРЕХОДА СКРЫТА ФИЛЬТРОМ (§4.5): источник говорит словами и
+          даёт выход. Молчаливый промах читается поломкой. */}
+      {filterMiss ? (
+        <div className={s.missStrip} role="status">
+          <Icon name="questionCircle" className={s.errIcon} />
+          <span>Позиция «{filterMiss}» скрыта активным фильтром</span>
+          <Button
+            variant="secondary"
+            className={s.errRetry}
+            onClick={() => { onPatch({ filters: [] }); setFilterMiss(null); }}
+          >
+            Показать все
+          </Button>
+        </div>
+      ) : null}
 
       {/* Точка замера порога сайдбара и СКРОЛЛБЛОК ленты: обе прокрутки —
           здесь, не на странице (разбор — в .module.css и JSDoc). Потолок
@@ -382,7 +863,7 @@ export function TenderCompare({
             строки: перенос включается одной CSS-переменной, наследуемой вниз,
             и memo пятисот <CompareRow> от этого не ломается — им меняется
             только целое число лимита. */}
-        <div className={cx(s.density, wideTitle && s.densityWide)}>
+        <div className={cx(s.density, wideTitle && s.densityWide, error && s.stale)}>
         <Table
           stickyHead
           stickyCol={pinned}
@@ -411,12 +892,22 @@ export function TenderCompare({
             <col className={s.colRule} style={pxStyle(layout?.qty)} />
             <col className={s.colRule} style={pxStyle(layout?.unit)} />
             <col className={s.colRule} style={pxStyle(layout?.spread)} />
+            {/* УСЛОВНЫЙ СТОЛБЕЦ «ПОТЕНЦИАЛ» (§1.6) — пятым, сразу за
+                «Разбросом»: обе колонки описывают СТРОКУ, а не предложение, и
+                разрывать их колонкой КП нельзя. Ширина приходит из того же
+                расчёта, что и у соседей. */}
+            {view.showPotential
+              ? <col className={s.colRule} style={pxStyle(layout?.potential)} />
+              : null}
             {bids.map((bid, i) => {
               const col = colorOf(bid);
               return (
                 <col
                   key={bid.contractor.id}
-                  className={cx(col && s.colTint, i < bids.length - 1 && s.colRule)}
+                  className={cx(
+                    col && s.colTint,
+                    (onInvite || i < bids.length - 1) && s.colRule,
+                  )}
                   style={{
                     ...pxStyle(layout?.bids[bid.contractor.id]),
                     ...(col ? { '--col': col } : {}),
@@ -424,6 +915,10 @@ export function TenderCompare({
                 />
               );
             })}
+            {/* Колонка-призрак — со СВОЕЙ шириной, наравне с колонками КП
+                (§5.7): «пригласить» это такое же место в ленте, просто пока
+                без чисел. */}
+            {onInvite ? <col style={pxStyle(layout?.bids[INVITE_COL])} /> : null}
           </colgroup>
           <thead>
             <tr>
@@ -459,6 +954,22 @@ export function TenderCompare({
               <th scope="col" className={cx(tableCell.numeric, s.headRule)}>Количество</th>
               <th scope="col" className={s.headRule}>Единица</th>
               <th scope="col" className={cx(tableCell.numeric, s.headRule)}>Разброс</th>
+              {/* ПОЯВЛЕНИЕ КОЛОНКИ ПОДЧЁРКНУТО (§1.6): шапка вспыхивает
+                  инфо-тоном, ячейки въезжают слева каскадом. Снятие галочки
+                  мгновенное — вход подтверждаем, обратный ход ничего не
+                  добавляет (каталог состояний). Стрелка ↓ стоит при активной
+                  сортировке по этому столбцу. */}
+              {view.showPotential ? (
+                <th
+                  scope="col"
+                  className={cx(tableCell.numeric, s.headRule, s.thNew)}
+                >
+                  Потенциал
+                  {view.rowView === 'potential' ? (
+                    <span className={s.sortArrow} aria-hidden="true">↓</span>
+                  ) : null}
+                </th>
+              ) : null}
             {bids.map((bid, i) => (
               <th
                 scope="col"
@@ -481,9 +992,21 @@ export function TenderCompare({
                   onGoToMark={(kind) => goToMark(kind, bid.contractor.id)}
                   collapsed={collapsed}
                   onFold={() => setCollapsed((on) => !on)}
+                  factsOpen={factsOpen}
+                  onFacts={() => setFactsOpen((on) => !on)}
+                  onPickVersion={(versionId) => onPickVersion?.(bid.contractor.id, versionId)}
+                  onGoToCorrections={(at) => setCorrList({ bid, at })}
                 />
               </th>
             ))}
+            {/* КОЛОНКА-ДЕЙСТВИЕ В КОНЦЕ ЛЕНТЫ (§5.7): вход в приглашение не
+                дальше правого торца данных. Своей ширины у неё нет — <col>
+                для неё не заводится, ячейка берёт остаток. */}
+            {onInvite ? (
+              <th className={cx(tableCell.card, s.ghostHead)}>
+                <GhostColumn onInvite={onInvite} />
+              </th>
+            ) : null}
             </tr>
           </thead>
 
@@ -491,7 +1014,7 @@ export function TenderCompare({
             /* Пустой результат обязан быть выходом, а не тупиком. */
             <tbody>
               <tr>
-                <td colSpan={4 + bids.length} className={tableCell.empty}>
+                <td colSpan={allCols} className={tableCell.empty}>
                   Ни одна позиция не проходит фильтры
                   <Button variant="secondary" onClick={() => onPatch({ filters: [] })}>
                     Сбросить фильтры
@@ -500,12 +1023,16 @@ export function TenderCompare({
               </tr>
             </tbody>
           ) : view.rowView === 'sections' ? (
-             /* По секциям: заголовок, строки, подытог — и все три только из
-                видимых строк. Секция, не прошедшая фильтр, исчезает целиком:
-                пустой блок читался бы как сбой. */
+             /* По секциям: заголовок, видимые строки, «Показано» и подытог.
+                УЗЕЛ НЕ ИСЧЕЗАЕТ, ДАЖЕ ЕСЛИ ФИЛЬТР СКРЫЛ ВСЁ ЕГО СОДЕРЖИМОЕ
+                (§1.2, `rows.md` §3). Прежний ранний `return null` был прямым
+                противоречием канону, а не недоделкой: специалист переставал
+                понимать, весь ли состав ФКП он видит, а свёрнутый им раньше
+                раздел молча пропадал и так же молча возвращался. Теперь
+                остаётся и заголовок, и полный подытог, а «Показано: 0
+                позиций» с прочерком говорит, почему строк нет. */
              groups.map((group) => {
                const rows = rowsOfGroup(group);
-               if (!rows.length) return null;
                const open = !folded[group.id];
                return (
                  <tbody key={group.id}>
@@ -534,7 +1061,7 @@ export function TenderCompare({
                    <tr className={s.groupRow}>
                      <th
                        scope="rowgroup"
-                       colSpan={pinned ? 1 : 4}
+                       colSpan={pinned ? 1 : leadCols}
                        className={cx(tableCell.card, s.groupHead)}
                      >
                        {/* Кнопка занимает свою ячейку целиком — ровно до
@@ -569,7 +1096,7 @@ export function TenderCompare({
                          содержимого у него нет — заголовку раздела писать под
                          колонками нечего. Ширина — всё, что не занял
                          заголовок, поэтому и она следует за булавкой. */}
-                     <td colSpan={(pinned ? 3 : 0) + bids.length} />
+                     <td colSpan={(pinned ? leadCols - 1 : 0) + tailCols} />
                    </tr>
 
                   {/* Итог остаётся и у свёрнутого раздела: ради него и сворачивают.
@@ -586,25 +1113,58 @@ export function TenderCompare({
                       thresholds={thresholds}
                       bids={bids}
                       sumWeight={facts.sumWeight}
+                      maxWeight={facts.maxWeight}
                       bind={popup.bind}
                       focused={focusRowId === row.position.id}
                       noteFor={noteFor}
                       flashCells={flashAll}
+                      index={numberOf.get(row.position.id) ?? 0}
+                      place={placeOf.get(row.position.id) ?? 0}
+                      totalRows={facts.rows.length}
+                      topRows={topRows}
+                      keyCut={facts.keyCut}
+                      nameOf={nameOf}
+                      commentsFor={comments.commentsFor}
+                      onAction={onCellAction}
+                      passportFor={passportFor}
                     />
                   )) : null}
 
-                  <TotalRow rows={allRowsOfGroup(group)} bids={bids} metric={view.mainMetric} />
+                  {/* «ПОКАЗАНО» УЗЛА (§1.1) — ПОДЧИНЁННОЙ строкой внутри
+                      секции и только под фильтром. Порядок фиксирован:
+                      сначала видимый срез, ниже полный подытог. Свёрнутая
+                      секция её не показывает: там и строк-то не видно, а
+                      подытог ради которого и сворачивают — остаётся.
+                      Тумблер параметров гасит обе строки разом: ярусов у
+                      одной настройки не выключают поодиночке. */}
+                  {shownRows && view.filters.length && open ? (
+                    <ShownRow
+                      node
+                      rows={rows}
+                      bids={bids}
+                      metric={view.mainMetric}
+                      lead={leadCols - 1}
+                    />
+                  ) : null}
+
+                  <TotalRow
+                    rows={allRowsOfGroup(group)}
+                    bids={bids}
+                    metric={view.mainMetric}
+                    lead={leadCols - 1}
+                  />
                 </tbody>
               );
             })
           ) : (
             /* Плоский список по одному числу: заголовки разделов и подытоги в
-                таком порядке смысла не имеют (§3.1 аудита). */
+                таком порядке смысла не имеют (§3.1 аудита). Раздел, откуда
+                пришла строка, при этом не теряется — его несут крошки в
+                самой строке (§1.4). */
             <tbody>
-              {[...visible]
-                .sort((a, b) => b[view.rowView === 'weight' ? 'weight' : 'maxPot']
-                              - a[view.rowView === 'weight' ? 'weight' : 'maxPot'])
-                .map((row) => (
+              {(() => {
+                const { head, tail, cut } = flatOrder(visible, view.rowView, facts, thresholds);
+                const rowOf = (row: RowFacts, dim?: boolean) => (
                   <CompareRow
                     key={row.position.id}
                     row={row}
@@ -613,12 +1173,53 @@ export function TenderCompare({
                     thresholds={thresholds}
                     bids={bids}
                     sumWeight={facts.sumWeight}
+                    maxWeight={facts.maxWeight}
                     bind={popup.bind}
                     focused={focusRowId === row.position.id}
                     noteFor={noteFor}
                     flashCells={flashAll}
+                    index={numberOf.get(row.position.id) ?? 0}
+                    place={placeOf.get(row.position.id) ?? 0}
+                    totalRows={facts.rows.length}
+                    topRows={topRows}
+                    keyCut={facts.keyCut}
+                    dim={dim}
+                    nameOf={nameOf}
+                    commentsFor={comments.commentsFor}
+                    onAction={onCellAction}
+                    passportFor={passportFor}
                   />
-                ))}
+                );
+                return (
+                  <>
+                    {head.map((row) => rowOf(row))}
+                    {/* ЛИНИЯ ОТСЕЧКИ И ХВОСТ (§1.3). Появляются только когда
+                        хвост есть: набор, целиком уместившийся выше порога,
+                        линией не размечают — там нечего отсекать. */}
+                    {cut && tail.length ? (
+                      <>
+                        <CutLine
+                          label={cut.label}
+                          rows={head.length}
+                          share={cut.share}
+                          span={allCols}
+                        />
+                        <TailRow
+                          open={tailOpen}
+                          count={tail.length}
+                          share={cut.tailShare}
+                          reason={cut.reason}
+                          span={allCols}
+                          onToggle={() => setTailOpen((on) => !on)}
+                        />
+                        {tailOpen ? tail.map((row) => rowOf(row, true)) : null}
+                      </>
+                    ) : (
+                      tail.map((row) => rowOf(row))
+                    )}
+                  </>
+                );
+              })()}
             </tbody>
           )}
 
@@ -627,7 +1228,21 @@ export function TenderCompare({
               Обёртка в tbody обязательна: голый tr на уровне таблицы браузер
               пере-вешивает в собственный tbody, и React честно ругается. */}
           <tbody>
-            <TotalRow grand rows={facts.rows} bids={bids} metric={view.mainMetric} />
+            {/* ГЛОБАЛЬНОЕ «ПОКАЗАНО» — над полным итогом и только под
+                фильтром (§1.1). Пара строк отвечает на два разных вопроса:
+                «сколько стоят именно эти позиции» и «сколько стоит всё».
+                Кто не знает, что итог остался полным, примет его за сумму
+                видимого и «поймает систему на ошибке». Выключатель общий
+                с узловой строкой — окно параметров. */}
+            {shownRows && view.filters.length ? (
+              <ShownRow
+                rows={visible}
+                bids={bids}
+                metric={view.mainMetric}
+                lead={leadCols - 1}
+              />
+            ) : null}
+            <TotalRow grand rows={facts.rows} bids={bids} metric={view.mainMetric} lead={leadCols - 1} />
           </tbody>
 
           {/* Условия поставщиков — матрица ответов формы КП вне цен, выровненная
@@ -637,11 +1252,71 @@ export function TenderCompare({
         </div>
       </div>
 
+      {/* Время последнего подтверждённого среза — подпись под лентой, а не в
+          caption: caption читают скринридеры, а это сообщение адресовано
+          глазам того, кто смотрит на приглушённые числа. */}
+      {error && sliceTime ? (
+        <p className={s.sliceTime}>последний подтверждённый срез · {sliceTime}</p>
+      ) : null}
+
       {/* Один попап на таблицу: содержимое подставляется, элемент не меняется. */}
       {popup.view}
 
-      {/* Досье подрядчика. */}
-      <DossierModal bid={dossier} total={positions.length} onClose={() => setDossier(null)} />
+      {/* ── ПАНЕЛИ ЯЧЕЙКИ ────────────────────────────────────────────────────
+          Три разные двери из одной ячейки, и каждая помнит свой адрес.
+          Рендерятся ОДНОЙ веткой на всю таблицу, а не в самой ячейке: панель
+          обязана пережить перерисовку строки, а 780 незаполненных <dialog>
+          в DOM стоили бы дороже всего экрана. */}
+      {cellPanels}
+
+      {/* МИНИ-СПИСОК КОРРЕКТИРОВОК КОЛОНКИ (§5.3, `contractor.md` §2).
+          Одна корректировка ведёт сразу к ячейке — там выбирать не из чего;
+          несколько открывают список: цикл вслепую не отвечает на вопрос
+          «сколько шагов и куда», а список даёт обзор проблемы ДО первого
+          прыжка. Строка ведёт к своей ячейке тем же контрактом перехода,
+          что и всё остальное (§4.5). */}
+      <Popover
+        anchor={corrList?.at ?? null}
+        onClose={() => setCorrList(null)}
+        label={corrList ? `Корректировки: ${corrList.bid.contractor.name}` : ''}
+        className={s.corrMenu}
+      >
+        {corrList ? (
+          <>
+            <p className={s.corrMenuTitle}>
+              Корректировки {corrList.bid.contractor.name} ·{' '}
+              {facts.rows.filter((r) => r.corrections.includes(corrList.bid.contractor.id)).length}
+              {' '}на рассмотрении
+            </p>
+            {facts.rows
+              .filter((r) => r.corrections.includes(corrList.bid.contractor.id))
+              .map((r) => (
+                <button
+                  key={r.position.id}
+                  type="button"
+                  className={s.corrMenuItem}
+                  onClick={() => {
+                    setCorrList(null);
+                    goToPosition(corrList.bid.contractor.id, r.position.id);
+                  }}
+                >
+                  <span className={s.corrMenuName}>{r.position.title}</span>
+                  <span className={s.corrMenuKind}>иной объём</span>
+                  <span className={s.corrMenuArrow} aria-hidden="true">→</span>
+                </button>
+              ))}
+          </>
+        ) : null}
+      </Popover>
+
+      {/* Досье подрядчика + его персональный срез (§5.2). */}
+      <DossierModal
+        bid={dossier}
+        total={positions.length}
+        onClose={() => setDossier(null)}
+        stats={dossier ? statsOf(dossier.contractor.id) : undefined}
+        onGoToCell={(positionId) => dossier && goToPosition(dossier.contractor.id, positionId)}
+      />
 
       {/* Палитра колонки — выпадашка из кнопки на карточке. */}
       <ColumnPainter
@@ -657,4 +1332,102 @@ export function TenderCompare({
       />
     </>
   );
+}
+
+/** Есть ли у пары «строка × подрядчик» названная пометка — ТА ЖЕ проверка,
+ *  что ставит `data-marks` в <BidCell>. Нужна ровно в одном месте: когда
+ *  ячейки в DOM нет и надо понять, ПОЧЕМУ её нет — свёрнута секция или скрыта
+ *  фильтром. Дублировать предикаты нельзя, поэтому читается то же, из чего
+ *  их считает модель. */
+function hasMark(kind: MarkKind, row: RowFacts, contractorId: string): boolean {
+  switch (kind) {
+    case 'min': return row.bestIds.includes(contractorId);
+    case 'anomaly': return row.bids.some((b) => b.contractorId === contractorId && b.anomaly);
+    case 'correction': return row.corrections.includes(contractorId);
+    case 'missing':
+    case 'declined': return !row.bids.some((b) => b.contractorId === contractorId);
+  }
+}
+
+/* ═══════════════════ ПОРЯДОК ПЛОСКОГО СПИСКА (§1.3, §1.5) ═══════════════════
+   Три сортировки — три РАЗНЫХ ответа на вопрос «где проходит граница», и
+   собирает их одна функция, потому что рендер обязан получить готовую тройку
+   «голова · хвост · подпись линии», а не выбирать её тремя ветками по месту.
+
+   ПО ВЕСУ — граница по порогу ключевых: тот же набор, что даёт фильтр
+   «Ключевые» и превью состава в окне параметров. Новых порогов не заводится.
+   ПО РАЗБРОСУ — граница по порогу высокого; строки БЕЗ рассчитанного разброса
+   уходят в хвост ОТДЕЛЬНОЙ группой с причиной (`sorting.md` §5): отсутствие
+   разброса это не «разброс 0 %», и класть их в общий хвост значило бы
+   утверждать, что цены сошлись.
+   ПО ПОТЕНЦИАЛУ — линии нет вовсе: канон её для этой сортировки не заводит,
+   а рисовать границу «просто чтобы была» значило бы придумать порог. */
+function flatOrder(
+  rows: RowFacts[],
+  rowView: CompareView['rowView'],
+  facts: { keyCut: { rows: number; share: number }; sumWeight: number },
+  thresholds: CompareThresholds,
+): {
+  head: RowFacts[];
+  tail: RowFacts[];
+  cut: { label: string; share: number; tailShare?: number; reason?: string } | null;
+} {
+  const shareOf = (list: RowFacts[]) => (facts.sumWeight
+    ? (list.reduce((acc, r) => acc + r.weight, 0) / facts.sumWeight) * 100
+    : 0);
+
+  if (rowView === 'potential') {
+    return { head: [...rows].sort((a, b) => b.maxPot - a.maxPot), tail: [], cut: null };
+  }
+
+  if (rowView === 'spread') {
+    const sorted = [...rows].sort((a, b) => (b.spread ?? -1) - (a.spread ?? -1));
+    /* Хвост здесь СОБИРАЕТСЯ ПО ОТСУТСТВИЮ ЗНАЧЕНИЯ, а не по порогу: у этих
+       строк разброса нет, и место им — за границей любой шкалы. */
+    const head = sorted.filter((r) => r.spread !== null);
+    const tail = sorted.filter((r) => r.spread === null);
+    const high = head.filter((r) => r.spreadTag === 'high');
+    if (!tail.length) {
+      /* Разброс есть у всех — граница остаётся одна, по порогу высокого. */
+      return high.length && high.length < head.length
+        ? {
+          head: high,
+          tail: head.slice(high.length),
+          cut: {
+            label: `высокий разброс · от ${decimal(thresholds.spreadHigh)} %`,
+            share: shareOf(high),
+            tailShare: shareOf(head.slice(high.length)),
+          },
+        }
+        : { head, tail: [], cut: null };
+    }
+    return {
+      head,
+      tail,
+      cut: {
+        label: `высокий разброс · от ${decimal(thresholds.spreadHigh)} %`,
+        share: shareOf(high),
+        reason: `без разброса · ${tail.length} ${plural(tail.length, 'позиция', 'позиции', 'позиций')} · сравнивать не с чем`,
+      },
+    };
+  }
+
+  const sorted = [...rows].sort((a, b) => b.weight - a.weight);
+  /* Ключевые СЧИТАЮТСЯ ПО ВСЕМУ СРЕЗУ (`keyDerived` ставит analyzeComparison),
+     а показываются по видимому: под фильтром линия отсекает то, что от набора
+     осталось, — иначе она обещала бы строки, которых на экране нет. */
+  const head = sorted.filter((r) => r.keyDerived || r.position.key === true);
+  const tail = sorted.filter((r) => !(r.keyDerived || r.position.key === true));
+  if (!head.length || !tail.length) return { head: sorted, tail: [], cut: null };
+  return {
+    head,
+    tail,
+    cut: {
+      label: 'линия ключевых',
+      /* ФАКТИЧЕСКИЙ охват набора, а не порог: набор собирается ДО первого
+         пересечения порога и почти всегда чуть больше него. */
+      share: shareOf(head),
+      tailShare: shareOf(tail),
+    },
+  };
 }

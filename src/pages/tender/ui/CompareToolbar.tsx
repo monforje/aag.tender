@@ -5,19 +5,40 @@ import {
 } from '@/shared/ui/Dropdown';
 import { Icon } from '@/shared/ui/Icon';
 import { Segmented } from '@/shared/ui/Segmented';
+import { Switch } from '@/shared/ui/Switch';
 import {
-  METRIC_LABEL, PRESET_LABEL, ROW_VIEW_LABEL, SATELLITE_LABEL,
+  METRIC_LABEL, PRESET_LABEL, ROW_VIEW_LABEL, SATELLITE_LABEL, SORT_VIEWS,
   moneyCompact,
   type CompareMetricId, type CompareThresholds, type CompareView,
-  type MetricTotals, type PresetId, type RowFacts, type RowViewId, type SatelliteId,
+  type MetricTotals, type PresetId, type RowFacts, type SatelliteId,
 } from '@/entities/comparison';
 import { CompareLegend } from './CompareLegend';
 import { CompareFilters, CompareSettings } from './CompareSettings';
 import s from './CompareToolbar.module.css';
 
 const METRICS = Object.keys(METRIC_LABEL) as CompareMetricId[];
-const ROW_VIEWS = Object.keys(ROW_VIEW_LABEL) as RowViewId[];
 const SATELLITES = Object.keys(SATELLITE_LABEL) as SatelliteId[];
+
+/** Спутник → его поле в виде, и обратно. ДВЕ ТАБЛИЦЫ вместо цепочки
+ *  тернарников: четыре галочки уже не читаются в одну строку, а забытая
+ *  ветка молча оставила бы контрол мёртвым — кликается, а ничего не
+ *  происходит. Типы при этом ловят пропущенный ключ на месте. */
+const SATELLITE_STATE: Record<SatelliteId, (v: CompareView) => boolean> = {
+  deviation: (v) => v.showDeviation,
+  dynamics: (v) => v.showDynamics,
+  rate: (v) => v.showRate,
+  potential: (v) => v.showPotential,
+};
+/** Подпись дефолтного порядка на триггере: пунктом меню он не является, но
+ *  назвать себя контрол обязан. */
+const ROW_VIEW_DEFAULT = ROW_VIEW_LABEL.sections;
+
+const SATELLITE_PATCH: Record<SatelliteId, (on: boolean) => Partial<CompareView>> = {
+  deviation: (on) => ({ showDeviation: on }),
+  dynamics: (on) => ({ showDynamics: on }),
+  rate: (on) => ({ showRate: on }),
+  potential: (on) => ({ showPotential: on }),
+};
 
 interface ToolbarProps {
   view: CompareView;
@@ -40,6 +61,11 @@ interface ToolbarProps {
    *  же причине: читается это состояние, а не считается. */
   wideTitle: boolean;
   onWideTitle: (on: boolean) => void;
+  /** Строки «Показано» под фильтром (§1.1) — третий тумблер оформления там же
+   *  и по той же причине: сводка среза это эргономика чтения, а не нарезка
+   *  данных, и чип «Изменён» на неё подниматься не должен. */
+  shownRows: boolean;
+  onShownRows: (on: boolean) => void;
   /** Вид перестроен переходом «анализ → таблица»: чип с ВОЗВРАТОМ полного
    *  пользовательского вида (05 §7). Старый «Изменён · Сброс» при этом молчит:
    *  два чипа про один уход от базы — забор. */
@@ -49,6 +75,13 @@ interface ToolbarProps {
   /** Ручное движение по одной из осей состояния — пресет не сбрасывается,
    *  но поднимает флаг «изменён». */
   onPatch: (patch: Partial<Omit<CompareView, 'preset'>>) => void;
+  /** Сколько строк видно и сколько всего — счётчик скрытых (§3.4). Канон
+   *  требует ЗАМЕТНОСТИ: «скрыто 128» говорит сильнее, чем «5 из 133». */
+  visible: number;
+  total: number;
+  /** Есть ли предыдущий раунд: без него «Динамика» видна и НЕАКТИВНА с
+   *  объяснением — считать изменение не от чего (`satellites.md` §2). */
+  hasPrevRound: boolean;
 }
 
 /**
@@ -74,8 +107,11 @@ interface ToolbarProps {
  */
 export function CompareToolbar({
   view, thresholds, onThresholds, allRows, totals, modified, rankTint, onRankTint, wideTitle, onWideTitle,
+  shownRows, onShownRows,
   analysisApplied, onRestoreView, onPreset, onPatch,
+  visible, total, hasPrevRound,
 }: ToolbarProps) {
+  const hidden = total - visible;
   return (
     <DropdownGroup>
       <div className={s.bar}>
@@ -101,7 +137,8 @@ export function CompareToolbar({
             соотношения «сколько запаса сидит в лучшей цене». */}
         <QuietSelect
           slot="compare-metric"
-          cap="Показано:"
+          icon="graphUp"
+          name="Основной показатель"
           value={view.mainMetric}
           options={METRICS.map((id) => ({
             id,
@@ -114,36 +151,40 @@ export function CompareToolbar({
           footer={<MetricRatio totals={totals} />}
         />
 
-        {/* Секция 2: спутники стоимости — постоянно видимы и независимы от
-            селекта (описывают стоимость, а она в ячейке есть всегда). Чип —
-            ОДНА кнопка: кликабельны и тумблер, и подпись, состояние несёт
-            aria-pressed; прежняя обвязка «span с охранённым кликом вокруг
-            <Switch>» упразднена вместе с проблемой делегирования щелчка.
-            Мини-тумблер повторяет геометрию <Switch> 28×16/12: один контрол —
-            одна геометрия на всём экране. */}
-        <div className={s.satellites} role="group" aria-label="Спутники стоимости">
-          {SATELLITES.map((id) => {
-            const checked = id === 'deviation' ? view.showDeviation : view.showRate;
-            return (
-              <SatelliteToggle
-                key={id}
-                checked={checked}
-                label={SATELLITE_LABEL[id]}
-                onToggle={() => onPatch(
-                  id === 'deviation' ? { showDeviation: !checked } : { showRate: !checked },
-                )}
-              />
-            );
-          })}
-        </div>
+        {/* Секция 2: спутники стоимости. ЧЕТЫРЕ ЧИПА СВЕРНУТЫ В ОДИН ТИХИЙ
+            СЕЛЕКТ (правка владельца 25.08.2026): развёрнутым рядом они
+            занимали 443px из 927 доступных — почти половину полосы, — и
+            именно они переносили её на вторую строку. Переносящаяся полоса
+            хуже свёрнутого списка: на второй строке контролы меняют место от
+            появления любого чипа, то есть прыгают ровно тогда, когда по ним
+            и кликают.
+            Состояние с полосы при этом НЕ ПРОПАЛО: число включённых стоит на
+            самом триггере — тот же приём, что у «Фильтров» рядом. */}
+        <SatelliteSelect
+          view={view}
+          hasPrevRound={hasPrevRound}
+          onPatch={onPatch}
+        />
 
+        {/* КОНТРОЛ «СОРТИРОВКА» (§1.5). Имя контрола — часть контракта:
+            «Строки» обещало ВИД, а он меняет ПОРЯДОК. «По разделам» из пунктов
+            убрано — это исходное состояние, а не выбор: в него СБРАСЫВАЮТ
+            крестиком, и крестик появляется ровно тогда, когда есть что
+            сбрасывать. Сброс не трогает ни фильтры, ни галочку «Потенциал»
+            (`sorting.md` §9): три разные оси, три разных решения. */}
         <QuietSelect
           slot="compare-rows"
           icon="list"
-          cap="Строки:"
+          name="Сортировка строк"
           value={view.rowView}
-          options={ROW_VIEWS.map((id) => ({ id, label: ROW_VIEW_LABEL[id] }))}
-          onPick={(rowView) => onPatch({ rowView })}
+          options={SORT_VIEWS.map((id) => ({ id, label: ROW_VIEW_LABEL[id] }))}
+          onPick={(rowView) => onPatch({
+            rowView,
+            /* СОРТИРОВКА «ПО ПОТЕНЦИАЛУ» ВКЛЮЧАЕТ СТОЛБЕЦ И НЕ ВЫКЛЮЧАЕТ ЕГО
+               НИ ОДНА (`sorting.md` §4): порядок по числу, которого нет на
+               экране, канон запрещает прямо. */
+            ...(rowView === 'potential' ? { showPotential: true } : {}),
+          })}
         />
 
         <div className={s.tail}>
@@ -169,7 +210,15 @@ export function CompareToolbar({
 
             ГЛИФЫ РАЗНЫЕ, потому что смыслы разные: restart — «вернуть в
             исходное» (база пресета), history — «вернуться к прошлому
-            состоянию» (вид пользователя до разбора). */}
+            состоянию» (вид пользователя до разбора).
+
+            ПОДПИСЬ — ОДНО СЛОВО «СБРОС» (правка владельца 25.08.2026).
+            «Изменён · Сброс» занимало 128px, и вместе со счётчиком скрытых
+            (75) правый блок переставал влезать в остаток полосы — она
+            переносилась ровно тогда, когда пользователь работает с фильтром,
+            то есть в самый неудачный момент. Состояние «изменён» при этом не
+            потеряно: чип есть ТОЛЬКО в этом состоянии, его наличие и есть
+            сообщение, а полная формулировка живёт в aria-label и title. */}
         {analysisApplied && onRestoreView ? (
           <button
             type="button"
@@ -178,17 +227,18 @@ export function CompareToolbar({
             onClick={onRestoreView}
           >
             <Icon name="history" className={s.modchipIcon} />
-            Вид изменён анализом · Вернуть мой вид
+            Вернуть мой вид
           </button>
         ) : modified ? (
           <button
             type="button"
             className={s.modchip}
-            title="Состояние ушло от базы пресета — вернуть исходную нарезку"
+            aria-label={`Вид изменён — сбросить к базе пресета «${PRESET_LABEL[view.preset]}»`}
+            title={`Состояние ушло от базы пресета «${PRESET_LABEL[view.preset]}» — показатель, слои, сортировка и фильтры вернутся к исходной нарезке`}
             onClick={() => onPreset(view.preset)}
           >
             <Icon name="restart" className={s.modchipIcon} />
-            Изменён · Сброс
+            Сброс
           </button>
         ) : null}
 
@@ -197,6 +247,20 @@ export function CompareToolbar({
             Предикаты среза вернули отдельной кнопкой-глифом: это
             бизнес-логика, всегда на виду, а не настройка вида — в одну
             панель с порогами их схлопывать нельзя. */}
+        {/* СЧЁТЧИК СКРЫТЫХ СТРОК (§3.4, `filters.md` §4). Разность вычислима и
+            из caption, но канон формулирует ЗАМЕТНОСТЬ как требование:
+            «скрыто 128» говорит сильнее, чем «5 из 133», потому что называет
+            то, чего пользователь НЕ ВИДИТ. Чип появляется только под
+            фильтром — без него скрывать нечего. */}
+        {hidden > 0 ? (
+          <span
+            className={s.hiddenChip}
+            title={`Видно ${visible} из ${total} позиций · скрыто фильтрами ${hidden}`}
+          >
+            скрыто {hidden}
+          </span>
+        ) : null}
+
         {onThresholds ? (
           <CompareSettings
             thresholds={thresholds}
@@ -206,6 +270,8 @@ export function CompareToolbar({
             onRankTint={onRankTint}
             wideTitle={wideTitle}
             onWideTitle={onWideTitle}
+            shownRows={shownRows}
+            onShownRows={onShownRows}
           />
         ) : null}
         <CompareLegend thresholds={thresholds} />
@@ -220,14 +286,28 @@ export function CompareToolbar({
   );
 }
 
-/** Тихий триггер одиночного выбора: подпись secondary, значение medium,
- *  шеврон. Одиночный выбор закрывает меню — выбрал и ушёл. Каретка вращается
- *  на открытости (рецепт 11: поворот глифа на месте, второй канал) —
- *  aria-expanded приходит от <Dropdown> на кнопку триггера. */
-function QuietSelect<T extends string>({ slot, cap, icon, value, options, onPick, footer }: {
+/** Тихий триггер одиночного выбора: глиф, значение medium, шеврон. Одиночный
+ *  выбор закрывает меню — выбрал и ушёл. Каретка вращается на открытости
+ *  (рецепт 11: поворот глифа на месте, второй канал) — aria-expanded приходит
+ *  от <Dropdown> на кнопку триггера.
+ *
+ *  ПОДПИСИ-КАПА НА ПОЛОСЕ БОЛЬШЕ НЕТ (правка владельца 25.08.2026). «Показано:»
+ *  и «Сортировка:» стоили 141px из 927 — при том что оба слова повторяли то,
+ *  что и так видно: значение «Стоимость» рядом с глифом графика не спутать ни
+ *  с чем, а «По разделам» рядом с глифом списка — тем более. Имя контрола не
+ *  потерялось: оно ушло в `aria-label` и `title`, то есть осталось доступным
+ *  обоим каналам — и скринридеру, и курсору. Полоса же перестала переноситься.
+ *
+ *  КРЕСТИКА СБРОСА ЗДЕСЬ ТОЖЕ НЕТ (та же правка): сброс сортировки —
+ *  частный случай возврата к базе пресета, и живёт он в чипе «Изменён · Сброс»
+ *  вместе со всеми остальными осями. Два разных сброса рядом заставляли
+ *  выбирать, каким из них пользоваться. */
+function QuietSelect<T extends string>({ slot, name, icon, value, options, onPick, footer }: {
   slot: string;
-  cap: string;
-  icon?: 'list';
+  /** Имя контрола: доступное имя кнопки и нативная подсказка. Видимой подписи
+   *  у триггера нет — её место занимает само значение. */
+  name: string;
+  icon: 'list' | 'graphUp';
   value: T;
   options: ReadonlyArray<{ id: T; label: string; hint?: string }>;
   onPick: (value: T) => void;
@@ -237,6 +317,7 @@ function QuietSelect<T extends string>({ slot, cap, icon, value, options, onPick
 }) {
   const control = useDropdownSlot(slot);
   const current = options.find((o) => o.id === value);
+  const shown = current?.label ?? ROW_VIEW_DEFAULT;
 
   return (
     <Dropdown {...control} menuAlign="left" menu={(
@@ -256,10 +337,14 @@ function QuietSelect<T extends string>({ slot, cap, icon, value, options, onPick
     )}
     >
       {(trigger) => (
-        <button {...trigger} className={s.trigger}>
-          {icon ? <Icon name={icon} className={s.triggerIcon} /> : null}
-          <span className={s.triggerCap}>{cap}</span>
-          <span className={s.triggerVal}>{current?.label}</span>
+        <button
+          {...trigger}
+          className={s.trigger}
+          aria-label={`${name}: ${shown}`}
+          title={`${name}: ${shown}`}
+        >
+          <Icon name={icon} className={s.triggerIcon} />
+          <span className={s.triggerVal}>{shown}</span>
           <Icon name="caretSmall" className={s.triggerCaret} />
         </button>
       )}
@@ -267,36 +352,77 @@ function QuietSelect<T extends string>({ slot, cap, icon, value, options, onPick
   );
 }
 
-/** Спутник стоимости — чип-тумблер: одна кнопка «мини-свитч + подпись».
+/** Спутники стоимости одним тихим селектом: на полосе — глиф, слово «Слои» и
+ *  число включённых, внутри — четыре <Switch> с подписями и пояснением у
+ *  неактивного.
  *
- *  КОГДА:  показ слоя таблицы, применяющийся сразу, без формы.
- *  НЕ ДЛЯ: взаимоисключающих режимов (см. <Segmented>) и отметки в форме
- *          (см. <Checkbox>).
+ *  КОГДА:  полоса сравнения. Четыре галочки канона (`satellites.md`) остаются
+ *          четырьмя галочками — свернулось только их МЕСТО на полосе.
+ *  НЕ ДЛЯ: предикатов среза (см. <CompareFilters> — там режут ДАННЫЕ) и
+ *          порогов (см. <CompareSettings>).
  *
- *  UX:     кликабельна ВСЯ площадь чипа высотой полосы — промахнуться мимо
- *          нельзя. Включённость — заливкой мини-трека и положением бегунка;
- *          его короткий ход (.12s, как у <Switch>) и есть анимация отклика.
- *  A11Y:   aria-pressed — переключатель-кнопка по ARIA APG; имя читается из
- *          видимой подписи, отдельного aria-label не нужно. Мини-трек
- *          aria-hidden — состояние объявляет сама кнопка.
- */
-function SatelliteToggle({ checked, label, onToggle }: {
-  checked: boolean;
-  label: string;
-  onToggle: () => void;
+ *  UX:     СВЁРНУТЫ РАДИ ОДНОЙ СТРОКИ ПОЛОСЫ (правка владельца 25.08.2026):
+ *          развёрнутым рядом четыре чипа занимали 443px из 927 и переносили
+ *          полосу. Число включённых стоит НА ТРИГГЕРЕ — состояние с полосы не
+ *          ушло, ушёл только его размер. «ДИНАМИКА» ВИДНА И НЕАКТИВНА В
+ *          ПЕРВОМ РАУНДЕ (`satellites.md` §2): контрол, которого на одном
+ *          тендере нет, а на другом есть, заставляет искать его глазами
+ *          каждый раз; неактивный с причиной честнее.
+ *  A11Y:   каждый переключатель — настоящий <Switch> со своим aria-label;
+ *          клавиатура меню и Escape достаются от <Dropdown>. */
+function SatelliteSelect({ view, hasPrevRound, onPatch }: {
+  view: CompareView;
+  hasPrevRound: boolean;
+  onPatch: (patch: Partial<Omit<CompareView, 'preset'>>) => void;
 }) {
+  const control = useDropdownSlot('compare-satellites');
+  const on = SATELLITES.filter((id) => SATELLITE_STATE[id](view));
+
   return (
-    <button
-      type="button"
-      className={cx(s.satellite, checked && s.isOn)}
-      aria-pressed={checked}
-      onClick={onToggle}
+    <Dropdown {...control} menuAlign="left" closeOnSelect={false} menu={(
+      <div className={s.satMenu}>
+        {SATELLITES.map((id) => {
+          const checked = SATELLITE_STATE[id](view);
+          const locked = id === 'dynamics' && !hasPrevRound;
+          return (
+            <label
+              key={id}
+              className={cx(s.satRow, locked && s.isLocked)}
+              title={locked
+                ? 'Изменение к прошлому раунду считается от собственного прошлого КП подрядчика. Идёт первый раунд — базы нет.'
+                : undefined}
+            >
+              <span className={s.satLabel}>{SATELLITE_LABEL[id]}</span>
+              <Switch
+                checked={checked}
+                disabled={locked}
+                onChange={(next) => onPatch(SATELLITE_PATCH[id](next))}
+                aria-label={SATELLITE_LABEL[id]}
+              />
+            </label>
+          );
+        })}
+      </div>
+    )}
     >
-      <span className={s.satelliteTrack} aria-hidden="true">
-        <span className={s.satelliteKnob} />
-      </span>
-      {label}
-    </button>
+      {(trigger) => (
+        <button
+          {...trigger}
+          className={s.trigger}
+          aria-label={on.length
+            ? `Слои ячейки, включено: ${on.map((id) => SATELLITE_LABEL[id]).join(', ')}`
+            : 'Слои ячейки, ни одного не включено'}
+          title={on.length
+            ? `Слои ячейки: ${on.map((id) => SATELLITE_LABEL[id]).join(' · ')}`
+            : 'Слои ячейки: отклонение, динамика, ставка, потенциал'}
+        >
+          <Icon name="layers" className={s.triggerIcon} />
+          <span className={s.triggerVal}>Слои</span>
+          {on.length ? <span className={s.satCount}>{on.length}</span> : null}
+          <Icon name="caretSmall" className={s.triggerCaret} />
+        </button>
+      )}
+    </Dropdown>
   );
 }
 

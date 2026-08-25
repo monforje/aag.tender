@@ -4,13 +4,33 @@
    Тихие триггеры и пункты меню собирают стили из токенов проекта; ничего из
    эталона сюда не перенесено — экран вне эталона. */
 
+/* ── ОСТРОВ КОНТРОЛОВ (решение владельца 25.08.2026) ───────────────────────
+   Полоса выделена собственной заливкой: девять контролов на белом холсте
+   читались россыпью — глаз не видел, где кончается «управление срезом» и
+   начинается таблица. Тихая ступень --cu-fill-subtle, та же, что у шапки
+   секций ниже: остров — мебель, а не содержимое, и спорить с данными за
+   внимание он не должен.
+
+   ОТРИЦАТЕЛЬНЫЙ МАРЖИН ПОД СВОЙ ЖЕ ПАДДИНГ — приём таблицы (`margin-inline:
+   -12px` там же и по той же причине): заливка доходит до краёв области,
+   а контролы остаются на прежней вертикали и не теряют 20px рабочей ширины.
+   Ради этих 20px всё и затевалось — полоса переносилась на вторую строку.
+
+   `flex-wrap: wrap` ОСТАВЛЕН страховкой, а не режимом: после свёртки спутников
+   и снятия подписей-капа содержимое умещается в одну строку на 927px (замер
+   25.08.2026 — рабочая ширина с открытым сайдбаром), но окна бывают уже. */
 .bar{
   display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
   margin-bottom: 10px;
+  margin-inline: -10px; padding: 6px 10px;
+  border-radius: var(--cu-radii-5);
+  background: var(--cu-fill-subtle);
 }
 /* Разделитель сегмента и тихих триггеров: тонкая вертикаль, а не воздух —
-   слева режимы, справа прочтение одного и того же среза. */
-.sep{ width: 1px; height: 20px; background: var(--cu-border-default); }
+   слева режимы, справа прочтение одного и того же среза. На заливке острова
+   он берёт ступень громче --cu-border-default: тот рассчитан на белое (то же
+   правило, что у линеек шапки таблицы). */
+.sep{ width: 1px; height: 20px; background: var(--cu-content-placeholder); opacity: .5; }
 
 /* Правый блок: чип сброса, легенда, фильтры. Прижат к правому краю через
    margin-inline-start:auto, а НЕ распоркой flex:1 отдельным узлом — полоса
@@ -30,17 +50,54 @@
   font-size: 13px; white-space: nowrap;
   transition: background-color var(--cu-animation-duration) var(--cu-animation-timing);
 }
-.trigger:hover{ background: var(--cu-state-hover-subtle); }
+/* Ховер поверх СОБСТВЕННОЙ заливки острова — ступень -strong, ради таких
+   случаев она и заведена (каталог состояний). На белом фоне -subtle хватало;
+   на fill-subtle он не проступает вовсе. */
+.trigger:hover{ background: var(--cu-state-hover-strong); }
 .trigger:focus-visible{ outline: var(--cu-focus-ring); outline-offset: 1px; }
 /* Подпись — secondary, не tertiary ([R1]): она часть контрола и обязана
    проходить по контрасту. Значение medium — его и читают. */
-.trigger__cap{ color: var(--cu-content-secondary); }
 .trigger__val{
   font-weight: var(--cu-font-weight-medium);
   color: var(--cu-content-primary);
 }
 .trigger__icon,
 .trigger__caret{ color: var(--cu-content-tertiary); --icon-size: 14px; }
+/* Глиф триггера отвечает на курсор ПО СВОЕМУ СМЫСЛУ: график подрастает,
+   список и стопка слоёв приподнимаются. Одно короткое движение вверх у всех
+   трёх — это одна семья контролов, и разводить их характерами было бы шумом;
+   у соседей по экрану (звезда, флажок, самолётик) характеры разные, потому
+   что и предметы разные. */
+.trigger__icon{ transition: transform var(--cu-duration-fast) var(--cu-ease-standard); }
+@media (hover: hover){
+  .trigger:hover .trigger__icon{ transform: translateY(-1.5px); }
+}
+@media (prefers-reduced-motion: reduce){
+  .trigger:hover .trigger__icon{ transform: none; }
+}
+
+/* ── СПУТНИКИ ОДНИМ СЕЛЕКТОМ ──────────────────────────────────────────────
+   Число включённых — на триггере: свернулось МЕСТО контрола, а не его
+   состояние. Тот же приём и тот же вид, что у бейджа «Фильтров» рядом. */
+.sat-count{
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 16px; height: 16px; padding: 0 4px;
+  border-radius: var(--cu-radii-round);
+  background: var(--cu-content-primary); color: var(--cu-content-on-dark);
+  font-size: 10px; line-height: 1; font-weight: var(--cu-font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+.sat-menu{ display: flex; flex-direction: column; gap: 2px; padding: 4px; min-width: 208px; }
+/* Строка меню — <label>, поэтому кликается вся: щелчок по подписи попадает в
+   переключатель платформенно, без делегирования руками. */
+.sat-row{
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  height: 32px; padding: 0 8px; border-radius: var(--cu-radii-3);
+  font-size: 13px; color: var(--cu-content-primary); cursor: pointer;
+  transition: background-color var(--cu-duration-fast) var(--cu-ease-standard);
+}
+.sat-row:hover{ background: var(--cu-state-hover-subtle); }
+.sat-label{ min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Каретка отвечает за открытость поворотом (рецепт 11: глиф крутится на
    месте, второй канал); угол кратен её симметрии. Тайминг — общий со всеми
    стрелками-состояниями экрана (.fold таблицы, тоггл дерева): один язык
@@ -72,69 +129,6 @@
 }
 .ratio-cap{ font-size: 12px; color: var(--cu-content-tertiary); }
 
-/* ── секция спутников стоимости ────────────────────────────────────────────
-   Тихий трек-контейнер В РОДСТВЕ с сегментом пресетов: та же подложка, те же
-   2px и концентрика — управление аналитикой читается семьёй контролов, а не
-   россыпью. Включённый чип белеет капсулой на треке: слой показа нейтрален,
-   цветом его не красят — отклонение в таблице бывает обоих знаков, один тон
-   врал бы. */
-.satellites{
-  display: inline-flex; align-items: center; gap: 2px;
-  height: 30px; padding: 0 2px;
-  border-radius: var(--cu-radii-4);
-  background: var(--cu-fill-subtle);
-}
-.satellite{
-  display: inline-flex; align-items: center; gap: 6px;
-  height: 26px; padding: 0 8px 0 6px;
-  border-radius: var(--cu-radii-3);
-  font-size: 13px; white-space: nowrap;
-  color: var(--cu-content-secondary);
-  transition:
-    background-color var(--cu-animation-duration) var(--cu-animation-timing),
-    color var(--cu-animation-duration) var(--cu-animation-timing);
-}
-/* Рецепт 1: крупная поверхность — слабая ступень. */
-.satellite:hover{ background: var(--cu-state-hover-subtle); color: var(--cu-content-primary); }
-/* Правило после :hover — при равной специфичности решает порядок, серая
-   ступень не проступает сквозь белую капсулу. Гашение — как у пилюли
-   сегмента: brightness(.96) темнит и на тёмной теме (капсула светлая). */
-.satellite.is-on{
-  background: var(--cu-background-main);
-  color: var(--cu-content-primary);
-}
-.satellite.is-on:hover{ filter: brightness(.96); }
-/* Отклик на нажатие — микросжатие содержимого: жест подтверждён. */
-.satellite:active{ transform: scale(.97); }
-.satellite:focus-visible{ outline: var(--cu-focus-ring); outline-offset: 1px; }
-
-/* Мини-тумблер — точная копия <Switch> (трек 28×16, бегунок 12): один
-   контрол — одна геометрия на всём экране. Бегунок едет translate'ом:
-   свойство композитится само и не спорит с будущими трансформациями. */
-.satellite-track{
-  position: relative; flex: 0 0 auto;
-  width: 28px; height: 16px;
-  border-radius: var(--cu-radii-round);
-  border: 1px solid var(--cu-border-default);
-  background: var(--cu-fill-subtle);
-  transition:
-    background-color var(--cu-duration-fast) var(--cu-ease-standard),
-    border-color var(--cu-duration-fast) var(--cu-ease-standard);
-}
-.satellite-knob{
-  position: absolute; top: 1px; left: 1px;
-  width: 12px; height: 12px;
-  border-radius: inherit;
-  background: var(--cu-background-main);
-  box-shadow: var(--cu-elevation-1);
-  transition: translate var(--cu-duration-fast) var(--cu-ease-standard);
-}
-.satellite.is-on .satellite-track{
-  border-color: var(--cu-content-primary);
-  background: var(--cu-content-primary);
-}
-.satellite.is-on .satellite-knob{ translate: 14px 0; }
-
 /* ── чип «Изменён · Сброс» (Д.2) ───────────────────────────────────────────
    Состояние ушло от базы пресета — молча не теряем. Капсула тона info: это
    факт о состоянии, а не тревога, и в danger её красить не за что — сброс
@@ -160,5 +154,40 @@
   background-image: linear-gradient(var(--cu-state-hover-strong), var(--cu-state-hover-strong));
 }
 .modchip:focus-visible{ outline: var(--cu-focus-ring); outline-offset: 1px; }
-.modchip__icon{ --icon-size: 13px; }
+.modchip__icon{
+  --icon-size: 13px;
+  transition: transform var(--cu-duration-slow) var(--cu-ease-standard);
+}
+/* СТРЕЛКА СБРОСА ДЕЛАЕТ ПОЛНЫЙ ОБОРОТ — ровно то, что кнопка и обещает:
+   «вернуть в исходное». Транзишен, а не кадры, потому что оборот кратен
+   360° и конечное состояние совпадает с начальным: застрять глифу негде,
+   а на уходе курсора он честно откручивается назад. */
+@media (hover: hover){
+  .modchip:hover .modchip__icon{ transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce){
+  .modchip:hover .modchip__icon{ transform: none; }
+}
 
+
+/* ── §3.4 СЧЁТЧИК СКРЫТЫХ СТРОК ───────────────────────────────────────────
+   Канон формулирует ЗАМЕТНОСТЬ как требование: «скрыто 128» говорит сильнее,
+   чем «5 из 133», потому что называет то, чего пользователь НЕ ВИДИТ.
+   Чип появляется только под фильтром — без него скрывать нечего. */
+.hidden-chip{
+  display: inline-flex; align-items: center; flex: none;
+  height: 24px; padding: 0 10px;
+  border-radius: var(--cu-radii-round);
+  background: var(--cu-background-main);
+  color: var(--cu-content-secondary);
+  font-size: 12px; white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  cursor: help;
+}
+
+/* ── §3.1 НЕАКТИВНЫЙ СПУТНИК ─────────────────────────────────────────────
+   «Динамика» в первом раунде видна и не кликается: контрол, которого на
+   одном тендере нет, а на другом есть, заставляет искать его глазами каждый
+   раз. Неактивный с объяснением честнее — он говорит, что появится. */
+.is-locked{ opacity: .45; cursor: not-allowed; }
+.is-locked:hover{ background: none; }

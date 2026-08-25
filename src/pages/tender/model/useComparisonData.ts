@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
-  fetchComparison, simulateNextSubmission, snapshotRound,
-  type Comparison,
+  decideCorrection, fetchComparison, selectBidVersion, simulateNextSubmission,
+  snapshotRound, type Comparison,
 } from '@/entities/comparison';
 import { useAsync } from '@/shared/lib/useAsync';
 
@@ -42,12 +42,48 @@ export function useComparisonData(tenderId: string) {
     return { comparison, prev };
   }, [tenderId, submissions]);
 
+  /* ВРЕМЯ ПОСЛЕДНЕГО ПОДТВЕРЖДЁННОГО СРЕЗА (§5.9). Пишется при КАЖДОМ
+     успешном ответе и переживает следующую неудачу — в этом весь смысл:
+     когда расчёт упал, приглушённая таблица обязана назвать, НА КОГДА эти
+     числа верны. Реф, а не состояние: подпись рисуется вместе с ошибкой, и
+     лишнего рендера ради неё не нужно. */
+  const sliceTime = useRef<string | undefined>(undefined);
+  if (state.data?.comparison && !state.error) {
+    sliceTime.current = new Date().toLocaleString('ru-RU', {
+      hour: '2-digit', minute: '2-digit',
+    });
+  }
+
+  /* Обе мутации ПЕРЕЧИТЫВАЮТ снимок тем же путём, что и первая загрузка:
+     api отдаёт НОВЫЙ объект (см. `replaceContractor`), и мемоизации таблицы
+     честно пересчитываются. Своего оптимистичного состояния здесь нет —
+     решение по корректировке двигает медианы, ранжир и счётчики шапки, и
+     подделать это на клиенте значило бы завести второй расчёт. */
+  const reloadRef = useRef(state.reload);
+  reloadRef.current = state.reload;
+
+  const decide = useCallback(async (
+    contractorId: string, positionId: string,
+    decision: 'accepted' | 'declined', note?: string,
+  ) => {
+    await decideCorrection({ tenderId, contractorId, positionId, decision, note });
+    reloadRef.current();
+  }, [tenderId]);
+
+  const pickVersion = useCallback(async (contractorId: string, versionId: string) => {
+    await selectBidVersion({ tenderId, contractorId, versionId });
+    reloadRef.current();
+  }, [tenderId]);
+
   return {
     comparison: state.data?.comparison ?? null,
     prevComparison: state.data?.prev ?? null,
     loading: state.loading,
     error: state.error,
     reload: state.reload,
+    sliceTime: sliceTime.current,
+    decideCorrection: decide,
+    pickVersion,
     /** ДЕМО: следующий молчащий подрядчик подаёт КП. Перечитывать нечего,
      *  когда подавать больше некому — лента об этом и сообщает. Тендер назван
      *  явно: у статических снимков ленты подач нет, и кнопка гаснет сразу. */

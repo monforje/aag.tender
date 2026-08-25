@@ -1,0 +1,238 @@
+/* ТРЕД КОММЕНТАРИЕВ К ЯЧЕЙКЕ (§2.4). Свой модуль: с таблицей у него нет ни
+   одного общего селектора — панель живёт в верхнем слое `<dialog>`.
+
+   МАСШТАБ ПАНЕЛИ ЗАДАН ТРЕМЯ ЧИСЛАМИ, а не подобран по месту: ширина 400,
+   потолок ленты записей 340, потолок поля ввода 96. Первое — по мере текста
+   (~60 знаков в строке при 13/19, верхняя граница читаемости абзаца), второе
+   — чтобы композер оставался виден при любой длине переписки, третье — чтобы
+   одна простыня не выдавила ленту. */
+.pop{ --pop-width: 400px; padding: 0; }
+.thread{ padding: 14px 16px 16px; text-align: left; }
+
+/* ── ШАПКА: АДРЕС ТРЕДА ─────────────────────────────────────────────────────
+   Первым — О ЧЁМ тред (позиция), вторым — ЧЕЙ (подрядчик). Панель открывают
+   из ячейки, и первый вопрос читателя всегда «это точно та строка?».
+   «Комментарии · N» стояло здесь до 25.08.2026 и отвечало на вопрос, которого
+   никто не задавал: что панель про комментарии, видно и так. */
+.head{ margin-bottom: 12px; }
+.title{
+  font-size: 14px; line-height: 19px;
+  font-weight: var(--cu-font-weight-semibold);
+  color: var(--cu-content-primary);
+  overflow-wrap: anywhere;
+}
+.sub{ margin-top: 2px; font-size: 12px; line-height: 16px; color: var(--cu-content-tertiary); }
+
+/* ── ПОЛОСА ТРЕДА: счётчик + действие над ВСЕМ тредом ──────────────────────
+   Двумя линейками, а не воздухом: это служебная полоса между адресом и
+   записями, и обе стороны ей нужны — иначе счётчик прилипает то к заголовку,
+   то к первой записи. */
+.bar{
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 7px 0;
+  border-top: 1px solid var(--cu-border-default);
+  border-bottom: 1px solid var(--cu-border-default);
+}
+.count{
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; line-height: 16px;
+  font-weight: var(--cu-font-weight-medium);
+  color: var(--cu-content-secondary);
+  font-variant-numeric: tabular-nums;
+}
+/* Непрочитанные — капсула тона info, тем же цветом, что и маркер в ячейке:
+   одно состояние — один цвет во всех трёх местах, где оно называется. */
+.unread-pill{
+  display: inline-flex; align-items: center;
+  height: 16px; padding: 0 6px;
+  border-radius: var(--cu-radii-round);
+  background: var(--cu-tone-info-fill); color: var(--cu-tone-info-ink);
+  font-size: 10px; font-weight: var(--cu-font-weight-semibold);
+}
+
+/* Ссылкоподобная кнопка: действие над ВСЕМ тредом, а не над записью, и
+   кнопочный вид поставил бы его в один ряд с «Ответить» под каждой. */
+.link-like{
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 12px; line-height: 16px; color: var(--cu-tone-info-ink);
+  font-weight: var(--cu-font-weight-medium);
+  white-space: nowrap;
+}
+.link-like:hover:not(:disabled){ text-decoration: underline; }
+.link-like:disabled{ color: var(--cu-content-placeholder); cursor: default; }
+.link-icon{ width: 14px; height: 14px; flex: none; }
+/* Галочка «поставлена»: короткий доворот с приседанием — жест отметки. */
+@keyframes seen-tick{
+  0%{ transform: scale(1) rotate(0) }
+  45%{ transform: scale(.86) rotate(-14deg) }
+  100%{ transform: scale(1) rotate(0) }
+}
+@media (hover: hover){
+  .link-like:hover:not(:disabled) .link-icon{ animation: seen-tick .45s var(--cu-animation-timing); }
+}
+
+/* ── ЛЕНТА ЗАПИСЕЙ ────────────────────────────────────────────────────────
+   Прокручивается САМА, а шапка и композер стоят: тред на сорок реплик иначе
+   выдавил бы поле ввода за экран — то есть отнял бы у панели её главное
+   действие. Записи разделены линейкой, а не только воздухом: у соседних
+   реплик одного автора иначе не видно границы. */
+.list{
+  max-height: 340px; overflow-y: auto;
+  margin: 0 -16px; padding: 0 16px;
+}
+.item{ display: flex; gap: 10px; padding: 10px 0; }
+.item + .item{ border-top: 1px solid var(--cu-border-default); }
+/* Ответ — отступом, а не уменьшенным аватаром: размер аватара означал бы
+   разный статус участников (правка владельца 25.08.2026). */
+.item--reply{ padding-left: 38px; }
+
+/* АВАТАР ЕДИНОГО РАЗМЕРА 28px — и у записи, и у ответа, и у композера. */
+.avatar{
+  width: 28px; height: 28px; flex: none;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  font-size: 11px; font-weight: var(--cu-font-weight-semibold);
+}
+/* Тон — от имени автора, детерминированно: один человек всегда одного цвета.
+   Тревожных тонов нет — цвет здесь различает людей, а не оценивает их. */
+.av-info{ background: var(--cu-tone-info-fill); color: var(--cu-tone-info-ink); }
+.av-success{ background: var(--cu-tone-success-fill); color: var(--cu-tone-success-ink); }
+.av-warning{ background: var(--cu-tone-warning-fill); color: var(--cu-tone-warning-ink); }
+
+.body{ flex: 1; min-width: 0; }
+.item-head{ display: flex; align-items: baseline; gap: 7px; min-width: 0; }
+.name{
+  font-size: 13px; font-weight: var(--cu-font-weight-semibold);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.time{ font-size: 11px; color: var(--cu-content-tertiary); white-space: nowrap; }
+/* Непросмотренная запись — точка тона info у имени. Тот же канал, что у
+   глифа маркера в ячейке: одно состояние — один цвет везде. */
+.new-dot{
+  width: 6px; height: 6px; border-radius: 50%; flex: none;
+  background: var(--cu-tone-info);
+}
+
+.text{
+  margin-top: 3px;
+  font-size: 13px; line-height: 19px;
+  /* Поставщик присылает артикулы и ссылки без пробелов — без переноса по
+     любому месту они распирают панель. */
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+/* СВОРАЧИВАНИЕ — ТОЛЬКО У ДЛИННОЙ ЗАПИСИ (правка владельца 25.08.2026).
+   line-clamp стоял на КАЖДОЙ, и под «Согласны» из двух слов висело
+   «Показать полностью» — кнопка, обещающая спрятанное там, где прятать
+   нечего. Теперь класс приходит вместе с самой кнопкой: одно условие, один
+   источник правды (см. `isLong` в компоненте). */
+.text--clamp{
+  display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* СВОРАЧИВАНИЕ БЕЗ JS. Чекбокс скрыт, но существует: он и держит состояние
+   «развёрнуто», принадлежащее одной записи. `~` — только последующие соседи,
+   поэтому input стоит в разметке ПЕРЕД текстом. */
+.clamp-toggle{ position: absolute; opacity: 0; width: 0; height: 0; }
+.clamp-toggle:checked ~ .text--clamp{
+  display: block; -webkit-line-clamp: unset; overflow: visible;
+}
+.more{
+  display: inline-block; margin-top: 2px;
+  font-size: 12px; color: var(--cu-tone-info-ink); cursor: pointer;
+}
+.more:hover{ text-decoration: underline; }
+.clamp-toggle:checked ~ .more{ display: none; }
+/* Кольцо фокуса — на подписи: сам чекбокс невидим, и без этого правила
+   переключатель с клавиатуры был бы недостижим глазом. */
+.clamp-toggle:focus-visible ~ .more{
+  outline: var(--cu-focus-ring); outline-offset: 2px; border-radius: var(--cu-radii-2);
+}
+
+/* Действия под записью. Отрицательный отступ слева ставит первую кнопку на
+   одну вертикаль с текстом: собственный паддинг кнопки иначе сдвигал бы её. */
+.acts{ display: flex; align-items: center; gap: 2px; margin-top: 4px; margin-left: -8px; }
+.act{
+  display: inline-flex; align-items: center; gap: 5px;
+  height: 26px; padding: 0 8px; border-radius: var(--cu-radii-3);
+  font-size: 12px; color: var(--cu-content-secondary);
+}
+.act:hover{ background: var(--cu-state-hover-subtle); color: var(--cu-content-primary); }
+.act-icon{
+  width: 13px; height: 13px; flex: none;
+  transition: transform var(--cu-duration-fast) var(--cu-ease-standard);
+}
+/* Глиф отвечает на курсор своим смыслом: стрелка ответа отскакивает влево
+   («к записи»), лист копирования приподнимается («снялась копия»). */
+.act:hover .act-icon{ transform: translateX(-2px); }
+.act:last-child:hover .act-icon{ transform: translateY(-2px); }
+
+/* ── КОМПОЗЕР ─────────────────────────────────────────────────────────────
+   БЕЗ кнопок «Отменить / Ответить» (правка владельца): поле и круглая иконка
+   отправки. align-items:flex-end прижимает кнопку к низу — при двух и более
+   строках она остаётся снизу справа, а не всплывает к центру поля. */
+.composer{
+  display: flex; gap: 10px; align-items: flex-end;
+  margin-top: 12px; padding-top: 12px;
+  border-top: 1px solid var(--cu-border-default);
+}
+.field{
+  flex: 1; min-width: 0;
+  display: flex; align-items: flex-end; gap: 6px;
+  padding: 3px 3px 3px 12px;
+  border: 1px solid var(--cu-border-default); border-radius: var(--cu-radii-6);
+  background: var(--cu-background-main);
+  transition: border-color var(--cu-duration-fast) var(--cu-ease-standard);
+}
+.field:focus-within{
+  border-color: var(--cu-content-quaternary);
+  box-shadow: var(--cu-state-ring);
+}
+.input{
+  flex: 1; min-width: 0; border: 0; outline: none; resize: none;
+  font: inherit; font-size: 13px; line-height: 19px;
+  padding: 6px 0; background: none;
+  /* Потолок автороста: дальше поле прокручивается само. */
+  max-height: 96px;
+}
+/* КРУГЛАЯ КНОПКА ОТПРАВКИ. Размер глифа задаётся --icon-size, а НЕ правилом
+   `.send svg{width:15px}`, и это была вся причина «знак не по середине»:
+   <Icon> рисует span в --icon-size (20px по умолчанию), флекс кнопки
+   центрирует именно ЕГО, а ужатая до 15px картинка внутри 20-пиксельного
+   спана прижималась к его левому верхнему углу — глиф стоял на 2px левее и
+   выше центра. Размер задан спану — центр глифа совпал с центром кнопки.
+   Полпикселя вправо сверх того — оптика: у бумажного самолётика масса
+   смещена к хвосту, и геометрический центр не совпадает с видимым. */
+.send{
+  width: 28px; height: 28px; flex: none; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  --icon-size: 16px;
+  background: var(--cu-content-primary); color: var(--cu-content-on-dark);
+  transition: background-color var(--cu-duration-fast) var(--cu-ease-standard);
+}
+.send svg{ transform: translateX(.5px); }
+.send:hover:not(:disabled){ background: #000; }
+.send:disabled{ background: var(--cu-fill); color: var(--cu-content-placeholder); cursor: default; }
+/* Самолётик уходит по своей диагонали — вправо-вверх, туда, куда и летит. */
+@keyframes send-off{
+  0%{ transform: translate(.5px, 0) }
+  45%{ transform: translate(2.5px, -2px) }
+  100%{ transform: translate(.5px, 0) }
+}
+@media (hover: hover){
+  .send:hover:not(:disabled) svg{ animation: send-off .45s var(--cu-animation-timing); }
+}
+
+/* Выход из режима ответа. Появляется только В нём — постоянная «Отмена» под
+   пустым полем читалась бы отменой самой панели. */
+.cancel-reply{
+  margin-top: 6px; font-size: 11px; color: var(--cu-content-tertiary);
+}
+.cancel-reply:hover{ color: var(--cu-content-primary); text-decoration: underline; }
+
+@media (prefers-reduced-motion: reduce){
+  .link-like:hover:not(:disabled) .link-icon,
+  .send:hover:not(:disabled) svg{ animation: none; }
+  .act:hover .act-icon{ transform: none; }
+}

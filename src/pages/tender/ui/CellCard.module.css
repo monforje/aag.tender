@@ -1,0 +1,148 @@
+/* КАРТОЧКА ЯЧЕЙКИ — разбор пары «позиция × подрядчик» (§2.1).
+
+   ОТДЕЛЬНЫЙ МОДУЛЬ, а не часть TenderCompare.module.css: общих селекторов с
+   таблицей у карточки нет ни одного — она живёт в верхнем слое `<dialog>`,
+   ничего из строки не наследует и ничего в ней не красит. Ровно та же
+   граница, что у досье и палитры.
+
+   Ширина едет переменной --pop-width на сам `<dialog>` (её читает
+   <Popover>): 400px — предел, на котором строка «подпись · значение» держит
+   значение на одной строке при суммах в восемь разрядов. */
+.pop{ --pop-width: 400px; padding: 0; }
+
+.card{ padding: 14px 16px 16px; text-align: left; }
+
+.title{
+  font-size: 13px; line-height: 18px;
+  font-weight: var(--cu-font-weight-semibold);
+}
+.sub{
+  margin-top: 2px;
+  font-size: 12px; line-height: 16px;
+  color: var(--cu-content-tertiary);
+}
+
+/* ВОЗДУХ ДО СТАТУСА УВЕЛИЧЕН (правка владельца 25.08.2026): статус — не
+   продолжение заголовка, а отдельное утверждение о ячейке. */
+.status-row{
+  margin-top: 12px;
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+}
+/* ПРОСТО ТЕКСТ: ни точки, ни капители, ни бейджа. «Участвует в расчёте» —
+   факт, а не предупреждение, и оформлять его как состояние значит поднимать
+   шум там, где всё в порядке. */
+.status-text{ font-size: 12px; color: var(--cu-content-secondary); }
+.trace{
+  font-size: 11px; line-height: 15px;
+  color: var(--cu-content-quaternary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Секция карточки — блок полей за хэйрлайном. Отбивка одинаковая у всех:
+   карточка читается сверху вниз равными шагами. */
+.sec{
+  margin-top: 11px; padding-top: 11px;
+  border-top: 1px solid var(--cu-border-default);
+}
+
+.row{ display: flex; justify-content: space-between; gap: 12px; }
+.row + .row{ margin-top: 3px; }
+.row-label{
+  display: inline-flex; align-items: center; gap: 6px;
+  color: var(--cu-content-secondary); font-size: 12px; line-height: 18px;
+}
+.row-value{
+  font-size: 12px; line-height: 18px;
+  text-align: right; font-variant-numeric: tabular-nums;
+}
+/* Иконка рядом с текстом — flex+center, БЕЗ margin-top (правило второй
+   волны, владелец 25.08.2026): вертикаль держит выравнивание строки. */
+.row-icon{ width: 13px; height: 13px; flex: none; }
+
+.cap{
+  font-size: 10px; line-height: 14px; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--cu-content-secondary);
+  font-weight: var(--cu-font-weight-medium);
+}
+
+/* ── РАСПРЕДЕЛЕНИЕ ЦЕН v2 ──────────────────────────────────────────────────
+   Дорожка с концевыми делениями, полые точки предложений, медиана высоким
+   штрихом, открытая цена — ромб с ореолом. ТРИ РАЗНЫЕ ФОРМЫ, а не три цвета:
+   на девяти пикселях цвет не различается, а форма различается сразу. */
+.track{
+  position: relative; height: 22px; margin-top: 10px;
+  background: linear-gradient(var(--cu-border-default), var(--cu-border-default))
+              50% 50% / 100% 1px no-repeat;
+}
+.track::before,
+.track::after{
+  content: ""; position: absolute; top: 50%; transform: translateY(-50%);
+  width: 2px; height: 12px; border-radius: 1px;
+  background: var(--cu-content-placeholder);
+}
+.track::before{ left: 0; }
+.track::after{ right: 0; }
+.track i{
+  position: absolute; top: 50%; transform: translate(-50%,-50%);
+  width: 9px; height: 9px; border-radius: 50%;
+  background: var(--cu-background-main);
+  border: 1.6px solid var(--cu-content-secondary);
+}
+.med{
+  width: 2px !important; height: 16px !important;
+  border-radius: 1px !important;
+  background: var(--cu-content-primary) !important;
+  border: 0 !important;
+}
+.here{
+  border-radius: 2px !important; border: 0 !important;
+  transform: translate(-50%,-50%) rotate(45deg) !important;
+  background: var(--cu-tone-info) !important;
+  box-shadow: 0 0 0 3px var(--cu-tone-info-fill);
+}
+.track-labels{
+  display: flex; justify-content: space-between; gap: 8px; margin-top: 5px;
+  font-size: 11px; color: var(--cu-content-tertiary);
+}
+.here-label{ color: var(--cu-tone-info-ink); font-weight: var(--cu-font-weight-medium); }
+
+/* ── ИЗМЕНЕНИЕ К ПРОШЛОМУ РАУНДУ ──────────────────────────────────────────
+   Старое зачёркнуто → стрелка → новое жирным + дельта-капсула; база справа. */
+.round{
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin-top: 5px; font-size: 12px; font-variant-numeric: tabular-nums;
+}
+.round-old{ color: var(--cu-content-quaternary); }
+.round-arrow{ display: inline-flex; color: var(--cu-content-placeholder); }
+.round-arrow svg{ width: 13px; height: 13px; }
+.delta-chip{
+  display: inline-flex; align-items: center; height: 18px; padding: 0 7px;
+  border-radius: var(--cu-radii-round); font-size: 11px;
+  font-weight: var(--cu-font-weight-medium);
+}
+/* Вниз по цене — success: в торге это хорошая новость. Вверх — warning, а не
+   danger: подорожание требует объяснения, но само по себе нарушением не
+   является. */
+.delta-down{ background: var(--cu-tone-success-fill); color: var(--cu-tone-success-ink); }
+.delta-up{ background: var(--cu-tone-warning-fill); color: var(--cu-tone-warning-ink); }
+.round-base{
+  margin-left: auto; font-size: 11px; color: var(--cu-content-quaternary);
+}
+
+/* Цитата поставщика — причина аномалии или обоснование корректировки. */
+.quote{
+  margin-top: 6px; padding: 7px 9px;
+  background: var(--cu-fill-subtle);
+  border-left: 2px solid var(--cu-border-default);
+  border-radius: 0 var(--cu-radii-2) var(--cu-radii-2) 0;
+  color: var(--cu-content-secondary);
+  font-size: 12px; line-height: 17px; font-style: italic;
+}
+
+/* ПОДВАЛ 50/50 (правка владельца): обе кнопки ведут ПРОЧЬ из карточки и
+   равны по весу; делить их 60/40 значило бы назвать одну главной без причины.
+   Кнопки центрируются каждая в своей половине. */
+.actions{
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 13px;
+}
+.actions > *{ justify-content: center; white-space: nowrap; }

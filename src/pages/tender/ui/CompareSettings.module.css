@@ -149,6 +149,20 @@
    ВЫБРАННЫХ предикатов, не строк; для скринридера его несёт имя кнопки
    («Параметры анализа · фильтров: N»), значок — визуальный дубль ([R1]).
    Без него активные фильтры перестали бы читаться с полосы вовсе. */
+/* ВОРОНКА ФИЛЬТРОВ «ПРОЛИВАЕТСЯ»: короткий сдвиг вниз — то, что воронка и
+   делает. Шестерня рядом крутится, лента фильтров льётся, вопросительный
+   знак покачивается: три соседние иконки правого блока обязаны двигаться
+   по-разному, иначе движение перестаёт различать их. */
+.funnel svg{ transition: transform var(--cu-duration-fast) var(--cu-ease-standard); }
+@media (hover: hover){
+  .funnel:hover svg,
+  .funnel[aria-expanded='true'] svg{ transform: translateY(1.5px); }
+}
+@media (prefers-reduced-motion: reduce){
+  .funnel:hover svg,
+  .funnel[aria-expanded='true'] svg{ transform: none; }
+}
+
 .btn-badge{
   position: absolute; top: -3px; right: -4px;
   display: flex; align-items: center; justify-content: center;

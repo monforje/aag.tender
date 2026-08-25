@@ -1,7 +1,8 @@
 import { cx } from '@/shared/lib/cx';
 import {
-  cellMark, money, type Bid, type CompareMetricId, type RowFacts,
+  money, sumRows, type Bid, type CompareMetricId, type RowFacts,
 } from '@/entities/comparison';
+import { plural } from '@/shared/lib/plural';
 import { tableCell } from '@/shared/ui/Table';
 import s from './TenderCompare.module.css';
 
@@ -36,13 +37,18 @@ import s from './TenderCompare.module.css';
  * <TotalRow rows={groupRows} bids={bids} metric={view.mainMetric} />
  * <TotalRow grand rows={facts.rows} bids={bids} metric={view.mainMetric} />
  */
-export function TotalRow({ grand, rows, bids, metric }: {
+export function TotalRow({ grand, rows, bids, metric, lead }: {
   /** Итог ВСЕЙ таблицы, а не раздела: другая подпись и другой вес. */
   grand?: boolean;
   /** Все позиции узла (или всей сметы) — независимо от активных фильтров. */
   rows: RowFacts[];
   bids: Bid[];
   metric: CompareMetricId;
+  /** Сколько пустых колонок левого блока добрать после подписи: их число
+   *  меняется вместе с условным столбцом «Потенциал» (§1.6). Числом из
+   *  одного места, а не константой по месту: колонка появляется по галочке,
+   *  и забытая тройка съехала бы всей строкой итога. */
+  lead: number;
 }) {
   return (
     <tr className={cx(s.totalRow, grand && s.totalRowGrand)}>
@@ -52,12 +58,9 @@ export function TotalRow({ grand, rows, bids, metric }: {
           прокрученной строкой съедала итог первого подрядчика. Пустые
           колонки объёма добираются отдельным colSpan={3}. */}
       <th scope="row" className={s.totalLabel}>{grand ? 'Итого' : 'Итого секция'}</th>
-      <td colSpan={3} />
+      <td colSpan={lead} />
       {bids.map((bid) => {
-        const sum = rows.reduce(
-          (acc, r) => acc + cellValue(bid.contractor, r, metric),
-          0,
-        );
+        const sum = sumRows(bid.contractor, rows, metric);
         return (
           <td key={bid.contractor.id} className={cx(tableCell.numeric, s.totalValue)}>
             {sum ? money(sum) : '—'}
@@ -68,12 +71,59 @@ export function TotalRow({ grand, rows, bids, metric }: {
   );
 }
 
-/** Значение одной пары работа × подрядчик в деньгах выбранного режима:
- *  стоимость — расценка × общий объём; потенциал — заявленный запас за
- *  единицу × объём (источника запаса нет — вклада в Σ потенциалов нет). */
-function cellValue(contractor: Bid['contractor'], row: RowFacts, metric: CompareMetricId): number {
-  if (metric === 'potential') {
-    return (cellMark(contractor, row.position.id).potential ?? 0) * row.position.qty;
-  }
-  return (contractor.prices[row.position.id] ?? 0) * row.position.qty;
+/**
+ * Строка «Показано» — сумма основного показателя по ВИДИМОМУ срезу (§1.1,
+ * `rows.md` §3, `filters.md` §4).
+ *
+ * КОГДА:  только при активном фильтре, в двух ярусах: узловая — подчинённой
+ *         строкой ВНУТРИ секции, глобальная — над «Итого». Порядок фиксирован:
+ *         сначала «Показано», ниже итог. Гасятся ОДНИМ выключателем в окне
+ *         параметров таблицы — тумблер прячет обе строки разом, числа при
+ *         этом не трогает (решение владельца 25.08.2026).
+ * НЕ ДЛЯ: полного итога (см. <TotalRow>) — тот фильтром не пересчитывается
+ *         НИКОГДА, и это половина смысла обеих строк: рядом стоят «сколько
+ *         стоят именно эти позиции» и «сколько стоит всё».
+ *
+ * UX:     БЕЗ ФИЛЬТРА СТРОКИ НЕТ ВОВСЕ. «Показано 65 из 65» — не сообщение, а
+ *         шум; строка появляется ровно тогда, когда видимое перестало
+ *         совпадать с полным.
+ *         УЗЛОВАЯ — ПОДЧИНЁННАЯ, А НЕ ВТОРАЯ СЕКЦИЯ: без заливки, кеглем
+ *         ниже, с отступом под шеврон раздела. С заливкой она читалась второй
+ *         шапкой и разрывала секцию надвое.
+ *         НОЛЬ ПОЗИЦИЙ — ПРОЧЕРК, А НЕ «0 ₽» (§1.2): ноль это названная
+ *         величина («столько стоит»), а под фильтром складывать просто
+ *         нечего. Узел при этом остаётся на месте со своим полным подытогом —
+ *         карта документа обязана быть стабильной под любым фильтром.
+ * A11Y:   подпись — <th scope="row">, как и у итога: строка сводки называет
+ *         себя, а не полагается на соседство.
+ *
+ * @example
+ * <ShownRow node rows={visibleOfGroup} bids={bids} metric={view.mainMetric} lead={4} />
+ */
+export function ShownRow({ node, rows, bids, metric, lead }: {
+  /** Узловой ярус — внутри секции; иначе глобальный над «Итого». */
+  node?: boolean;
+  /** ВИДИМЫЕ строки узла или всего среза. */
+  rows: RowFacts[];
+  bids: Bid[];
+  metric: CompareMetricId;
+  lead: number;
+}) {
+  const n = rows.length;
+  return (
+    <tr className={cx(s.shownRow, node && s.shownRowNode)}>
+      <th scope="row" className={s.shownLabel}>
+        Показано: {n} {plural(n, 'позиция', 'позиции', 'позиций')}
+      </th>
+      <td colSpan={lead} />
+      {bids.map((bid) => {
+        const sum = n ? sumRows(bid.contractor, rows, metric) : 0;
+        return (
+          <td key={bid.contractor.id} className={cx(tableCell.numeric, s.shownValue)}>
+            {sum ? money(sum) : <span className={s.dash}>—</span>}
+          </td>
+        );
+      })}
+    </tr>
+  );
 }

@@ -9,9 +9,14 @@
 import type { Tone } from '@/shared/ui/Badge';
 import { POTENTIAL_MIN, type CompareThresholds } from './thresholds';
 import {
-  cellMark, hasAnomaly, pendingCorrection,
-  type ComparePosition, type Contractor, type PositionGroup,
+  bidStage, cellMark, countsInAnalysis, hasAnomaly, isWaiting, pendingCorrection,
+  type BidStage, type ComparePosition, type Contractor, type PositionGroup,
 } from './contract';
+/* ТОЛЬКО ТИП, и потому цикла нет: `view.ts` читает предикаты, предикаты
+   читают этот файл. `import type` стирается компилятором — в рантайме ребра
+   графа не появляется. Держать `CompareMetricId` здесь копией было бы хуже:
+   селект показателя и формула его значения обязаны знать одно перечисление. */
+import type { CompareMetricId } from './view';
 
 /** Итог по одному подрядчику — всё, что показывает его карточка в шапке. */
 export interface Bid {
@@ -34,6 +39,25 @@ export interface Bid {
    *  имеет права быть единственным носителем ранга: подпись читается и в
    *  чёрно-белом, и скринридером. */
   rankLabel: string;
+  /** Стадия участника — поднята из подрядчика, чтобы шапка колонки и ячейки
+   *  не спрашивали её у двух разных источников. */
+  stage: BidStage;
+  /** Идёт ли колонка В СЧЁТ. Приглашённый и закрытый доступ — нет: у первого
+   *  цен нет вовсе, второй показывается справочно (`contractor.md` §4).
+   *  Ранг у таких колонок 0 — «места нет», а не «последнее место». */
+  counts: boolean;
+  /** Δ к ЛИДЕРУ в деньгах и процентах — числа шапки (`contractor.md` §2).
+   *  У самого лидера `null`: «+0 %» на первом месте читалось бы отставанием
+   *  от кого-то ещё. У колонки вне счёта тоже `null` — сравнивать её итог с
+   *  лидером значило бы поставить её в тот же ряд.
+   *
+   *  У НЕПОЛНОГО КП ТОЖЕ `null`, и это не пропуск. Итог неполного
+   *  предложения заведомо занижен — в нём нечего складывать по незакрытым
+   *  позициям, — и «−6,5 % к лидеру» читалось бы СКИДКОЙ там, где на деле
+   *  не хватает 7 % сметы. Ровно поэтому `rankBids` и опускает такие КП в
+   *  конец: сравнивать их итоги с полными нельзя, и показывать разницу
+   *  числом — тем более. Шапка вместо Δ говорит про неполноту прямо. */
+  deltaToLeader: { money: number; pct: number } | null;
 }
 
 /** Итог по позициям — одна функция и для группы, и для всего КП. */
@@ -63,20 +87,50 @@ export function rankBids(contractors: Contractor[], positions: ComparePosition[]
     filled: positions.filter((p) => contractor.prices[p.id] !== undefined).length,
     percent: contractor.fill,
     sum: sumOf(contractor, positions),
+    stage: bidStage(contractor),
+    counts: countsInAnalysis(contractor),
   }));
 
+  /* КОЛОНКИ ВНЕ СЧЁТА УХОДЯТ В ХВОСТ И МЕСТА НЕ ЗАНИМАЮТ (`contractor.md`
+     §4). Приглашённый с нулевой суммой иначе оказался бы «лучшим
+     предложением» — сортировка по сумме честно поставила бы ноль первым, и
+     медаль уехала бы тому, кто вообще ничего не подал. */
   scored.sort((a, b) => (
-    Number(a.percent < 100) - Number(b.percent < 100) || a.sum - b.sum
+    Number(!a.counts) - Number(!b.counts)
+    || Number(a.percent < 100) - Number(b.percent < 100)
+    || a.sum - b.sum
   ));
 
-  const last = scored.length;
+  const counted = scored.filter((b) => b.counts);
+  const last = counted.length;
+  const leaderSum = counted[0]?.sum ?? 0;
+
   return scored.map((bid, i) => {
+    if (!bid.counts) {
+      return {
+        ...bid,
+        rank: 0,
+        tone: 'neutral' as Tone,
+        rankLabel: bid.stage === 'invited' ? 'Приглашён, КП не подано'
+          : bid.stage === 'draft' ? 'Черновик, не подан'
+            : 'Доступ закрыт — в расчёте не участвует',
+        deltaToLeader: null,
+      };
+    }
     const rank = i + 1;
     return {
       ...bid,
       rank,
-      tone: rank === 1 ? 'success' : rank === last ? 'danger' : 'warning',
+      tone: (rank === 1 ? 'success' : rank === last ? 'danger' : 'warning') as Tone,
       rankLabel: rank === 1 ? 'Лучшее предложение' : `${rank}-е место`,
+      /* Δ считается от ЛИДЕРА, а не от соседа по ранжиру: вопрос шапки —
+         «насколько дороже лучшего», и цепочка «каждый к предыдущему» на него
+         не отвечает. Нулевой итог лидера (ни одной цены во всём тендере)
+         процента не даёт — деление на ноль вернуло бы Infinity молча. */
+      deltaToLeader: rank === 1 || leaderSum === 0 || bid.percent < 100 ? null : {
+        money: bid.sum - leaderSum,
+        pct: ((bid.sum - leaderSum) / leaderSum) * 100,
+      },
     };
   });
 }
@@ -112,8 +166,19 @@ export interface RowFacts {
   spread: number | null;
   /** Метка разброса ВЫВЕДЕНА из процента порогом, а не принята полем. */
   spreadTag: 'none' | 'noticeable' | 'high' | null;
-  /** Подрядчик с лучшей НЕаномальной ценой; нет конкуренции — null. */
-  bestId: string | null;
+  /** Подрядчики с лучшей НЕаномальной ценой. МАССИВ, а не одно имя: равные
+   *  значения дают СОВМЕСТНЫЙ минимум, и штамп «мин» обязан стоять у обеих
+   *  ячеек (`cell.md` §2). Одним полем это было невыразимо — приходилось
+   *  выбирать одного из равных, и выбирал его порядок колонок.
+   *  Пусто — конкуренции нет (меньше двух цен) либо все цены аномальны. */
+  bestIds: string[];
+  /** Подрядчики с ВЕРХНЕЙ границей строки — тем же правилом совместности.
+   *  Максимум слабее минимума и бейджа не получает: он рисуется тихой
+   *  засечкой над числом (§2.5, правило «слов в ячейках нет»). Аномальные
+   *  цены сюда НЕ попадают по той же причине, что и в минимум: верхняя
+   *  граница торга — это самое дорогое ЧЕСТНОЕ предложение, а выброс уже
+   *  помечен своим знаком. */
+  maxIds: string[];
   /** Есть ли в строке аномальная расценка — подъём ячейковой пометки на
    *  строку для фильтра и счётчика: у строки нет своей аномалии, есть чужие. */
   anomaly: boolean;
@@ -121,9 +186,20 @@ export interface RowFacts {
    *  решение подрядчика, отсутствие расценки — дыра в КП (§4 слой 3). */
   declined: boolean;
   missing: boolean;
+  /** Ждём ответ хотя бы от одного (§2.8). Отдельно от `missing`: пробел
+   *  требует запроса, ожидание — терпения, и в счётчике полноты это разные
+   *  числа. */
+  waiting: boolean;
   /** Максимум заявленного потенциала по строке, ₽ ПО СТРОКЕ (за единицу ×
-   *  общий объём): сортировка «По потенциалу» и фильтр читают его. */
+   *  общий объём): сортировка «По потенциалу», фильтр и СТОЛБЕЦ «Потенциал»
+   *  (§1.6) читают его. */
   maxPot: number;
+  /** Заявленный запас каждого, ₽ по строке, СВЕРХУ ВНИЗ. Разбор столбца
+   *  «Потенциал» («за счёт кого собран») читает готовый список, а не
+   *  пересобирает его из подрядчиков на каждом наведении: строк 65, колонок
+   *  десяток, и попап обязан открываться, а не считать.
+   *  Пусто — запаса не заявил никто. */
+  pots: Array<{ contractorId: string; value: number }>;
   /** Вес строки — сумма по самому дорогому предложению: «во сколько обойдётся
    *  в худшем случае», оценка риска, а не факта. У снятой строки вес 0. */
   weight: number;
@@ -163,6 +239,18 @@ export interface ComparisonFacts {
   /** Σ веса среза: база доли веса. Сумма долей даёт ровно 100 % — в отличие
    *  от сломанного «% среза» демо, делившего вес на чужой итог подрядчика. */
   sumWeight: number;
+  /** Вес САМОЙ ТЯЖЁЛОЙ строки — база нормировки полосы вклада (§4.2,
+   *  `position.md` §2). Канон нормирует по ЛИДЕРУ, а не по сотне: на 137
+   *  позициях доли редко выходят за 20 %, и деление на 100 % прятало бы
+   *  разницу между 12,4 % и 18,7 % в двух почти одинаковых огрызках полосы.
+   *  Ноль — весов нет вовсе (ни одной цены), полосы не рисуются. */
+  maxWeight: number;
+  /** ЛИНИЯ ОТСЕЧКИ КЛЮЧЕВЫХ (§1.3): сколько строк вошло в набор и какую долю
+   *  стоимости они на самом деле набрали. Считается ЗДЕСЬ, потому что здесь
+   *  же набор и собирается — второй проход по отсортированным весам в
+   *  компоненте дал бы подпись, которая расходится с самой линией на
+   *  граничных данных. */
+  keyCut: { rows: number; share: number };
   /** Сколько НЕРАССМОТРЕННЫХ корректировок объёма у каждого подрядчика —
    *  знак ⚠ в шапке его колонки. Считается ОДНИМ проходом здесь, а не в
    *  карточке: ось строки и ось колонки обязаны складывать одно и то же
@@ -198,8 +286,14 @@ export function analyzeComparison(
   thresholds: CompareThresholds,
 ): ComparisonFacts {
   const byContractor = new Map(contractors.map((c) => [c.id, c]));
+  /* СЧИТАЕМ ТОЛЬКО ПО УЧАСТНИКАМ (`contractor.md` §4). Приглашённый без цен
+     и колонка с закрытым доступом стоят в таблице, но в арифметику не входят
+     ни одним числом: иначе замок обвалил бы медиану строки, а приглашённый
+     добавил бы пустую цену в разброс. Фильтр стоит ОДИН раз здесь, а не у
+     каждой из шести формул ниже. */
+  const counted = contractors.filter(countsInAnalysis);
   const rows: RowFacts[] = groups.flatMap((group) => group.positions.map((position) => {
-    const closed = contractors
+    const closed = counted
       .filter((c) => c.prices[position.id] !== undefined)
       .map((c) => ({ contractorId: c.id, price: c.prices[position.id] }));
 
@@ -217,11 +311,33 @@ export function analyzeComparison(
         || hasAnomaly(cellMark(byContractor.get(b.contractorId)!, position.id)),
     }));
 
-    /* Минимум — лучшая НЕаномальная цена при живой конкуренции. */
+    /* Минимум и максимум — КРАЯ ЧЕСТНОГО диапазона при живой конкуренции.
+       Аномальные цены не претендуют ни на тот, ни на другой: выброс уже
+       помечен своим знаком, и делать его «лучшей ценой» или «верхней
+       границей торга» значило бы дважды сказать о нём разное.
+
+       РАВНЫЕ ЗНАЧЕНИЯ — СОВМЕСТНЫЕ (`cell.md` §2): собираем ВСЕХ, кто стоит
+       на краю, а не первого встречного. Сравнение по строгому `<` выбирало
+       из двух одинаковых цен ту, что левее, — и штамп «мин» переезжал между
+       колонками при перестановке звёздочкой, хотя данные не менялись. */
     const fair = bids.filter((b) => !b.anomaly);
-    const bestId = fair.length && prices.length > 1
-      ? fair.reduce((best, b) => (b.price < best.price ? b : best)).contractorId
-      : null;
+    const edge = (pick: (a: number, b: number) => number): string[] => {
+      if (!fair.length || prices.length < 2) return [];
+      /* Редьюсер оборачивается стрелкой НАМЕРЕННО: `reduce(Math.min)` отдал бы
+         в Math.min ещё индекс и сам массив — четыре аргумента вместо двух, и
+         результат становится NaN. Ловится это только тестом: экран при таком
+         NaN просто перестаёт ставить штампы, ничего не ломая на вид. */
+      const target = fair.map((b) => b.price).reduce((a, b) => pick(a, b));
+      return fair.filter((b) => b.price === target).map((b) => b.contractorId);
+    };
+
+    const pots = counted
+      .map((c) => ({
+        contractorId: c.id,
+        value: (cellMark(c, position.id).potential ?? 0) * position.qty,
+      }))
+      .filter((p) => p.value > 0)
+      .sort((a, b) => b.value - a.value);
 
     return {
       position,
@@ -231,20 +347,25 @@ export function analyzeComparison(
       spreadTag: spreadPct === null ? null
         : spreadPct >= thresholds.spreadHigh ? 'high'
           : spreadPct >= thresholds.spreadNoticeable ? 'noticeable' : 'none',
-      bestId,
+      bestIds: edge(Math.min),
+      maxIds: edge(Math.max),
       anomaly: bids.some((b) => b.anomaly),
-      declined: contractors.some((c) => cellMark(c, position.id).declined === true),
+      declined: counted.some((c) => cellMark(c, position.id).declined === true),
+      /* Пробел — ТОЛЬКО там, где не ждут ответа и не отказались: три разных
+         состояния и три разных действия (§2.8). */
       missing: !position.removed
-        && contractors.some((c) => c.prices[position.id] === undefined && cellMark(c, position.id).declined !== true),
-      maxPot: Math.max(0, ...contractors.map(
-        (c) => (cellMark(c, position.id).potential ?? 0) * position.qty,
-      )),
+        && counted.some((c) => c.prices[position.id] === undefined
+          && cellMark(c, position.id).declined !== true
+          && !isWaiting(c, position.id)),
+      waiting: !position.removed && counted.some((c) => isWaiting(c, position.id)),
+      maxPot: pots[0]?.value ?? 0,
+      pots,
       weight: position.removed || !prices.length ? 0 : Math.max(...prices) * position.qty,
       keyDerived: false,
       /* Порядок — как у колонок, потому что клик по знаку строки ведёт к
          первой ячейке СЛЕВА НАПРАВО. Снятая строка корректировок не берёт:
          решать по позиции, которой в смете больше нет, нечего. */
-      corrections: position.removed ? [] : contractors
+      corrections: position.removed ? [] : counted
         /* Корректировка живёт при ЦЕНЕ: поставщик говорит «эта сумма — за
            другой объём». Без цены (пробел, отказ) говорить не о чем, и
            считать такую ячейку значило бы обещать переход к знаку, которого
@@ -260,14 +381,25 @@ export function analyzeComparison(
      (metrics.md §8). Снятые и неоценённые строки веса не имеют — в набор не
      попадают. Ручные пометки `position.key` добавляются ПОВЕРХ этого. */
   const sumWeight = rows.reduce((acc, r) => acc + r.weight, 0);
+  let keyCut = { rows: 0, share: 0 };
+  let maxWeight = 0;
   if (sumWeight > 0) {
     let acc = 0;
+    let count = 0;
     for (const row of [...rows].sort((a, b) => b.weight - a.weight)) {
       if (row.weight <= 0) break;
+      if (!count) maxWeight = row.weight;
       acc += row.weight;
+      count += 1;
       row.keyDerived = true;
       if ((acc / sumWeight) * 100 >= thresholds.keyShare) break;
     }
+    /* ФАКТИЧЕСКИЙ охват, а не порог: подпись линии говорит «3 позиции · 95 %
+       стоимости», и 95 здесь — то, что набралось, а не то, что просили. Набор
+       собирается ДО первого пересечения порога, поэтому он почти всегда чуть
+       больше — соврать округлением до порога значило бы обещать 80 % там,
+       где лежит 95. */
+    keyCut = { rows: count, share: (acc / sumWeight) * 100 };
   }
 
   /* Счётчик шапки — свёртка тех же списков, а не второй обход данных. */
@@ -279,9 +411,35 @@ export function analyzeComparison(
   }
 
   return {
-    rows, byId: new Map(rows.map((r) => [r.position.id, r])), sumWeight, correctionsBy,
+    rows,
+    byId: new Map(rows.map((r) => [r.position.id, r])),
+    sumWeight, maxWeight, keyCut, correctionsBy,
   };
 }
+
+/** ЗНАЧЕНИЕ ПАРЫ «работа × подрядчик» В ДЕНЬГАХ выбранного режима: стоимость —
+ *  расценка × общий объём, потенциал — заявленный запас за единицу × объём.
+ *
+ *  ЖИВЁТ ЗДЕСЬ, А НЕ В КОМПОНЕНТЕ ИТОГА, потому что читателей стало трое:
+ *  строка «Итого» (`TotalRow`), строка «Показано» видимого среза (§1.1) и
+ *  «Итого секция». Пока читатель был один, приватная функция рядом с ним была
+ *  честной; трое, складывающих одно и то же по трём формулам, — способ
+ *  получить экран, который спорит сам с собой. */
+export function cellValue(
+  contractor: Contractor, row: RowFacts, metric: CompareMetricId,
+): number {
+  if (metric === 'potential') {
+    return (cellMark(contractor, row.position.id).potential ?? 0) * row.position.qty;
+  }
+  return (contractor.prices[row.position.id] ?? 0) * row.position.qty;
+}
+
+/** Сумма показателя по НАБОРУ строк для одной колонки — общая формула строк
+ *  «Итого», «Итого секция» и «Показано». Разница между ними ровно одна: какой
+ *  набор строк передали. */
+export const sumRows = (
+  contractor: Contractor, rows: readonly RowFacts[], metric: CompareMetricId,
+): number => rows.reduce((acc, r) => acc + cellValue(contractor, r, metric), 0);
 
 /* ═══════════════════ ИТОГИ УРОВНЯ ТЕНДЕРА ═══════════════════ */
 

@@ -17,22 +17,53 @@ import type { PredicateId } from './filters';
  *  (₽/ед.), обе живут спутниками, а не здесь. */
 export type CompareMetricId = 'cost' | 'potential';
 
-/** Спутники стоимости — галочки панели таблицы. Описывают стоимость, поэтому
- *  НЕ зависят от селекта основного: она в ячейке есть всегда. */
-export type SatelliteId = 'deviation' | 'rate';
+/** Спутники стоимости — ЧЕТЫРЕ галочки канона (`satellites.md`). Описывают
+ *  стоимость, поэтому НЕ зависят от селекта основного: она в ячейке есть
+ *  всегда.
+ *
+ *  Две из четырёх появились 25.08.2026 и обе связаны с чем-то за пределами
+ *  ячейки: «Динамика» требует прошлого раунда (в первом круге видна и
+ *  неактивна — базы сравнения нет), «Потенциал» добавляет СТОЛБЕЦ левой зоны
+ *  (§1.6). Обе остаются спутниками, а не показателями: показателем может быть
+ *  только то, что суммируется в подытог. */
+export type SatelliteId = 'deviation' | 'dynamics' | 'rate' | 'potential';
 
 export const SATELLITE_LABEL: Record<SatelliteId, string> = {
   deviation: 'Отклонение',
+  dynamics: 'Динамика',
   rate: 'Ставка',
+  potential: 'Потенциал',
 };
 
-export type RowViewId = 'sections' | 'weight' | 'potential';
+/** ПОРЯДОК СОРТИРОВОК СТРОК. `sections` — не пункт меню, а ИСХОДНОЕ
+ *  СОСТОЯНИЕ таблицы (`sorting.md`): контрол называется «Сортировка», и
+ *  «по разделам» это её отсутствие. Пунктов ровно три — вес, потенциал,
+ *  разброс, — и у активного есть крестик сброса, возвращающий сюда.
+ *
+ *  Имя контрола — часть контракта: «Строки» обещало вид, а сортировка меняет
+ *  ПОРЯДОК; спутать их значит обещать пользователю не то, что произойдёт. */
+export type RowViewId = 'sections' | 'weight' | 'potential' | 'spread';
+
+/** Пункты МЕНЮ сортировки — без `sections`: выбрать «исходное состояние»
+ *  нельзя, в него сбрасывают. Массив, а не `Object.keys(ROW_VIEW_LABEL)`:
+ *  подпись нужна и дефолту (его показывает сам триггер). */
+export const SORT_VIEWS: ReadonlyArray<Exclude<RowViewId, 'sections'>> = [
+  'weight', 'potential', 'spread',
+];
 
 export interface CompareView {
   preset: PresetId;
   mainMetric: CompareMetricId;
   showDeviation: boolean;
   showRate: boolean;
+  /** Изменение к прошлому раунду суффиксом. Неактивна в первом круге —
+   *  базы сравнения нет; гейт стоит у контрола, а не здесь: ось остаётся
+   *  осью, даже когда данных под неё в этом тендере ещё нет. */
+  showDynamics: boolean;
+  /** Столбец «Потенциал» левой зоны (§1.6). Сортировка «По потенциалу»
+   *  включает его и НЕ выключает ни одна (`sorting.md` §4): порядок по числу,
+   *  которого нет на экране, канон запрещает прямо. */
+  showPotential: boolean;
   rowView: RowViewId;
   filters: PredicateId[];
 }
@@ -50,9 +81,29 @@ export type PresetId = 'overview' | 'bidding' | 'anomalies';
  *  аномалий; порядок строк отдаётся весу, потому что риск смотрят сверху вниз
  *  по влиянию на итог. */
 export const PRESETS: Record<PresetId, Omit<CompareView, 'preset'>> = {
-  overview: { mainMetric: 'cost', showDeviation: false, showRate: false, rowView: 'sections', filters: [] },
-  bidding: { mainMetric: 'potential', showDeviation: false, showRate: false, rowView: 'potential', filters: ['pot'] },
-  anomalies: { mainMetric: 'cost', showDeviation: true, showRate: false, rowView: 'weight', filters: ['spread', 'anomaly'] },
+  overview: {
+    mainMetric: 'cost', showDeviation: false, showRate: false,
+    showDynamics: false, showPotential: false, rowView: 'sections', filters: [],
+  },
+  /* ТОРГИ ПО КАНОНУ (`presets.md`): потенциал основной + ОТКЛЮЧЕНИЕ ВКЛЮЧЕНО.
+     До 25.08.2026 здесь стояло `showDeviation: false` — сценарий торга без
+     процентов отклонения заставлял включать их руками каждый раз, а именно
+     они и отвечают на вопрос «с кем торговаться». Столбец потенциала едет
+     вместе с сортировкой по нему: порядок по невидимому числу канон
+     запрещает. Динамику доливает второй раунд — гейт у контрола. */
+  bidding: {
+    mainMetric: 'potential', showDeviation: true, showRate: false,
+    showDynamics: false, showPotential: true, rowView: 'potential', filters: ['pot'],
+  },
+  /* АНОМАЛИИ ПО КАНОНУ: сортировка «По разбросу», а не «По весу». Вес
+     поднимал наверх самые ДОРОГИЕ позиции, тогда как вопрос режима —
+     «где цены расходятся»: наверху обязаны стоять расходящиеся. Фильтр —
+     один, «аномальные цены»: разброс уже задан порядком строк, и вторым
+     предикатом он лишь сузил бы выборку до пересечения двух редких событий. */
+  anomalies: {
+    mainMetric: 'cost', showDeviation: true, showRate: false,
+    showDynamics: false, showPotential: false, rowView: 'spread', filters: ['anomaly'],
+  },
 };
 
 export const PRESET_LABEL: Record<PresetId, string> = {
@@ -66,8 +117,10 @@ export const METRIC_LABEL: Record<CompareMetricId, string> = {
 };
 
 export const ROW_VIEW_LABEL: Record<RowViewId, string> = {
-  /* Термин владельца (24.08.2026): группы сметы — «секции». */
-  sections: 'По секциям', weight: 'По весу', potential: 'По потенциалу',
+  /* Термин владельца (24.08.2026): группы сметы — «секции». Подпись дефолта
+     стоит на триггере контрола, пунктом меню он не является. */
+  sections: 'По разделам',
+  weight: 'По весу', potential: 'По потенциалу', spread: 'По разбросу',
 };
 
 /** Строка ячейки в терминах модели: главное число, база-стоимость или
@@ -75,7 +128,10 @@ export const ROW_VIEW_LABEL: Record<RowViewId, string> = {
 export type CellLine =
   | { kind: 'main'; metric: CompareMetricId }
   | { kind: 'base' }
-  | { kind: 'rate' };
+  /** `baseLabel` — объём, за который поставщик назвал расценку: «его объём
+   *  135 м²». Есть только при непринятой корректировке (§2.6): цена за чужой
+   *  объём без собственной базы нечитаема. */
+  | { kind: 'rate'; baseLabel?: string };
 
 /** Состав строк ячейки — единственное место, знающее правила источника §1:
  *
@@ -90,13 +146,25 @@ export type CellLine =
  *
  *  Рендер читает план, а не придумывает состав сам: так правило №5 нельзя
  *  нарушить локальной правкой ячейки. */
-export function cellLines(view: CompareView): { lines: CellLine[]; deviationOn: 'main' | 'base' | null } {
+export function cellLines(view: CompareView, forced?: {
+  /** Ставка выводится НЕЗАВИСИМО от галочки — правило корректировки
+   *  (`correction.md` §2, `satellites.md` §3): пока решение не принято,
+   *  сумма посчитана за ЧУЖОЙ объём, и без ставки её не с чем сопоставить. */
+  rate?: boolean;
+  /** Подпись базы к принудительной ставке: «его объём 135 м²». */
+  baseLabel?: string;
+}): { lines: CellLine[]; deviationOn: 'main' | 'base' | null } {
   const lines: CellLine[] = [{ kind: 'main', metric: view.mainMetric }];
   const deviationOn = view.showDeviation
     ? view.mainMetric === 'cost' ? 'main' : 'base'
     : null;
   if (view.mainMetric !== 'cost') lines.push({ kind: 'base' });
-  if (view.showRate) lines.push({ kind: 'rate' });
+  /* Правило 4 источника (ставка — последней) и правило корректировки дают
+     ОДНУ строку, а не две: галочка включена и корректировка висит — ставка
+     всё равно одна, просто с подписью базы. */
+  if (view.showRate || forced?.rate) {
+    lines.push(forced?.baseLabel ? { kind: 'rate', baseLabel: forced.baseLabel } : { kind: 'rate' });
+  }
   return { lines, deviationOn };
 }
 
@@ -120,10 +188,7 @@ export function applyTransition(
   const base = PRESETS[transition.preset];
   const next: CompareView = {
     preset: transition.preset,
-    mainMetric: base.mainMetric,
-    showDeviation: base.showDeviation,
-    showRate: base.showRate,
-    rowView: base.rowView,
+    ...base,
     filters: [...base.filters],
   };
   for (const metric of transition.requiredMetrics ?? []) {
@@ -144,6 +209,8 @@ export const isModifiedView = (view: CompareView): boolean => {
   return view.mainMetric !== base.mainMetric
     || view.showDeviation !== base.showDeviation
     || view.showRate !== base.showRate
+    || view.showDynamics !== base.showDynamics
+    || view.showPotential !== base.showPotential
     || view.rowView !== base.rowView
     || !sameSet(view.filters, base.filters);
 };

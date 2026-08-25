@@ -306,14 +306,19 @@
    всплывает — на цветной подложке одного кольца мало. */
 .card:hover{ box-shadow: var(--cu-state-ring), var(--cu-elevation-3); }
 
-/* Шапка карточки: контент по центру, как и просили. Три колонки с ОДИНАКОВЫМИ
-   краями (24px слева и справа) — только так имя стоит по центру карточки, а
-   не по центру остатка: у звезды и кружка места разная ширина содержимого, и
-   auto-колонки увели бы имя вбок. */
+/* Шапка карточки — ОДИН флекс-ряд при любом составе (решение владельца
+   25.08.2026). Бывший грид из трёх колонок молча дорисовывал четвёртому
+   ребёнку — селекту версий — вторую неявную строку, и карточки с версиями
+   вырастали против карточек без них. Флекс таких сюрпризов не знает: звезда,
+   имя, селект версии и стрелка всегда стоят в ряд, высота ряда — высота
+   самого высокого контрола (24px). Имя забирает остаток (`min-width: 0`
+   обязателен — без него флекс-элемент не даёт себя сжать ниже содержимого,
+   и многоточие не наступает никогда), звезда и стрелка — жёсткие края. */
 .card__head{
-  display: grid; grid-template-columns: var(--cu-size-6) minmax(0, 1fr) var(--cu-size-6);
-  align-items: center; gap: 6px;
+  display: flex; align-items: center; gap: 5px;
 }
+/* Кнопки шапки не участвуют в раздаче ширины: сжиматься может только имя. */
+.card__head > button{ flex: none; }
 
 /* Звезда «в избранном». Рецепт (5): в покое её нет, проявляется по наведению
    на карточку и по фокусу внутри неё — без :focus-within кнопка была бы
@@ -334,6 +339,20 @@
 }
 .card:hover .star, .card:focus-within .star, .star.is-on{ opacity: 1; }
 .star:hover{ background: var(--cu-state-hover); color: var(--cu-content-primary); }
+/* ДВИЖЕНИЕ ЗВЕЗДЫ — «ЗАЖИГАЕТСЯ»: доворот на своей оси с коротким подскоком
+   масштаба. У каждой иконки экрана своя логика движения (правило владельца
+   25.08.2026), и здесь она читается прямо из предмета: звезда вспыхивает.
+   Кадры, а не transition: движение обязано вернуться в исходное, иначе глиф
+   застревал бы повёрнутым на всё время наведения. */
+@keyframes star-twinkle{
+  0%{ transform: rotate(0) scale(1) }
+  40%{ transform: rotate(-18deg) scale(1.18) }
+  70%{ transform: rotate(6deg) scale(1.04) }
+  100%{ transform: rotate(0) scale(1) }
+}
+@media (hover: hover){
+  .star:hover svg{ animation: star-twinkle .5s cubic-bezier(.36,.07,.19,.97); }
+}
 .star.is-on{ color: var(--cu-content-primary); }
 /* Залитая звезда — bold-начертание Solar: у него геометрия в ЗАЛИВКЕ, а
    глобальное правило иконок (§3: .icon svg{fill:none; stroke:currentColor})
@@ -345,12 +364,20 @@
 
 /* Имя. Просто текст: кнопкой оно было, пока карточка кликалась целиком, и
    нажатие на имя уводило в окно, которого не просили. Многоточие, а не
-   перенос: три колонки в шапке обязаны остаться одной высоты, иначе таблица
-   поедет. */
+   перенос: шапка обязана остаться одной высоты, иначе таблица поедет.
+   Имя — флекс-элемент с `min-width: 0`: забирает остаток ряда и отдаёт его
+   под обрезку; медаль лидера стоит рядом как отдельный жёсткий элемент и
+   под многоточие не попадает никогда. */
 .card__name{
-  min-width: 0; text-align: center;
+  flex: 1 1 auto; min-width: 0;
+  display: flex; align-items: center; gap: 5px;
   font-size: 14px; line-height: 20px; font-weight: var(--cu-font-weight-semibold);
   color: var(--cu-content-primary);
+}
+/* Обрезка живёт на внутреннем спане: text-overflow работает только у блока,
+   а родитель — флекс-контейнер пары «медаль + имя». */
+.card__name-text{
+  min-width: 0;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
@@ -360,10 +387,10 @@
    ПОДСКАЗКА (палитра перекрашивает колонку рукой), порядок колонок немой,
    а медаль остаётся вердиктом при любой перекраске. Пояснение — title, а не
    попап ячеек: у карточки свой язык подсказок, нативные title носят звезда,
-   процент и обе кнопки. Кегль глифа 14 — по имени, оптическая посадка −2px. */
+   процент и обе кнопки. Кегль глифа 14 — по имени; зазор до имени даёт
+   gap родителя, своего поля медали не нужно. */
 .leader{
-  display: inline-block; vertical-align: -2px;
-  margin-right: 5px;
+  display: inline-flex; flex: none;
   color: var(--cu-tone-success-ink);
   --icon-size: 14px;
   cursor: help;
@@ -395,10 +422,17 @@
 /* Полнота и сумма — одной строкой. ВЫРАВНИВАНИЕ ПО БАЗОВОЙ ЛИНИИ, а не по
    центру (решение владельца 24.08.2026, вторая волна): слева блок в две
    строки («100 %» + капитель «ЗАПОЛНЕНО»), справа одна — по центру их числа
-   стояли на разной высоте и читались как два независимых куска. Базовая линия
-   колоночного flex-блока — это линия его ПЕРВОЙ строки, то есть самого
-   процента: он и встаёт вровень с суммой. */
-.figures{ display: flex; align-items: baseline; gap: 10px; }
+   стояли бы на разной высоте и читались как два независимых куска. Базовая
+   линия колоночного flex-блока — это линия его ПЕРВОЙ строки, то есть самого
+   процента: он и встаёт вровень с суммой.
+
+   ВЫСОТА СЛОТА ФИКСИРОВАНА (30px = 18px числа + 12px капители) и равна
+   высоте строки состояния у колонок без КП (.stage-line): единая геометрия
+   карточек не должна зависеть от того, чем заполнен слот. */
+.figures{
+  display: flex; align-items: baseline; gap: 10px;
+  min-height: 32px;
+}
 
 /* Строка статуса и действий. Капсула прижата влево, две иконки — вправо:
    margin-right:auto на капсуле, а не justify-content:space-between, иначе
@@ -407,8 +441,24 @@
    margin-top:auto прижимает строку к низу карточки — раньше это делал подвал
    с палитрой. Без него у соседа с именем в две строки статус встал бы выше,
    и три карточки перестали бы читаться рядами. */
-.meta{ display: flex; align-items: center; gap: 2px; margin-top: auto; }
-.card__status{ margin-right: auto; min-width: 0; }
+/* ПОДВАЛ — ОДИН РЯД С ОБЩИМИ ОТСТУПАМИ: пометки · статус · ⚠ · цвет · досье.
+   Ужимается ровно один элемент — капсула статуса (min-width:0 + многоточие на
+   её подписи): у остальных четырёх геометрия 24×24 и сжимать в них нечего.
+   Без многоточия слово вылезало ЗА КРАЙ КАПСУЛЫ — «Уточняется» на 71px при
+   собственной ширине 73 (замер 25.08.2026): текст рисовался поверх скругления,
+   и статус читался сломанным. */
+.meta{
+  display: flex; align-items: center; gap: 2px; flex-wrap: nowrap;
+  margin-top: auto;
+}
+/* Поля капсулы на карточке уже канонических 10px: подвал делят пять
+   элементов на 187px содержимого, и каждый пиксель по краям пилюли — это
+   пиксель, отнятый у слова внутри неё. Сама пилюля от 8px не перестаёт быть
+   пилюлей, а «Получено» перестаёт быть «Получ…». */
+.card__status{ margin-right: auto; min-width: 0; padding-inline: 7px; }
+.card__status-label{
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 
 /* ── ПОМЕТКИ КОЛОНКИ: КНОПКА В ПОДВАЛЕ ────────────────────────────────────
    Порядок подвала — пометки, статус, палитра, стрелка (решение владельца
@@ -980,8 +1030,14 @@
 @keyframes spread-open-r{
   0%{ transform: translateX(0) } 45%{ transform: translateX(1.15px) } 100%{ transform: translateX(0) }
 }
-.spread-mark:hover [data-mk='cap-l']{ animation: spread-open .55s cubic-bezier(.34,1.4,.64,1); }
-.spread-mark:hover [data-mk='cap-r']{ animation: spread-open-r .55s cubic-bezier(.34,1.4,.64,1); }
+/* КРИВАЯ — СЕМЬИ БРЕЛОКОВ (.tag, .coin, .key-mark, .corr, .pin), а не
+   упругая. Здесь стояла cubic-bezier(.34,1.4,.64,1) с перелётом за конечную
+   точку; на ходе в 1,15px перелёт даёт треть пикселя — то есть не читается
+   вовсе, — зато выбивает засечки из общего языка движения экрана, где все
+   пометки двигаются одной физической кривой. Разброс «дышит» ровно так же,
+   просто в семье. */
+.spread-mark:hover [data-mk='cap-l']{ animation: spread-open .55s cubic-bezier(.36,.07,.19,.97); }
+.spread-mark:hover [data-mk='cap-r']{ animation: spread-open-r .55s cubic-bezier(.36,.07,.19,.97); }
 
 /* ── ⚠ «ИНОЙ ОБЪЁМ»: ОДИН ЗНАК НА ТРИ МЕСТА ───────────────────────────────
    Ячейка, шапка колонки и строка носят ОДИН и тот же класс намеренно: знак
@@ -1020,6 +1076,13 @@
 /* Единая зона reduced-motion: все hover-анимации брелоков гасятся одним
    блоком; въезд спутниковых строк ячейки — туда же. */
 @media (prefers-reduced-motion: reduce){
+  /* `transform` гасится ТОЛЬКО там, где он и есть движение. У .cmark им
+     держится центровка по высоте (translateY(-50%)) — обнулить его значило
+     бы уронить маркер на полвысоты вниз, то есть сломать вёрстку ради
+     настройки о движении. */
+  .star:hover svg, .version-trigger:hover .version-icon,
+  .corr-chip:hover .corr-chip-icon, .cmark, .cmark:hover{ animation: none; }
+  .ghost:hover .ghost-icon{ transform: none; }
   .tag:hover, .coin:hover, .key-mark:hover svg,
   .spread-mark:hover [data-mk='cap-l'],
   .spread-mark:hover [data-mk='cap-r'],
@@ -1044,11 +1107,6 @@
   box-shadow: inset 3px 0 0 var(--cu-tone-warning);
   background-image: repeating-linear-gradient(-45deg,
     var(--cu-tone-warning-fill) 0 5px, transparent 5px 10px);
-}
-.anomaly-trigger{ display: block; width: 100%; text-align: right; }
-.anomaly-trigger:focus-visible{
-  outline: var(--cu-focus-ring); outline-offset: -3px;
-  border-radius: var(--cu-radii-2);
 }
 
 /* ── ПРОБЕЛ ДАННЫХ против ОТКАЗА ─────────────────────────────────────────── */
@@ -1083,14 +1141,9 @@
 .spread-noticeable .spread-bar i{ background: var(--cu-tone-warning); }
 .spread-high .spread-bar i{ background: var(--cu-tone-danger); }
 
-/* Доля веса (вид «По весу»): та же микрошкала, но шкала — 100 % среза. */
-.share{
-  display: inline-block; width: 34px; height: 3px;
-  vertical-align: middle; margin-right: 6px;
-  border-radius: var(--cu-radii-round);
-  background: var(--cu-state-hover); overflow: hidden;
-}
-.share i{ display: block; height: 100%; background: var(--cu-tone-info); border-radius: inherit; }
+/* Микрошкала доли веса жила здесь до 25.08.2026 и снята вместе со своим
+   режимом: полоса вклада стала ПОСТОЯННОЙ (§4.2) и рисуется общим
+   <ProgressBar> — одна геометрия на все шкалы величины в приложении. */
 
 /* Снятая строка притушена целиком и остаётся в DOM — часть истории сметы. */
 .row--removed{ opacity: .55; }
@@ -1140,14 +1193,6 @@
   }
 }
 
-/* Цена за единицу во втором поле попапа минимума — второй строкой ПОД ценой:
-   пара не влезает в колонку значения, а переносить цену нельзя. */
-.popup-unit{
-  display: block; margin-top: 1px;
-  font-size: 11px; line-height: 13px; font-weight: 400;
-  color: var(--cu-content-tertiary);
-}
-
 /* ── УСЛОВИЯ ПОСТАВЩИКОВ (матрица внизу таблицы) ───────────────────────────
    Строки-вопросы формы КП, колонки — те же подрядчики: ответы читаются
    столбиком под его же ценами. Подпись блока — капитель, тот же язык
@@ -1183,7 +1228,11 @@
 @keyframes term-pop{
   0%{ transform: scale(.7) } 55%{ transform: scale(1.15) } 100%{ transform: scale(1) }
 }
-.term-mark:hover svg{ animation: term-pop .45s cubic-bezier(.34,1.56,.64,1); }
+/* ПЕРЕЛЁТ УЖЕ ЗАПИСАН В КАДРАХ (.7 → 1.15 → 1), и упругая кривая поверх них
+   считала его ВТОРОЙ раз: знак отскакивал дважды за 450мс и читался
+   резиновым. Кадры оставлены как есть — «поп» задуман, — а кривая взята
+   стандартная, та же, что у соседнего .term-note. */
+.term-mark:hover svg{ animation: term-pop .45s var(--cu-animation-timing); }
 
 /* Примечание — кнопка с попапом по клику; иконка покачиванием зовёт нажать. */
 @keyframes note-wiggle{
@@ -1210,3 +1259,585 @@
 }
 .term-value:hover{ background: var(--cu-state-hover); transform: translateY(-1px); }
 .term-value:focus-visible{ outline: var(--cu-focus-ring); outline-offset: 1px; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   РЕЕСТР РАЗРЫВОВ С КАНОНОМ, 25.08.2026 — вторая волна правок владельца.
+   Ниже только то, что появилось этой волной; всё выше осталось на месте.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── §4.7 РАЗДЕЛЬНЫЕ ЦЕЛИ ВНУТРИ ЯЧЕЙКИ (обязательное для прода) ───────────
+   Тело и каждый знак — свои цели со своей подсветкой. Наведение на знак
+   ГАСИТ подсветку тела: один жест — одна подсветка, и до клика видно, какая
+   цель активна.
+
+   ПРАВИЛО ЖИВЁТ НА КЛАССЕ ЯЧЕЙКИ, А НЕ НА ПРОПЕ, и это условие работы memo:
+   строка мемоизирована по ссылкам пропов, и «подсвечено ли тело» обязано
+   решаться CSS'ом, а не состоянием React — иначе каждое движение курсора
+   перерисовывало бы строку целиком. */
+/* ТЕЛО ЯЧЕЙКИ — САМА `<td>`. Ни обёртки, ни кнопки внутри: на 65×12 это
+   1560 лишних боксов, и платит за них каждый кадр прокрутки (замер и разбор
+   — в JSDoc <BidCell>; коротко: p50 16,7 → 33,3 мс, поток 1446 → 3938 мс,
+   и возвращает кадры ровно снятие боксов, а не обработчиков). Подсветка,
+   фокус и обработчики достаются `<td>` даром — она существует всегда. */
+.bid-cell{
+  position: relative;
+  /* Резерв под маркер переписки — у ВСЕХ ячеек (разбор выше). !important
+     обязателен: `.table td` и `.table td:last-child` в чужом модуле пишут
+     padding шорткатом со специфичностью (0,1,1) и (0,2,1). */
+  padding-right: 26px !important;
+}
+/* ПОДСВЕЧИВАЕТСЯ ВСЯ ЯЧЕЙКА, А ЦЕЛЬЮ СЛУЖИТ ЧИСЛО (правка владельца
+   25.08.2026). Два разных вопроса и два разных ответа: ховер говорит «вот эта
+   клетка» и потому красит клетку целиком, попап говорит «вот это число» и
+   потому просыпается только над ним. Совмещать зоны не нужно — раньше они
+   были совмещены, и попап вспыхивал при проходе курсора по пустому полю. */
+.bid-cell:hover{ background-image: linear-gradient(var(--cu-state-hover), var(--cu-state-hover)); }
+.hov-body{ cursor: pointer; }
+.hov-body:focus-visible{ outline: var(--cu-focus-ring); outline-offset: 2px; border-radius: var(--cu-radii-2); }
+/* Знак перехватывает подсветку у ячейки — рецепт 7 каталога состояний: один
+   жест, одна подсветка. */
+.bid-cell:has(.sign:hover){ background-image: none; }
+
+/* ── КАРТА МЕСТ ЗНАКОВ ЯЧЕЙКИ (решение владельца 25.08.2026) ───────────────
+   У каждого знака СВОЁ место, и место это не зависит от того, какие соседи
+   ему выпали. До правки ⚠ и маркер переписки стояли одной кучкой у правой
+   кромки: кучка ехала по горизонтали от числа знаков, наезжала на цену и
+   сама на себя. Единственный знак, который читался всегда, — штамп «мин»,
+   ровно потому, что у него было своё место (левый нижний угол). Теперь так
+   у всех:
+
+     левый ВЕРХНИЙ угол   .corner-signs — ⚠ и всё, что придёт за ним, рядом;
+     правая середина      .cmark        — маркер переписки;
+     левый НИЖНИЙ угол    .tag          — штамп «мин»;
+     левая кромка         .riska        — риска аномалии;
+     вплотную к числу     .coin         — монета запаса торга.
+
+   РЕЗЕРВ СПРАВА СТОИТ У ВСЕХ ЯЧЕЕК, а не только у тех, где маркер есть, — и
+   это разворот прежнего решения («платить 22px в каждой из 780 ради
+   восьмидесяти»). Экономия была мнимой: цена сдвигалась на 22px ровно там,
+   где появлялась переписка, а колонку цен читают ВЕРТИКАЛЬЮ — одна съехавшая
+   строка ломает столбик целиком. Постоянный резерв стоит ноль боксов: это
+   padding, а не разметка. */
+.corner-signs{
+  position: absolute; top: 2px; left: 5px; z-index: 3;
+  display: inline-flex; align-items: center; gap: 1px;
+}
+.cmark{
+  position: absolute; right: 2px; top: 50%; transform: translateY(-50%);
+  z-index: 3;
+}
+.sign{
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; flex: none;
+  border-radius: var(--cu-radii-3);
+  transition: background-color var(--cu-duration-fast) var(--cu-ease-standard);
+}
+.sign:hover{ background: var(--cu-state-hover); }
+.sign:focus-visible{ outline: var(--cu-focus-ring); outline-offset: 1px; }
+
+/* ── §2.3 РИСКА АНОМАЛИИ ───────────────────────────────────────────────────
+   Штриховку СОХРАНЯЕМ (решение владельца), риска добавляет второй канал —
+   он читается при выключенной цветовой подсветке. Знака «!» на ней нет
+   (правка 25.08.2026): направление отклонения цветом не кодируется. */
+.riska{
+  position: absolute; left: 0; top: calc(50% - 12px);
+  width: 3px; height: 24px;
+  border-radius: 0 2px 2px 0;
+  background: var(--cu-tone-warning);
+}
+/* Ячейка становится системой координат для риски и штампа «мин». */
+.cell--anomaly{ position: relative; }
+
+/* ── §2.5 МАКСИМУМ — БЕЗ ЗНАКА В ЯЧЕЙКЕ (правка владельца 25.08.2026) ──────
+   Здесь стояла тихая засечка над числом — двухпиксельная черта цвета
+   placeholder. Снята: на 13-пиксельном числе она читалась подчёркиванием,
+   артефактом рендера или следом чужой рамки — чем угодно, кроме «верхняя
+   граница строки», — и спросить о ней было некого, потому что курсор
+   попадал на неё случайно. Максимум остаётся В МОДЕЛИ (`row.maxIds`,
+   `data-marks="max"`) и называется словами в сводке ячейки: это КОНТЕКСТ
+   торга, а не вердикт, и знака в клетке он не заслуживает вовсе. */
+
+/* ── §2.8 ОЖИДАНИЕ ОТВЕТА ─────────────────────────────────────────────────
+   Точки говорят «идёт», прочерк говорит «нет» — два разных состояния и два
+   разных действия. Движение гасится глобальным prefers-reduced-motion, сами
+   точки остаются: гасится ДВИЖЕНИЕ, а не информация. */
+.wait-dots{ display: inline-flex; gap: 3px; align-items: center; }
+.wait-dots i{
+  width: 4px; height: 4px; border-radius: 50%;
+  background: var(--cu-content-placeholder);
+}
+/* МИГАНИЕ — ТОЖЕ ПО НАВЕДЕНИЮ, и по той же измеренной причине (см. разбор у
+   dot-slide выше): девяти непрерывно мигающих точек внутри ленты хватало,
+   чтобы кадры прокрутки выросли с 16,7 до 50 мс. Само СООБЩЕНИЕ при этом не
+   теряется: три точки в столбце чисел читаются «ждём» и неподвижными —
+   именно так их и печатают в тексте, — а словами состояние названо в сводке
+   ячейки («Ждём ответ поставщика») и в подписи колонки приглашённого. */
+.wait-dots i:nth-child(2){ animation-delay: .15s; }
+.wait-dots i:nth-child(3){ animation-delay: .3s; }
+.bid-cell:hover .wait-dots i,
+.stage-line:hover .wait-dots i{ animation: wait-blink 1.2s infinite; }
+@keyframes wait-blink{ 0%,60%,100%{ opacity: .35 } 30%{ opacity: 1 } }
+
+/* ── §2.4 МАРКЕР КОММЕНТАРИЯ ──────────────────────────────────────────────
+   Глиф 18px в зоне 22×22 по ЦЕНТРУ ВЫСОТЫ ячейки. Счётчика-бабла нет
+   (решение владельца): состояние несёт сам глиф — непрочитанное отличается
+   формой (точка на пузыре) И тоном. */
+.cmark{ color: var(--cu-content-quaternary); }
+.cmark svg{ width: 18px; height: 18px; display: block; }
+/* Появление маркера — короткий въезд справа: переписка приходит в открытой
+   таблице, и клетка обязана сказать об этом движением, а не молча подменить
+   пиксели. Место под него зарезервировано заранее, поэтому ничего не едет. */
+@keyframes cmark-in{ from{ opacity: 0; transform: translate(4px, -50%) } }
+.cmark{ animation: cmark-in var(--cu-duration-base) var(--cu-ease-standard); }
+.cmark:hover{ color: var(--cu-content-primary); }
+/* ПУЗЫРЬ КИВАЕТ — короткое приседание с подскоком: жест «здесь говорят».
+   translateY складывается с центровкой по высоте, поэтому -50% входит в
+   каждый кадр — иначе маркер прыгнул бы вниз на полвысоты. */
+@keyframes cmark-nod{
+  0%{ transform: translate(0, -50%) scale(1) }
+  40%{ transform: translate(0, calc(-50% - 2px)) scale(1.1) }
+  100%{ transform: translate(0, -50%) scale(1) }
+}
+@media (hover: hover){
+  .cmark:hover{ animation: cmark-nod .42s cubic-bezier(.36,.07,.19,.97); }
+}
+.cmark--unread{ color: var(--cu-tone-info-ink); }
+
+/* ── §1.4 КРОШКИ РАЗДЕЛА (плоские виды) ───────────────────────────────────
+   Отдельной строкой НАД названием; левый край общий с ним, поэтому вёрстка
+   не едет. Разделитель — placeholder: он служебный. */
+.crumbs{
+  display: flex; align-items: center; gap: 2px; flex-wrap: wrap;
+  margin-bottom: 1px;
+  font-size: 11px; line-height: 15px;
+  color: var(--cu-content-quaternary);
+}
+.crumb{
+  display: inline-flex; align-items: center; gap: 2px;
+  color: var(--cu-content-tertiary);
+}
+.crumb-sep{ color: var(--cu-content-placeholder); }
+
+/* ── §4.3 НОМЕР В ЛЕВОМ ВЕРХНЕМ УГЛУ ──────────────────────────────────────
+   Своей строкой над названием, у самого края ячейки (правка владельца
+   25.08.2026). Гуттером в 36px он стоял СЛЕВА ОТ НАЗВАНИЯ и отнимал их у
+   единственного содержимого, ради которого колонка существует: в панораме
+   ширина якоря 280px, то есть служебное число забирало каждый восьмой
+   пиксель строки.
+
+   Левые края названий совпадают у всех строк по построению — под номером
+   стоит ОБЩИЙ отступ .title-row, а не колонка переменной ширины: длина
+   числа на него больше не влияет вовсе.
+
+   Кегль 10/13 и четвертичный тон: номер нужен, чтобы на строку сослаться
+   («смотри 47-ю»), а не чтобы её прочитать. */
+.row-num{
+  display: block;
+  color: var(--cu-content-quaternary);
+  font-size: 10px; line-height: 13px;
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--cu-font-weight-regular, 400);
+}
+/* Общий отступ содержимого под номером — ОДИН для крошек и названия: их
+   левые края обязаны совпадать между собой и со строкой ниже. */
+.title-row, .crumbs{ padding-left: 10px; }
+
+/* ── §4.2 ПОЛОСА ВКЛАДА — ТОЛЬКО В РАЗВЁРНУТОМ ВИДЕ ───────────────────────
+   Трек фиксированной ширины и процент с min-width: проценты соседних строк
+   стоят на ОДНОЙ вертикали, а полоса не поднимает строку (flex:none).
+   Сама шкала — общий <ProgressBar>.
+
+   В ОБЫЧНОМ ВИДЕ ЕЁ НЕТ (правка владельца 25.08.2026). Постоянной полоса
+   прожила один день: трек 96 + зазор 7 + процент 44 — это 147px флекс-ряда,
+   которые в колонке-якоре шириной 280 отнимались у названия, и «Кабель
+   силовой ВВГнг(А)-LS 5×6» становился «Кабель сило…». Вопрос «сколько весит
+   строка» задают редко, вопрос «что это за работа» — всегда, и когда на один
+   ответ места не хватает, побеждает второй.
+
+   ГАСИТ ЕЁ CSS ПО КЛАССУ ОБЁРТКИ, а не проп строки, и это то же условие
+   работы memo, что у переноса названий: пятьсот <CompareRow> мемоизированы,
+   и лишний булев проп в каждой отменял бы memo на каждом щелчке тумблера.
+   `display:none` вместо неотрисовки намеренно — в развёрнутый режим и
+   обратно переключаются часто, а пересборка пятисот строк ради этого не
+   нужна. */
+.density:not(.density--wide) .wbar{ display: none; }
+.wbar{ display: inline-flex; align-items: center; gap: 7px; flex: none; cursor: help; }
+.wbar-pct{
+  min-width: 44px;
+  font-size: 12px; font-weight: var(--cu-font-weight-medium);
+  color: var(--cu-content-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── §1.8 РАЗБРОС: ОДНА ЛИНЕЙКА, ТРИ ТОНА ─────────────────────────────────
+   Глиф один и переведён на currentColor; состояние задаёт ТОЛЬКО цвет.
+   Размер ×1.2 к прежнему (24×16 → 29×19) и одинаков у всех трёх: разный
+   размер читался бы разной величиной. */
+.spread-cell{ cursor: help; }
+.spread-mark{ width: 29px; height: 19px; margin-left: 7px; }
+.sp-low{ color: var(--cu-tone-success); }
+.sp-not{ color: var(--cu-tone-warning); }
+.sp-high{ color: var(--cu-tone-danger); }
+/* ── ТОЧКА «ДЫШИТ» ПО НАВЕДЕНИЮ, А НЕ В ПОКОЕ ─────────────────────────────
+   Владелец просил движущуюся точку (§1.8), и она есть — но включается на
+   наведении и фокусе, а не крутится всегда. Это ИЗМЕРЕННОЕ решение, а не
+   осторожность.
+
+   ЗАМЕР (puppeteer, --cpu 4, 65 позиций × 12 КП, свежая страница на каждый
+   вариант, медиана трёх прогонов, 40 шагов колеса по ленте):
+     непрерывная анимация точки и точек ожидания  p50 50,1 мс · 101 из 101
+     без «дыхания» точки                          p50 33,3 мс ·  60 из 106
+     без точек ожидания                           p50 50,0 мс ·  96 из  96
+     без обеих                                    p50 16,7 мс ·  52 из 109
+   База до правок — p50 16,7. То есть непрерывное движение ВНУТРИ
+   прокручиваемой ленты и было всей регрессией целиком.
+
+   ЧТО НЕ ПОМОГЛО, хотя должно было (проверено тем же способом):
+     will-change: transform            p50 50,1 — SVG-трансформ не композитится;
+     contain: paint на ячейках         p50 50,0;
+     animation-play-state: paused
+       по классу на время прокрутки    p50 50,0 — класс ставится честно
+                                       (проверено: во время прокрутки
+                                       computed = paused), но Chrome уже
+                                       держит ленту в «анимируемом»
+                                       состоянии, и кадры не возвращаются;
+     animation: none по тому же классу p50 50,0 — то же самое.
+   Возвращает кадры РОВНО отсутствие анимации в покое — отсюда :hover.
+
+   Цена решения честная и маленькая: точка неподвижна, пока на строку не
+   смотрят. Смысл жеста при этом сохраняется целиком — «дышит» она ровно
+   тогда, когда её читают. */
+@keyframes dot-slide{ from{ transform: translateX(-2.6px) } to{ transform: translateX(3.4px) } }
+.spread-cell:hover .spread-mark [data-mk='dot'],
+.spread-cell:focus-within .spread-mark [data-mk='dot']{
+  animation: dot-slide 2.4s var(--cu-ease-standard) infinite alternate;
+}
+
+/* ── §1.6 СТОЛБЕЦ «ПОТЕНЦИАЛ» ─────────────────────────────────────────────
+   Появление подчёркнуто: шапка вспыхивает инфо-тоном один раз, ячейки
+   въезжают слева каскадом. Снятие галочки мгновенное — вход подтверждаем,
+   обратный ход ничего не добавляет. */
+.pot-cell{ cursor: help; }
+.col-sorted{ background-image: linear-gradient(var(--cu-fill-subtle), var(--cu-fill-subtle)); }
+.sort-arrow{ margin-left: 4px; color: var(--cu-content-tertiary); }
+.th-new{ animation: th-flash 1.8s var(--cu-ease-standard); }
+@keyframes th-flash{
+  0%, 30%{ background-color: var(--cu-tone-info-fill); }
+  100%{ background-color: var(--cu-fill-subtle); }
+}
+
+/* ── §1.3 ЛИНИЯ ОТСЕЧКИ И ХВОСТ ───────────────────────────────────────────
+   Линия — ступень content-secondary во всю ширину: граница набора читается
+   как граница, а не как ещё одна строка. */
+.cut-line td{
+  border-top: 2px solid var(--cu-content-secondary);
+  padding: 6px 8px 3px;
+}
+.cut-cap{
+  font-size: 11px; letter-spacing: .03em;
+  color: var(--cu-content-secondary);
+}
+.tail-row td{ padding: 0; background: var(--cu-fill-subtle); }
+.tail-toggle{
+  display: flex; align-items: center; gap: 8px;
+  width: 100%; padding: 9px 8px;
+  font-size: 13px; color: var(--cu-content-secondary);
+  text-align: left;
+}
+.tail-toggle:hover{ background: var(--cu-state-hover); color: var(--cu-content-primary); }
+.tail-toggle:focus-visible{ outline: var(--cu-focus-ring); outline-offset: -2px; }
+/* Шеврон доворачивается на месте — рецепт 11 каталога: раскрытие СОДЕРЖИМОГО
+   при этом мгновенное, анимировать высоту строк таблицы честно нельзя. */
+.tail-chev{
+  display: inline-flex; flex: none;
+  color: var(--cu-content-placeholder);
+  transform: rotate(-90deg);
+  transition: transform var(--cu-duration-base) var(--cu-ease-standard);
+}
+.tail-chev.is-on{ transform: rotate(0deg); }
+/* Хвост читаем, но приглушён: он за границей набора, а не вычеркнут. */
+.row--dim th, .row--dim td{ color: var(--cu-content-quaternary); }
+
+/* ── §1.1 СТРОКА «ПОКАЗАНО» ───────────────────────────────────────────────
+   Глобальная — тихая заливка над полным итогом; узловая — ПОДЧИНЁННАЯ строка
+   внутри секции: без заливки, кеглем ниже, с отступом под шеврон раздела.
+   С заливкой она читалась второй шапкой и разрывала секцию надвое. */
+.shown-row th, .shown-row td{
+  background: var(--cu-fill-subtle);
+  padding-block: 9px;
+}
+.shown-label{
+  text-align: left;
+  font-weight: var(--cu-font-weight-medium);
+  color: var(--cu-content-secondary);
+}
+.shown-value{ font-variant-numeric: tabular-nums; }
+.shown-row--node th, .shown-row--node td{
+  background: none;
+  padding-block: 6px;
+  font-size: 12px; line-height: 16px;
+  color: var(--cu-content-secondary);
+}
+.shown-row--node .shown-label{ padding-left: 34px; font-weight: 400; }
+
+/* ── §5.9 ОШИБКА РАСЧЁТА И ПРИГЛУШЁННЫЙ СРЕЗ ──────────────────────────────
+   ТЕКСТ КРАСНЫЙ, а не бордовый (правка владельца): наш danger значит «худшее
+   место в ранжире», то есть оценку, и на слове «не удался» читается оттенком
+   бренда, а не сбоем. Заливку ошибка берёт у danger — второй фон заводить
+   незачем, цветом здесь говорит ТЕКСТ.
+   Иконка по ЦЕНТРУ высоты строки: flex + align-items:center, margin-top
+   запрещён (правило второй волны). */
+.err-strip, .miss-strip{
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 10px; padding: 11px 12px;
+  border-radius: var(--cu-radii-4);
+  font-size: 14px; line-height: 20px;
+}
+.err-strip{ background: var(--cu-tone-danger-fill); color: var(--cu-tone-error-ink); }
+.miss-strip{ background: var(--cu-tone-warning-fill); color: var(--cu-tone-warning-ink); }
+.err-icon{ width: 17px; height: 17px; flex: none; }
+.err-retry{ margin-left: auto; flex: none; }
+/* Приглушённый, но ЧИТАЕМЫЙ и прокручиваемый срез: пустой экран вместо
+   данных — худшее, что можно сделать с тем, кто уже что-то на них решил. */
+.stale{ opacity: .55; }
+.slice-time{
+  margin-top: 8px;
+  font-size: 11px; color: var(--cu-content-tertiary);
+}
+
+/* ── §5.7 КОЛОНКА-ПРИЗРАК «ПРИГЛАСИТЬ» ────────────────────────────────────
+   Пунктир, а не заливка: это место, которого пока нет, и рисовать его как
+   настоящую колонку значило бы обещать данные. */
+/* ВЫСОТА — ПО РЯДУ ШАПКИ, А НЕ ПО СОДЕРЖИМОМУ. `height` на самой ячейке
+   обязателен: `.table th.cell--card` обнуляет высоту в `auto`, а процент у
+   ребёнка табличной ячейки без ЗАДАННОЙ высоты не разрешается вовсе — кнопка
+   оставалась на 143px рядом со 158-пиксельными карточками. 40px здесь — не
+   размер, а признак «высота задана»: строка всё равно тянется по самой
+   высокой ячейке. */
+.ghost-head{ padding: 6px !important; height: 40px !important; }
+.ghost{
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 6px; width: 100%; height: 100%; padding: 12px;
+  border: 1.5px dashed var(--cu-content-placeholder);
+  border-radius: var(--cu-radii-4);
+  color: var(--cu-content-secondary);
+  font-size: 13px; text-align: center; white-space: normal;
+  transition: border-color var(--cu-duration-fast) var(--cu-ease-standard),
+              background-color var(--cu-duration-fast) var(--cu-ease-standard);
+}
+.ghost:hover{
+  border-color: var(--cu-content-quaternary);
+  color: var(--cu-content-primary);
+  background: var(--cu-fill-subtle);
+}
+.ghost-icon{
+  width: 20px; height: 20px;
+  transition: transform var(--cu-duration-base) var(--cu-ease-standard);
+}
+/* Плюс доворачивается на 90°: единственная иконка экрана, у которой движение
+   — не кадры, а состояние наведения. Так и задумано — «плюс раскрывается»
+   должно держаться, пока курсор на колонке, а не проигрываться и гаснуть. */
+@media (hover: hover){
+  .ghost:hover .ghost-icon{ transform: rotate(90deg); }
+}
+.ghost-sub{ font-size: 11px; line-height: 15px; color: var(--cu-content-tertiary); }
+
+/* ── §5.0–5.1 ЧИСЛА ШАПКИ КОЛОНКИ ─────────────────────────────────────────
+   Блок facts стоит МЕЖДУ figures и meta — порядок зафиксирован владельцем.
+   Свёрнуто — строка-ключ, раскрыто — сетка «капитель → значение»: подпись
+   10px quaternary слева, значение 12px medium tabular справа. */
+.cfacts{
+  border-top: 1px solid var(--cu-border-default);
+  padding-top: 7px;
+}
+/* ВЫСОТА СТРОКИ-КЛЮЧА ФИКСИРОВАНА 15px И НЕ ЗАВИСИТ ОТ СОДЕРЖИМОГО. Это не
+   косметика: карточка колонки — стопка слотов, и любой слот, выросший на
+   строку, двигает ВСЮ шапку таблицы у одной колонки из двенадцати. Ровно так
+   и разъезжались карточки до 25.08.2026: у «доступ закрыт» в ключе стоит
+   ГЛИФ ЗАМКА, а инлайновый svg — замещаемое содержимое, и строчный бокс
+   растёт под него независимо от line-height (замер: 29px против 15px, карточка
+   172 против 158). Лечение — общее правило второй волны: «иконка рядом с
+   текстом — это flex align-items:center», после которого глиф из потока строки
+   выпадает вовсе. Многоточие при этом живёт на .cfacts-text: анонимный
+   текстовый узел внутри флекса обрезать нечем. */
+.cfacts-summary{
+  display: flex; align-items: center; gap: 6px;
+  width: 100%; min-height: 15px;
+  cursor: pointer; list-style: none;
+  font-size: 11px; line-height: 15px;
+  color: var(--cu-content-secondary);
+  border-radius: var(--cu-radii-2);
+  text-align: left;
+}
+.cfacts-summary:hover{ color: var(--cu-content-primary); }
+.cfacts-summary:focus-visible{ outline: var(--cu-focus-ring); outline-offset: 2px; }
+.cfacts-key{
+  flex: 1; min-width: 0;
+  display: flex; align-items: center; gap: 5px;
+  white-space: nowrap;
+}
+.cfacts-text{ min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* Каретка — ТА ЖЕ, что у стрелки свёртывания карточек: жест один и тот же
+   («раскрыть на месте»), и рисовать его двумя разными глифами значило бы
+   заводить два языка на одну карточку. Поворот — ответ на СМЕНУ СОСТОЯНИЯ,
+   а не на курсор. */
+.cfacts-caret{
+  display: flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px; margin-left: auto; flex: none;
+  --icon-size: 13px;
+  transition: transform var(--cu-duration-fast) var(--cu-ease-standard);
+}
+.cfacts-caret.is-on{ transform: rotate(180deg); }
+.fgrid{
+  display: grid; grid-template-columns: 1fr auto;
+  gap: 5px 12px; margin-top: 8px;
+}
+.fk{
+  font-size: 10px; line-height: 14px; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--cu-content-quaternary);
+  align-self: center;
+}
+.fv{
+  font-size: 12px; font-weight: var(--cu-font-weight-medium);
+  text-align: right; font-variant-numeric: tabular-nums;
+}
+/* Отставание от лидера — тон danger-ink: это не ошибка, но и не нейтральное
+   число; красить его в общий текст значило бы спрятать главную цифру шапки. */
+.delta-ink{ color: var(--cu-tone-danger-ink); }
+/* Прочерк вместо несуществующего числа — тише самих чисел и с курсором
+   «здесь есть пояснение»: у лидера Δ к себе не бывает, у неполного КП она
+   запрещена. */
+.fv--none{ color: var(--cu-content-placeholder); cursor: help; }
+
+/* ── §5.6 КОЛОНКИ БЕЗ ДЕЙСТВУЮЩЕГО КП ────────────────────────────────────
+   Приглашённый и черновик показывают СОСТОЯНИЕ вместо чисел; закрытый
+   доступ — числа, но приглушённые, с замком: видно, что предложение есть, а
+   сравнивать его нельзя. */
+/* ВЫСОТА РАВНА СЛОТУ ЧИСЕЛ (.figures): колонка без КП занимает ровно столько
+   же места, сколько колонка с КП, — иначе приглашённый съезжает на 3px и рвёт
+   горизонтали, по которым карточки и читают. */
+.stage-line{
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: 32px;
+  font-size: 12px; line-height: 17px; text-align: center;
+  color: var(--cu-content-quaternary);
+}
+.lock-icon{ width: 14px; height: 14px; flex: none; }
+.figures--dim{ opacity: .55; }
+
+/* ── §5.5 СЕЛЕКТ ВЕРСИИ КП ────────────────────────────────────────────────
+   Тихий триггер у имени; выбранная НЕ последняя подсвечивается — иначе легко
+   забыть, что смотришь архив. */
+.version-trigger{
+  display: inline-flex; align-items: center; gap: 2px; flex: none;
+  height: 18px; padding: 0 5px;
+  border-radius: var(--cu-radii-2);
+  font-size: 11px; font-weight: var(--cu-font-weight-medium);
+  color: var(--cu-content-tertiary);
+}
+.version-trigger:hover{ background: var(--cu-state-hover); color: var(--cu-content-primary); }
+.version-trigger.is-on{
+  background: var(--cu-tone-warning-fill); color: var(--cu-tone-warning-ink);
+}
+/* Глиф истории у номера версии: он говорит «у этого КП есть прошлое».
+   Шеврон здесь был бы вторым «раскрыть на месте» рядом со стрелкой
+   свёртывания карточек — два одинаковых жеста про разное. */
+.version-icon{ width: 12px; height: 12px; flex: none; }
+/* СТОПКА ЛИСТАЕТСЯ: короткий сдвиг вверх и назад — «под верхним листом есть
+   ещё». Своя логика, не похожая ни на поворот каретки рядом, ни на оборот
+   стрелки досье: три глифа в одной карточке обязаны двигаться по-разному,
+   иначе движение перестаёт что-либо означать. */
+@keyframes version-riffle{
+  0%{ transform: translateY(0) }
+  45%{ transform: translateY(-2px) }
+  100%{ transform: translateY(0) }
+}
+@media (hover: hover){
+  .version-trigger:hover .version-icon{ animation: version-riffle .42s var(--cu-animation-timing); }
+}
+.version-menu{ --pop-width: 290px; }
+/* ГАЛОЧКА ВЫБОРА — СПРАВА, левый край текста ровный (общее правило меню,
+   владелец 25.08.2026): читают текст, а отмечают состояние. */
+.version-item{
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  height: 32px; padding: 0 8px;
+  border-radius: var(--cu-radii-3);
+  font-size: 13px; text-align: left;
+}
+.version-item:hover:not(:disabled){ background: var(--cu-state-hover-subtle); }
+.version-item:disabled{ color: var(--cu-content-placeholder); cursor: default; }
+.version-name{
+  flex: 1; min-width: 0; display: inline-flex; align-items: center; gap: 6px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.version-old{
+  flex: none; height: 16px; padding: 0 6px;
+  border-radius: var(--cu-radii-round);
+  background: var(--cu-fill); color: var(--cu-content-tertiary);
+  font-size: 10px; line-height: 16px;
+}
+.version-sum{
+  flex: none; font-size: 11px; color: var(--cu-content-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+.version-check{
+  flex: none; width: 16px; display: inline-flex; justify-content: center;
+  visibility: hidden; color: var(--cu-tone-info);
+}
+.version-item.is-on .version-check{ visibility: visible; }
+.version-check svg{ width: 14px; height: 14px; }
+.version-hint{
+  padding: 6px 8px 4px;
+  font-size: 11px; line-height: 16px; color: var(--cu-content-tertiary);
+}
+
+/* ── §5.3 «⚠ N»: ОДНА — ПЕРЕХОД, НЕСКОЛЬКО — СПИСОК ──────────────────────
+   Цикл вслепую не отвечает на вопрос «сколько шагов и куда»; список даёт
+   обзор проблемы ДО первого прыжка. */
+.corr-chip{
+  display: inline-flex; align-items: center; gap: 4px; flex: none;
+  height: 20px; padding: 0 6px;
+  border-radius: var(--cu-radii-3);
+  color: var(--cu-tone-warning-ink);
+  font-size: 12px; font-weight: var(--cu-font-weight-medium);
+  font-variant-numeric: tabular-nums;
+}
+.corr-chip{ padding-inline: 5px; }
+.corr-chip:hover{ background: var(--cu-tone-warning-fill); }
+.corr-chip-icon{ width: 13px; height: 13px; flex: none; transform-origin: 22% 90%; }
+/* ФЛАЖОК ПОЛОЩЕТСЯ НА ДРЕВКЕ: точка крепления у нижнего левого угла глифа,
+   отсюда и transform-origin. Чип ведёт к корректировкам — движение говорит
+   «здесь машут рукой», а не «здесь что-то крутится». */
+@keyframes flag-wave{
+  0%{ transform: rotate(0) } 30%{ transform: rotate(-9deg) }
+  60%{ transform: rotate(5deg) } 100%{ transform: rotate(0) }
+}
+@media (hover: hover){
+  .corr-chip:hover .corr-chip-icon{ animation: flag-wave .55s var(--cu-animation-timing); }
+}
+.corr-menu{ --pop-width: 320px; }
+.corr-menu-title{
+  padding: 6px 8px 2px;
+  font-size: 10px; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--cu-content-quaternary);
+}
+.corr-menu-item{
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  height: 32px; padding: 0 8px;
+  border-radius: var(--cu-radii-3);
+  font-size: 13px; text-align: left;
+}
+.corr-menu-item:hover{ background: var(--cu-state-hover-subtle); }
+.corr-menu-name{ flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.corr-menu-kind{
+  flex: none; height: 19px; padding: 0 7px;
+  border-radius: var(--cu-radii-round);
+  background: var(--cu-tone-warning-fill); color: var(--cu-tone-warning-ink);
+  font-size: 11px; line-height: 19px;
+}
+.corr-menu-arrow{ flex: none; color: var(--cu-content-tertiary); }
+
+/* Неполное КП вместо Δ к лидеру: его итог занижен на незакрытые позиции, и
+   разница с лидером читалась бы СКИДКОЙ. Тон нейтральный — это не нарушение,
+   а причина, по которой сравнивать нечем. */
+.partial-note{ color: var(--cu-content-tertiary); }

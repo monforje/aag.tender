@@ -1,0 +1,42 @@
+/* ОКНА ВЫГРУЗКИ И ПРИГЛАШЕНИЯ. Один модуль на два окна: у них совпадает
+   ВСЁ — ширина, заголовок, подпись, чеклист, футер 50/50, — а различается
+   только текст. Два модуля с одинаковыми правилами разъехались бы на первой
+   же правке отступа. */
+.dialog{ width: 400px; max-width: calc(100vw - 24px); }
+
+.title{ font-size: 16px; line-height: 22px; font-weight: var(--cu-font-weight-semibold); }
+.sub{ margin-top: 3px; font-size: 12px; line-height: 17px; color: var(--cu-content-secondary); }
+
+.checklist{ margin-top: 10px; }
+/* ГАЛОЧКА СПРАВА, ТЕКСТ СЛЕВА С РОВНЫМ КРАЕМ (правило владельца 25.08.2026):
+   тот же порядок, что в меню сортировки, фильтров и версий. Иконка по ЦЕНТРУ
+   ВЫСОТЫ строки — align-items:center, margin-top запрещён. */
+.check-line{
+  display: flex; gap: 8px; align-items: center;
+  padding: 5px 0;
+  font-size: 13px; line-height: 18px; color: var(--cu-content-secondary);
+}
+.grow{ flex: 1; min-width: 0; }
+.check-icon{ width: 15px; height: 15px; flex: none; color: var(--cu-tone-success-ink); }
+
+.file-name{
+  margin-top: 10px; padding: 8px 10px;
+  border-radius: var(--cu-radii-4);
+  background: var(--cu-global-sidebar-background);
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 12px; color: var(--cu-content-secondary);
+  /* Имя длинное и его копируют — перенос по любому месту вместо обрезки. */
+  overflow-wrap: anywhere;
+}
+
+/* Честное состояние вместо фальшивой кнопки (см. JSDoc <InviteDialog>). */
+.pending{
+  margin-top: 10px; padding: 8px 10px;
+  border-radius: var(--cu-radii-4);
+  background: var(--cu-fill-subtle);
+  font-size: 12px; line-height: 17px; color: var(--cu-content-tertiary);
+}
+
+.actions{ display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }
+.actions > *{ justify-content: center; white-space: nowrap; }
+.btn-icon{ width: 14px; height: 14px; flex: none; }

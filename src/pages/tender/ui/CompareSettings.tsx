@@ -15,7 +15,7 @@ import {
   type CompareThresholds, type PredicateId, type RowFacts,
 } from '@/entities/comparison';
 import { plural } from '@/shared/lib/plural';
-import { AnomalyGlyph, CoinMark, KeyMark, MedMark, SpreadMark } from './assets';
+import { AnomalyGlyph, CoinMark, KeyMark, SpreadMark } from './assets';
 import s from './CompareSettings.module.css';
 
 /* Глиф предиката — ТОТ ЖЕ маркер, что красит ячейки таблицы: один смысл —
@@ -25,7 +25,6 @@ const PREDICATE_GLYPH: Record<PredicateId, ReactElement> = {
   spread: <SpreadMark />,
   anomaly: <AnomalyGlyph />,
   pot: <CoinMark />,
-  med: <MedMark />,
 };
 
 /** Пороговые поля с фиксированным смыслом — рендерятся общим циклом; особые
@@ -52,9 +51,10 @@ const PLAIN_ROWS = [
  * 22.08.2026 — личных и организационных дефолтов нет).
  *
  * КОГДА:  из кнопки `⚙` полосы сравнения (<CompareToolbar>).
- *         Плюс две настройки ОФОРМЛЕНИЯ — подкраска колонок по ранжиру и
- *         развёрнутые названия позиций: чисел они не меняют, поэтому стоят
- *         первыми строками и «Вернуть системные значения» их не трогает.
+ *         Плюс три настройки ОФОРМЛЕНИЯ — подкраска колонок по ранжиру,
+ *         развёрнутые названия позиций и строки «Показано» под фильтром:
+ *         чисел они не меняют, поэтому стоят первыми строками и «Вернуть
+ *         системные значения» их не трогает.
  * НЕ ДЛЯ: показа отклонения и ставки (галочки спутников живут прямо на
  *         полосе), вида строк и ФИЛЬТРОВ (отдельная кнопка-глиф
  *         <CompareFilters> рядом: бизнес-логика среза всегда на виду, а
@@ -79,6 +79,7 @@ const PLAIN_ROWS = [
  */
 export function CompareSettings({
   thresholds, onChange, allRows, rankTint, onRankTint, wideTitle, onWideTitle,
+  shownRows, onShownRows,
 }: {
   thresholds: CompareThresholds;
   /** Зажатое значение приходят наружу: хранит страницу. */
@@ -92,6 +93,9 @@ export function CompareSettings({
   /** Развёрнутые названия позиций — второй тумблер оформления. */
   wideTitle: boolean;
   onWideTitle: (on: boolean) => void;
+  /** Строки «Показано» под фильтром (§1.1) — третий тумблер оформления. */
+  shownRows: boolean;
+  onShownRows: (on: boolean) => void;
 }) {
   const [at, setAt] = useState<DOMRect | null>(null);
 
@@ -152,6 +156,26 @@ export function CompareSettings({
               checked={wideTitle}
               onChange={onWideTitle}
               aria-label="Развернуть названия позиций"
+            />
+          </Setting>
+
+          {/* ТРЕТИЙ ТУМБЛЕР ОФОРМЛЕНИЯ (§1.1): строки «Показано» появляются
+              под фильтром сами — у секции подчинённой строкой, над полным
+              итогом с тихой заливкой. Выключатель для тех, кому хватает
+              счётчика «скрыто N» на полосе: суммы видимого среза —
+              подсказка, а не обязательная мебель, и решать это должен
+              человек. Полные итоги при этом не пересчитываются НИКОГДА:
+              тумблер прячет строки, но не трогает ни одно число.
+              «Вернуть системные значения» его не трогает по той же причине,
+              что и соседей: та кнопка возвращает ПОРОГИ. */}
+          <Setting
+            label="Строки «Показано»"
+            description="Под активным фильтром сумма видимого среза выводится строкой у каждого итога — в секции и над итогом всей таблицы."
+          >
+            <Switch
+              checked={shownRows}
+              onChange={onShownRows}
+              aria-label="Строки «Показано» под фильтром"
             />
           </Setting>
 
@@ -259,7 +283,7 @@ export function CompareFilters({ allRows, filters, onFilters }: {
         aria-expanded={at !== null}
         active={filters.length > 0}
         badge={filters.length ? <span className={s.btnBadge}>{filters.length}</span> : null}
-        className={s.gear}
+        className={cx(s.gear, s.funnel)}
         onClick={(e) => setAt(e.currentTarget.getBoundingClientRect())}
       />
       <Popover anchor={at} onClose={() => setAt(null)} label="Фильтры среза">

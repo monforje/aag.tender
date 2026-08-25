@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
-  applyTransition, PRESETS, SYSTEM_THRESHOLDS,
+  applyTransition, hasViewParams, parseView, PRESETS, serializeView, SYSTEM_THRESHOLDS,
   type CompareThresholds, type CompareView, type PresetId,
 } from '@/entities/comparison';
 import type { AnalysisResult, AnalysisTransition } from '@/features/ai-analysis';
@@ -36,15 +37,45 @@ export interface CompareFlash {
  *         чип анализа уступает место обычному «Изменён · Сброс». Сам вид при
  *         этом не трогается: человек уже смотрит туда, куда хотел.
  *
- *         URL это состояние не ловит намеренно — мебель страницы, как вкладки
- *         и фильтры реестра (осознанный долг, см. CLAUDE.md).
+ *         РАБОЧИЙ КОНТЕКСТ ЖИВЁТ В URL (§3.5, `state.md` §1) — с 25.08.2026.
+ *         «Передать коллеге разрешённую ссылку на тот же срез» это заявленная
+ *         цель продукта, и без сериализации совместная работа над срезом
+ *         невозможна: один описывает словами, что включить, второй собирает
+ *         это руками и получает похожий, но другой экран.
+ *         ПИШЕТСЯ ТОЛЬКО ОТЛИЧИЕ ОТ ПРЕСЕТА (кодек — `viewUrl.ts`), и запись
+ *         идёт `replace`, а не `push`: каждое движение галочки — не шаг
+ *         истории, иначе кнопка «Назад» превращалась бы в машину отмены
+ *         кликов вместо возврата на реестр.
+ *         СТАВКА В URL НЕ ВХОДИТ: личная привычка чтения, а не срез данных —
+ *         навязывать её по ссылке значит менять чужой экран без спроса.
+ *         Пороги аналитики тоже не входят: они принадлежат ТЕНДЕРУ и придут к
+ *         коллеге сами, вместе с данными.
  *
  * @example
  * const screen = useCompareScreen();
  * <TenderCompare view={screen.view} onPreset={screen.selectPreset} … />
  */
 export function useCompareScreen() {
-  const [view, setView] = useState<CompareView>({ preset: 'overview', ...PRESETS.overview });
+  const [params, setParams] = useSearchParams();
+  /* Ставка читается ИЗ ВИДА, а не из адреса, и на первом кадре её ещё нет —
+     дефолт пресета. Отдельного состояния под неё не нужно: она такая же ось
+     `CompareView`, просто не сериализуемая. */
+  const [view, setView] = useState<CompareView>(() => (
+    hasViewParams(params.toString())
+      ? parseView(params.toString(), { showRate: PRESETS.overview.showRate })
+      : { preset: 'overview', ...PRESETS.overview }
+  ));
+
+  /* ВИД → АДРЕС. Одно место записи, как и у `activeId` раздела: второй
+     писатель развёл бы адрес с экраном молча. Сравнение со строкой перед
+     записью обязательно — без него setParams на каждом рендере крутил бы
+     роутер в петле. */
+  useEffect(() => {
+    const next = serializeView(view);
+    if (next === params.toString()) return;
+    setParams(new URLSearchParams(next), { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- setParams стабилен, params читается для сравнения
+  }, [view]);
   /* Пороги аналитики — НАСТРОЙКИ ТЕНДЕРА (не константы кода): системный старт,
      правятся в окне `⚙` на полосе сравнения. Живут рядом со срезом — URL их
      не ловит по той же причине, что и фильтры реестра. */

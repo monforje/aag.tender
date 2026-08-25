@@ -292,12 +292,17 @@ assert.ok(long.length <= NOTE_MAX && long.endsWith('…'));
 const view: CompareView = {
   preset: 'overview', mainMetric: 'cost',
   showDeviation: false, showRate: false,
+  showDynamics: false, showPotential: false,
   rowView: 'sections', filters: [],
 };
 const moved = applyTransition(view, { preset: 'bidding', requiredMetrics: ['potential'] });
+/* Состав «Торгов» приведён к канону 25.08.2026 (§3.2): отклонение включено —
+   сценарий торга без процентов заставлял включать их руками каждый раз, —
+   а сортировка по потенциалу тянет за собой его столбец (`sorting.md` §4). */
 assert.deepEqual(moved, {
   preset: 'bidding', mainMetric: 'potential',
-  showDeviation: false, showRate: false,
+  showDeviation: true, showRate: false,
+  showDynamics: false, showPotential: true,
   rowView: 'potential', filters: ['pot'],
 }, 'пресет задаёт все оси целиком');
 
@@ -305,8 +310,11 @@ const merged = applyTransition(view, { preset: 'anomalies', requiredMetrics: ['d
 assert.deepEqual(merged.mainMetric, 'potential',
   'обязательный «потенциал» сильнее оси пресета: виден он только основным');
 assert.equal(merged.showDeviation, true, 'отклонение включается галочкой');
-assert.deepEqual(merged.filters, ['spread', 'anomaly']);
-assert.deepEqual(merged.rowView, 'weight');
+/* Фильтры и порядок строк берутся у ПРЕСЕТА целиком — required_metrics их не
+   касается. Состав «Аномалий» после правки канона: один фильтр и порядок по
+   разбросу (наверху расходящиеся, а не самые дорогие). */
+assert.deepEqual(merged.filters, ['anomaly']);
+assert.deepEqual(merged.rowView, 'spread');
 
 /* Требование цены ничего не меняет: стоимость присутствует всегда (§1, правило 2). */
 const priced = applyTransition(view, { preset: 'anomalies', requiredMetrics: ['price'] });

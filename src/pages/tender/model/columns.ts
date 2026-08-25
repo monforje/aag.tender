@@ -44,6 +44,13 @@ const LEAD = {
   unit: { base: 88, min: 80 },
   /** Разброс: «63,5 %» + брелок 24px + паддинги. */
   spread: { base: 96, min: 90 },
+  /** УСЛОВНЫЙ СТОЛБЕЦ «ПОТЕНЦИАЛ» (§1.6). Пол 120px — не с потолка: значение
+   *  печатается компактным форматом («164 тыс. ₽» ≈ 74px табличными 14px),
+   *  под ним подпись «3 из 10» ≈ 46px, плюс паддинги 8+8. База шире на
+   *  комфортный воздух. Колонка появляется ПО ГАЛОЧКЕ, и её ширина берётся
+   *  из того же бюджета, что у соседей: включение потенциала жмёт название,
+   *  а не колонки КП — те фиксированы. */
+  potential: { base: 138, min: 120 },
 } as const;
 
 /** Название позиции: ниже этого якорная колонка перестаёт называть строку.
@@ -134,12 +141,19 @@ export interface ColumnLayoutInput {
   /** Развёрнутые названия: колонка-якорь получает TITLE_WIDE вместо
    *  TITLE_MIN. Тумблер в окне параметров. */
   wideTitle?: boolean;
+  /** Включён условный столбец «Потенциал» (§1.6): в левом блоке появляется
+   *  пятая колонка. Флагом, а не «списком колонок»: колонка ровно одна и
+   *  ровно одна её и включает. */
+  potential?: boolean;
 }
 
 export interface ColumnLayout {
   qty: number;
   unit: number;
   spread: number;
+  /** Ширина столбца «Потенциал»; `undefined` — столбец выключен, и <col>
+   *  для него не рисуется вовсе. */
+  potential?: number;
   title: number;
   /** Ширины колонок КП по id подрядчика — у всех одинаково. */
   bids: Record<string, number>;
@@ -152,11 +166,16 @@ export interface ColumnLayout {
    ширин равна бюджету точно, поэтому название (оно получает всё, что
    осталось после левого блока и долей КП) растёт монотонно с окном и не
    дрожит на границах округления. */
-function allocLeads(total: number): { qty: number; unit: number; spread: number } {
+function allocLeads(total: number, potential: boolean): {
+  qty: number; unit: number; spread: number; potential?: number;
+} {
   const cols = [
     { min: LEAD.qty.min, room: LEAD.qty.base - LEAD.qty.min },
     { min: LEAD.unit.min, room: LEAD.unit.base - LEAD.unit.min },
     { min: LEAD.spread.min, room: LEAD.spread.base - LEAD.spread.min },
+    ...(potential
+      ? [{ min: LEAD.potential.min, room: LEAD.potential.base - LEAD.potential.min }]
+      : []),
   ];
   const allRoom = cols.reduce((acc, c) => acc + c.room, 0);
   const extra = Math.max(0, Math.min(total, LEAD_BASE) - LEAD_MIN);
@@ -174,12 +193,19 @@ function allocLeads(total: number): { qty: number; unit: number; spread: number 
     qty: cols[0].min + extras[0],
     unit: cols[1].min + extras[1],
     spread: cols[2].min + extras[2],
+    ...(potential ? { potential: cols[3].min + extras[3] } : {}),
   };
 }
 
 export function computeColumnLayout({
-  available, bids, wideTitle,
+  available, bids, wideTitle, potential,
 }: ColumnLayoutInput): ColumnLayout {
+  const on = potential === true;
+  /* Бюджет левого блока растёт вместе с условным столбцом — и база, и пол:
+     иначе включение «Потенциала» либо не давало бы ему места вовсе, либо
+     съедало его у названия молча. */
+  const leadBase = LEAD_BASE + (on ? LEAD.potential.base : 0);
+  const leadMin = LEAD_MIN + (on ? LEAD.potential.min : 0);
   const sumFixed = Math.max(bids.length, 1) * BID_FIXED;
   const fixedBids = (): Record<string, number> =>
     Object.fromEntries(bids.map(({ id }) => [id, BID_FIXED]));
@@ -189,18 +215,20 @@ export function computeColumnLayout({
   const titleMin = wideTitle ? TITLE_WIDE : TITLE_MIN;
 
   /* Панорама: места нет даже на половах левого блока. */
-  if (available < LEAD_MIN + titleMin + sumFixed) {
+  if (available < leadMin + titleMin + sumFixed) {
     return {
       qty: LEAD.qty.min, unit: LEAD.unit.min, spread: LEAD.spread.min,
+      ...(on ? { potential: LEAD.potential.min } : {}),
       title: titleMin, bids: fixedBids(), pan: true,
     };
   }
 
   /* Влезает: левые колонки жмутся от базы вниз ровно настолько, чтобы
      название удержало минимум; весь остаток забирает оно целиком. */
-  const leadTotal = Math.min(LEAD_BASE, available - titleMin - sumFixed);
-  const { qty, unit, spread } = allocLeads(leadTotal);
-  const title = available - qty - unit - spread - sumFixed;
+  const leadTotal = Math.min(leadBase, available - titleMin - sumFixed);
+  const lead = allocLeads(leadTotal, on);
+  const used = lead.qty + lead.unit + lead.spread + (lead.potential ?? 0);
+  const title = available - used - sumFixed;
 
-  return { qty, unit, spread, title: Math.max(title, titleMin), bids: fixedBids(), pan: false };
+  return { ...lead, title: Math.max(title, titleMin), bids: fixedBids(), pan: false };
 }

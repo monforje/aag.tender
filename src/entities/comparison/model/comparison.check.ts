@@ -12,8 +12,9 @@ import { strict as assert } from 'node:assert';
 import {
   analyzeComparison, bidStatus, cellLines, cellMark, clampThresholds, decimal,
   deviationPct, filterRows, flatten, groupSum, hasAnomaly, isModifiedView, medianOf, money,
-  moneyCompact, pendingCorrection, predicateCount, predicatePasses, PRESETS, rankBids, spread, sumOf,
-  SYSTEM_THRESHOLDS, termRows, hasTerms,
+  moneyCompact, pendingCorrection, predicateCount, predicatePasses, PREDICATES, PRESETS,
+  rankBids, sanitizeFilters, spread, sumOf,
+  SYSTEM_THRESHOLDS, termRows, hasTerms, countsInAnalysis, isWaiting,
   type CellLine, type ComparePosition, type CompareThresholds, type CompareView,
   type Contractor, type PositionGroup,
 } from '..';
@@ -192,8 +193,8 @@ assert.equal(factOf('m1').median, 5186);
 // из честных: на шестерых это СибирьМонолитДомостройИнжиниринг (43 500).
 const m2 = factOf('m2');
 assert.ok(m2.anomaly, 'аномалия арматуры размечена в фикстуре');
-assert.notEqual(m2.bestId, 'ms', 'аномально дешёвая цена выбывает из соревнования за минимум');
-assert.equal(m2.bestId, 'ds');
+assert.ok(!m2.bestIds.includes('ms'), 'аномально дешёвая цена выбывает из соревнования за минимум');
+assert.deepEqual(m2.bestIds, ['ds']);
 
 // …и остаётся в разбросе: аномалия не вычищается из процента строки.
 assert.ok(Math.abs(m2.spread! - 16.24) < 0.01, `разброс арматуры ${m2.spread}`);
@@ -305,16 +306,31 @@ assert.deepEqual(
 // невыбранном пункте бесполезно. Значения согласованы с разметкой фикстуры:
 // ключевых пять (ручные m1/m2/w1 плюс производные w3/g1 по доле 80 %), высоких
 // (≥40 %) две, аномальных строк три (данные + формула k = 3), с потенциалом
-// пять, дороже медианы на >5 % — восемь (шестёрка добавила w2).
-const counted = (['key', 'spread', 'anomaly', 'pot', 'med'] as const).map((id) => [
+// пять.
+const counted = (['key', 'spread', 'anomaly', 'pot'] as const).map((id) => [
   id, predicateCount(id, ALL),
 ]);
-assert.deepEqual(Object.fromEntries(counted), { key: 5, spread: 2, anomaly: 3, pot: 5, med: 8 });
+assert.deepEqual(Object.fromEntries(counted), { key: 5, spread: 2, anomaly: 3, pot: 5 });
+
+/* СОСТАВ ФИЛЬТРОВ ЗАКРЫТ — ЧЕТЫРЕ ПУНКТА (§3.3, `filters.md` §3). Проверка
+   стоит не ради арифметики, а ради КАНОНА: пятый предикат «Дороже медианы»
+   жил в коде и не был описан нигде, и вернуть его молча — ровно тот способ,
+   которым состав снова разъедется. */
+assert.deepEqual(
+  PREDICATES.map((p) => p.id), ['key', 'spread', 'pot', 'anomaly'],
+  'состав фильтров закрыт каноном: четыре предиката, «med» упразднён',
+);
+/* Мусор из URL и чужие пресеты отбрасываются, дубликаты схлопываются: на
+   полосе живёт ОДНО число активных фильтров, и «2» при одном действующем
+   было бы ложью. */
+assert.deepEqual(sanitizeFilters(['key', 'med', 'key', 'zzz']), ['key']);
+assert.deepEqual(sanitizeFilters([]), []);
 
 /* ═══════════ модель ячейки: оси, состав строк, пресеты ═══════════ */
 const view: CompareView = {
   preset: 'overview', mainMetric: 'cost',
   showDeviation: false, showRate: false,
+  showDynamics: false, showPotential: false,
   rowView: 'sections', filters: [],
 };
 assert.equal(isModifiedView(view), false, 'база пресета не считается изменённой');
@@ -324,6 +340,30 @@ assert.equal(isModifiedView({ ...view, mainMetric: 'potential' }), true);
 assert.equal(isModifiedView({ ...view, rowView: 'weight' }), true);
 assert.equal(isModifiedView({ ...view, showDeviation: true }), true);
 assert.equal(isModifiedView({ ...view, showRate: true }), true);
+assert.equal(isModifiedView({ ...view, showDynamics: true }), true);
+assert.equal(isModifiedView({ ...view, showPotential: true }), true);
+
+/* ═══════════ ПРЕСЕТЫ КАНОНА (§3.2, `presets.md`) ═══════════
+   Оба состава расходились с каноном, и оба расхождения были СОДЕРЖАТЕЛЬНЫМИ,
+   а не косметическими: «Торги» без процентов отклонения заставляли включать
+   их руками каждый раз, а «Аномалии» по весу поднимали наверх самые ДОРОГИЕ
+   позиции вместо расходящихся — то есть отвечали не на тот вопрос, ради
+   которого режим и открывают. */
+assert.equal(PRESETS.bidding.showDeviation, true,
+  'Торги: отклонение включено — сценарий торга без процентов бессмыслен');
+assert.equal(PRESETS.bidding.rowView, 'potential');
+assert.equal(PRESETS.bidding.showPotential, true,
+  'Торги: сортировка по потенциалу обязана включать его столбец (sorting.md §4)');
+assert.deepEqual(PRESETS.bidding.filters, ['pot']);
+assert.equal(PRESETS.anomalies.rowView, 'spread',
+  'Аномалии: наверху расходящиеся, а не самые дорогие');
+assert.equal(PRESETS.anomalies.showDeviation, true);
+assert.deepEqual(PRESETS.anomalies.filters, ['anomaly']);
+assert.equal(PRESETS.overview.rowView, 'sections',
+  '«По разделам» — исходное состояние, и оно принадлежит Обзору');
+/* Ни один пресет не включает динамику сам: её доливает ВТОРОЙ РАУНД, а гейт
+   стоит у контрола — оси всё равно, есть ли под неё данные. */
+assert.ok(Object.values(PRESETS).every((p) => p.showDynamics === false));
 
 /* Состав строк ячейки — правила источника §1, закодированные в cellLines():
  * основной первой строкой; стоимость присутствует ВСЕГДА (второй строкой
@@ -348,12 +388,14 @@ assert.deepEqual(costFullPlan.lines.map((l: CellLine) => l.kind), ['main', 'rate
   'основной «Стоимость» — база не дублируется, ставка последней');
 assert.equal(costFullPlan.deviationOn, 'main');
 
-/* Пресеты выражаются теми же осями и повторяются руками; «Аномалии» после
-   упразднения отклонения-основного собирается из стоимости с галочкой и
-   фильтров разброса и аномалий. */
+/* Пресеты выражаются теми же осями и повторяются руками. Состав «Аномалий»
+   приведён к канону 25.08.2026 (§3.2): порядок строк — по РАЗБРОСУ, фильтр
+   один. Ассерт стоит целиком, а не по полям: пресет — это комбинация, и
+   правка одной оси без соседних как раз и есть та ошибка, которую он ловит. */
 assert.deepEqual(PRESETS.anomalies, {
   mainMetric: 'cost', showDeviation: true, showRate: false,
-  rowView: 'weight', filters: ['spread', 'anomaly'],
+  showDynamics: false, showPotential: false,
+  rowView: 'spread', filters: ['anomaly'],
 });
 assert.equal(isModifiedView({ ...PRESETS.overview, preset: 'overview' }), false);
 
@@ -392,10 +434,16 @@ for (const p of AXP_POSITIONS) {
 const LEVEL: Record<string, number> = {
   pes: 1.04, mvp: 1.03, sso: 1.05, rek: 0.97,
   ekm: 1.07, nlt: 0.98, vgs: 1.10, lsp: 1.01, usm: 0.96,
+  /* Колонка с закрытым доступом (§5.6) — цены есть, но в расчёт не идут.
+     Вилку она соблюдает наравне с прочими: данные обязаны быть
+     правдоподобными, даже если экран их не считает. */
+  rbs: 1.12,
 };
 const stmPrices = STM.prices;
 for (const c of MOCK_AXP.contractors) {
   if (c.id === 'stm') continue;
+  /* Приглашённый цен не имеет вовсе — мерить у него нечего. */
+  if (Object.keys(c.prices).length === 0) continue;
   const lvl: number | undefined = LEVEL[c.id];
   assert.ok(lvl !== undefined, `${c.id}: уровень цен известен`);
   const level: number = lvl;
@@ -420,9 +468,172 @@ for (const c of MOCK_AXP.contractors) {
 for (const [id, level] of Object.entries(LEVEL)) {
   const c = MOCK_AXP.contractors.find((x) => x.id === id);
   assert.ok(c, `${id}: подрядчик на месте`);
-  if (c.fill >= 100) {
+  /* Условие про ранжир касается только тех, кто В РАНЖИРЕ и стоит:
+     закрытый доступ мест не занимает вовсе (`countsInAnalysis`). */
+  if (c.fill >= 100 && countsInAnalysis(c)) {
     assert.ok(level > 1, `${id}: полное КП с уровнем ${level} обгонит цены файла`);
   }
+}
+
+/* ═══════ СОСТАВ УЧАСТНИКОВ И ГРАНИЦА РАСЧЁТА (§5.6) ═══════
+   Две колонки без действующего КП добавлены к тем же данным, и весь смысл
+   проверки — в том, что арифметика их НЕ ЗАМЕТИЛА: приглашённый обвалил бы
+   медиану строки нулём, закрытый доступ претендовал бы на первое место.
+   Проверяется не «поле стоит», а следствие: ранг ноль, места нет, Δ нет. */
+{
+  const invited = MOCK_AXP.contractors.find((c) => c.id === 'spl')!;
+  const locked = MOCK_AXP.contractors.find((c) => c.id === 'rbs')!;
+  assert.equal(countsInAnalysis(invited), false, 'приглашённый в расчёт не входит');
+  assert.equal(countsInAnalysis(locked), false, 'закрытый доступ в расчёт не входит');
+  assert.equal(Object.keys(invited.prices).length, 0, 'у приглашённого нет цен вовсе');
+  assert.ok(Object.keys(locked.prices).length > 0, 'у закрытого доступа цены есть — справочно');
+
+  const ranked = rankBids(MOCK_AXP.contractors, AXP_POSITIONS);
+  const rankOf = (id: string) => ranked.find((b) => b.contractor.id === id)!;
+  assert.equal(rankOf('spl').rank, 0, 'приглашённый места не занимает');
+  assert.equal(rankOf('rbs').rank, 0, 'закрытый доступ места не занимает');
+  assert.equal(rankOf('spl').deltaToLeader, null);
+  assert.equal(rankOf('stm').rank, 1, 'лидером остаётся колонка из файла');
+  assert.equal(rankOf('stm').deltaToLeader, null, 'у лидера Δ к самому себе нет');
+  const second = ranked.find((b) => b.rank === 2)!;
+  assert.ok(second.deltaToLeader && second.deltaToLeader.money > 0,
+    'у второго места Δ к лидеру положительна и в деньгах, и в процентах');
+  /* Колонки вне счёта стоят В ХВОСТЕ порядка — иначе приглашённый с нулевой
+     суммой оказался бы «лучшим предложением». */
+  assert.ok(ranked.slice(-2).every((b) => !b.counts));
+}
+
+/* ═══════ ЧЕТВЁРТОЕ СОСТОЯНИЕ ЗНАЧЕНИЯ: ОЖИДАНИЕ (§2.8) ═══════
+   «Не подал цену» и «ещё не ответил» требуют разных действий, и различает их
+   РОВНО флаг подачи: цен нет ни там, ни там. */
+{
+  const mvp = MOCK_AXP.contractors.find((c) => c.id === 'mvp')!;
+  assert.equal(isWaiting(mvp, 'a05'), true, 'ждём ответ — это состояние, а не пробел');
+  assert.equal(isWaiting(mvp, 'a22'), false, 'честный пробел данных остаётся пробелом');
+  /* Цена ЕСТЬ — значит ответ получен, и флаг подачи уже неактуален. */
+  assert.equal(isWaiting(mvp, 'a01'), false, 'при живой цене ожидания не бывает');
+
+  const facts = analyzeComparison(MOCK_AXP.groups, MOCK_AXP.contractors, SYSTEM_THRESHOLDS);
+  const a05 = facts.byId.get('a05')!;
+  assert.equal(a05.waiting, true, 'строка знает про ожидание отдельно от пробела');
+}
+
+/* ═══════ СОВМЕСТНЫЕ КРАЯ СТРОКИ (§2.5) ═══════
+   Равные значения дают СОВМЕСТНЫЙ минимум и максимум: выбирать одного из
+   равных значило бы отдать штамп тому, кто левее, — и он переезжал бы при
+   перестановке колонок звездой, хотя данные не менялись. */
+{
+  const pos: ComparePosition = { id: 'x', title: 'Позиция', qty: 1, unit: 'шт.' };
+  const mk = (id: string, price: number): Contractor => ({
+    id, name: id, status: 'complete', fill: 100, inn: '', contact: '',
+    submitted: '01.01.2026', prices: { x: price },
+  });
+  const groups: PositionGroup[] = [{ id: 'g', title: 'G', positions: [pos] }];
+  /* ЧЕТЫРЕ ЦЕНЫ, А НЕ ТРИ, и это не придирка к фикстуре. На тройке 100/100/140
+     формула аномалии честно помечает третью цену выбросом: медиана отклонений
+     «остальных» равна нулю, а по канону при нулевой медиане аномально ЛЮБОЕ
+     отличие. Аномальная цена из краёв выбывает — и «совместный максимум»
+     проверить было бы не на чем. Пара 100/100 против пары 140/140 даёт
+     ненулевой разброс отклонений, аномалий нет, и оба края совместны. */
+  const tie = analyzeComparison(
+    groups,
+    [mk('a', 100), mk('b', 100), mk('c', 140), mk('d', 140)],
+    SYSTEM_THRESHOLDS,
+  );
+  const row = tie.byId.get('x')!;
+  assert.ok(row.bids.every((b) => !b.anomaly), 'на симметричной паре аномалий нет');
+  assert.deepEqual(row.bestIds, ['a', 'b'], 'равные минимумы — совместные');
+  assert.deepEqual(row.maxIds, ['c', 'd'], 'равные максимумы — тоже совместные');
+
+  /* Один участник — краёв нет вовсе: «минимум из одного» это не минимум. */
+  const alone = analyzeComparison(groups, [mk('a', 100)], SYSTEM_THRESHOLDS);
+  assert.deepEqual(alone.byId.get('x')!.bestIds, []);
+  assert.deepEqual(alone.byId.get('x')!.maxIds, []);
+}
+
+/* ═══════ ПРИНУДИТЕЛЬНАЯ СТАВКА ПРИ PENDING (§2.6) ═══════
+   Пока корректировка не рассмотрена, сумма посчитана за ЧУЖОЙ объём, и без
+   ставки с её базой сравнивать её с соседями нельзя. Галочка «Ставка» при
+   этом выключена — в том и суть «принудительно». */
+{
+  const off: CompareView = {
+    preset: 'overview', mainMetric: 'cost',
+    showDeviation: false, showRate: false,
+    showDynamics: false, showPotential: false,
+    rowView: 'sections', filters: [],
+  };
+  assert.deepEqual(cellLines(off).lines.map((l) => l.kind), ['main'],
+    'без корректировки выключенная галочка ставку не показывает');
+
+  const forced = cellLines(off, { rate: true, baseLabel: 'его объём 135 м²' });
+  assert.deepEqual(forced.lines.map((l) => l.kind), ['main', 'rate']);
+  const rate = forced.lines.find((l) => l.kind === 'rate')!;
+  assert.equal(rate.kind === 'rate' && rate.baseLabel, 'его объём 135 м²',
+    'метка базы едет вместе со ставкой: цена за чужой объём без базы нечитаема');
+
+  /* Галочка включена И корректировка висит — строка ставки всё равно ОДНА. */
+  const both = cellLines({ ...off, showRate: true }, { rate: true, baseLabel: 'его объём 135 м²' });
+  assert.equal(both.lines.filter((l) => l.kind === 'rate').length, 1);
+}
+
+/* ═══════ ГАШЕНИЕ ⚠ ПОСЛЕ РЕШЕНИЯ (§2.7) ═══════
+   Знак существует РОВНО в статусе `pending`, и три его оси — ячейка, строка,
+   шапка колонки — читают одну и ту же дверь. Проверяется, что решение гасит
+   все три РАЗОМ, а не по очереди. */
+{
+  const pos: ComparePosition = { id: 'x', title: 'Позиция', qty: 100, unit: 'м²' };
+  const groups: PositionGroup[] = [{ id: 'g', title: 'G', positions: [pos] }];
+  const mk = (status: 'pending' | 'accepted' | 'declined'): Contractor[] => ([
+    {
+      id: 'a', name: 'A', status: 'complete', fill: 100, inn: '', contact: '',
+      submitted: '01.01.2026', prices: { x: 100 },
+      marks: { x: { correction: { qty: 135, status } } },
+    },
+    {
+      id: 'b', name: 'B', status: 'complete', fill: 100, inn: '', contact: '',
+      submitted: '01.01.2026', prices: { x: 110 },
+    },
+  ]);
+
+  const pending = analyzeComparison(groups, mk('pending'), SYSTEM_THRESHOLDS);
+  assert.deepEqual(pending.byId.get('x')!.corrections, ['a'], 'строка видит знак');
+  assert.equal(pending.correctionsBy.get('a'), 1, 'шапка колонки видит тот же знак');
+  assert.ok(pendingCorrection(cellMark(mk('pending')[0], 'x')), 'ячейка видит его же');
+
+  for (const decided of ['accepted', 'declined'] as const) {
+    const after = analyzeComparison(groups, mk(decided), SYSTEM_THRESHOLDS);
+    assert.deepEqual(after.byId.get('x')!.corrections, [], `${decided}: гаснет в строке`);
+    assert.equal(after.correctionsBy.get('a'), undefined, `${decided}: гаснет в шапке`);
+    assert.equal(pendingCorrection(cellMark(mk(decided)[0], 'x')), undefined,
+      `${decided}: гаснет в ячейке`);
+  }
+}
+
+/* ═══════ СЧЁТЧИКИ ШАПКИ КОЛОНКИ (§5.1) ═══════
+   «Мин. цен N из M» и «без цены N» — числа, по которым колонки сравнивают
+   между собой. Считаются теми же предикатами, что рисуют ячейки; здесь
+   проверяется, что они сходятся с самим расчётом, а не живут своей жизнью. */
+{
+  const facts = analyzeComparison(MOCK_AXP.groups, MOCK_AXP.contractors, SYSTEM_THRESHOLDS);
+  const stm = MOCK_AXP.contractors.find((c) => c.id === 'stm')!;
+  const minsFromFacts = facts.rows.filter((r) => r.bestIds.includes('stm')).length;
+  const missingFromFacts = facts.rows.filter((r) => !r.position.removed
+    && stm.prices[r.position.id] === undefined
+    && cellMark(stm, r.position.id).declined !== true
+    && !isWaiting(stm, r.position.id)).length;
+  assert.ok(minsFromFacts > 0, 'у лидера есть минимальные цены');
+  assert.equal(missingFromFacts, 0, 'у КП из файла пробелов нет');
+
+  /* Нормировка полосы вклада (§4.2) — по ЛИДЕРУ, а не по сотне: у самой
+     тяжёлой строки полоса ровно полная. */
+  assert.ok(facts.maxWeight > 0);
+  const heaviest = facts.rows.reduce((a, b) => (b.weight > a.weight ? b : a));
+  assert.equal(heaviest.weight, facts.maxWeight);
+
+  /* Линия отсечки называет ФАКТИЧЕСКИЙ охват, и он не меньше порога. */
+  assert.ok(facts.keyCut.rows > 0);
+  assert.ok(facts.keyCut.share >= SYSTEM_THRESHOLDS.keyShare,
+    'набор ключевых собирается ДО первого пересечения порога');
 }
 
 /* Две колонки, совпадающие построчно, читаются поломкой таблицы, а не
@@ -507,9 +718,17 @@ for (const id of ['a28', 'b31']) {
   const rows = termRows(MOCK_AXP.contractors);
   assert.equal(rows.length, 9, 'объединение вопросов — 9 строк матрицы');
   const avans = rows.find((r) => r.label === 'Авансирование');
+  /* Два хвостовых `undefined` — колонки БЕЗ действующего КП (§5.6):
+     приглашённый формы ещё не присылал, закрытый доступ её не показывает.
+     Матрица обязана оставить их пустыми ячейками, а не схлопнуть — иначе
+     ответы поехали бы под чужие колонки, и это как раз тот сдвиг, который
+     глазами не поймать. */
   assert.deepEqual(avans?.cells.map((c) => c?.value),
-    ['40 %', '20 %', '30 %', '40 %', '50 %', '35 %', '25 %', '0 %', '45 %', '30 %'],
+    ['40 %', '20 %', '30 %', '40 %', '50 %', '35 %', '25 %', '0 %', '45 %', '30 %',
+      undefined, undefined],
     'ответы стоят под своими колонками, порядок — как в форме №1');
+  assert.equal(avans?.cells.length, MOCK_AXP.contractors.length,
+    'в матрице столько ячеек, сколько колонок в таблице');
   assert.equal(hasTerms(MOCK_AXP.contractors), true);
   // У демо-шестёрки условия тоже заполнены — матрица живёт на обоих тендерах.
   assert.equal(hasTerms(MOCK_COMPARISON.contractors), true);

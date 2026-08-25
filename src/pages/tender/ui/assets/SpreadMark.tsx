@@ -1,13 +1,28 @@
-/** Высокий разброс — линейка размаха. Засечки data-mk="cap-l"/"cap-r"
- *  разъезжаются по hover: диапазон «дышит» шириной, а не качанием. */
+/** Линейка размаха — ОДИН ГЛИФ НА ТРИ СТЕПЕНИ разброса (решение владельца
+ *  25.08.2026, §1.8). Раньше знак ставился ТОЛЬКО на «высоком» и был красным
+ *  насмерть; низкий и заметный не имели знака вовсе, и степень читалась
+ *  словом или не читалась никак.
+ *
+ *  ЦВЕТ — ЕДИНСТВЕННОЕ, ЧТО МЕНЯЕТСЯ, и приходит он снаружи через
+ *  `currentColor`: low — success, noticeable — warning, high — danger. Три
+ *  разные формы на три степени одной величины читались бы тремя разными
+ *  величинами; одна форма в трёх тонах читается шкалой, чем она и является.
+ *  Процент при этом остаётся текстом рядом — цвет не единственный носитель
+ *  смысла (README §6).
+ *
+ *  Засечки `data-mk="cap-l"/"cap-r"` разъезжаются по hover (диапазон «дышит»
+ *  шириной), точка `data-mk="dot"` медленно скользит между ними в покое:
+ *  разброс — это про то, что цены РАЗЪЕХАЛИСЬ, и движение точки говорит об
+ *  этом без единого слова. Обе анимации — transform-only и гасятся глобальным
+ *  правилом prefers-reduced-motion. */
 export function SpreadMark() {
   return (
     <svg viewBox="0 0 24 16" aria-hidden="true">
-      <g fill="none" stroke="var(--cu-tone-danger)" strokeWidth="1.7" strokeLinecap="round">
+      <g fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round">
         <path data-mk="cap-l" d="M3 4.8 V11.2" />
         <path d="M3 8 H21" strokeLinecap="butt" />
         <path data-mk="cap-r" d="M21 4.8 V11.2" />
-        <circle cx="10.2" cy="8" r="2.1" fill="var(--cu-tone-danger)" stroke="none" />
+        <circle data-mk="dot" cx="10.2" cy="8" r="2.1" fill="currentColor" stroke="none" />
       </g>
     </svg>
   );

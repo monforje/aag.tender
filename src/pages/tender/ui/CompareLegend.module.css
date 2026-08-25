@@ -79,25 +79,10 @@
 }
 .sample--chip-icon{ --icon-size: 11px; }
 
-/* Правка объёма: старое значение зачёркнуто третичным, новое рядом — та же
-   пара, что в колонке объёма. */
-.sample--corrected{
-  font-size: 13px; line-height: 18px; white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-}
-.sample--corrected s{ color: var(--cu-content-tertiary); }
 
 /* Ярусы разброса: треки одной шкалы с порогами из модели. */
 .spread-demo{ display: flex; flex-direction: column; gap: 3px; width: 110px; }
 .spread-row{ display: inline-flex; align-items: center; gap: 8px; }
-.spread-track{
-  width: 44px; height: 4px; border-radius: var(--cu-radii-round);
-  background: var(--cu-state-hover); overflow: hidden;
-}
-.spread-track i{ display: block; height: 100%; border-radius: inherit; }
-.spread-track i[data-tone='none']{ background: var(--cu-tone-neutral); }
-.spread-track i[data-tone='noticeable']{ background: var(--cu-tone-warning); }
-.spread-track i[data-tone='high']{ background: var(--cu-tone-danger); }
 .spread-cap{
   font-size: 11px; line-height: 14px;
   color: var(--cu-content-secondary);
@@ -135,3 +120,51 @@
   .item [data-mk='rise'],
   .item [data-mk='hatch']{ animation: none; }
 }
+
+/* ── ГЛОССАРИЙ: РЯД ПОДСВЕЧИВАЕТСЯ ПРИ НАВЕДЕНИИ ─────────────────────────
+   Легенду читают глазами сверху вниз, и подсветка ряда держит место, на
+   котором остановился взгляд, — ровно та же работа, что у ховера строки в
+   таблице. Рецепт 1 каталога состояний. */
+.item{ border-radius: var(--cu-radii-3); }
+.item:hover{ background: var(--cu-state-hover-subtle); }
+
+/* Образцы новых знаков второй волны (§1.8, §2.3, §2.4, §2.5, §2.8). Каждый —
+   ТА ЖЕ геометрия, что в таблице: дрейф формы исключён реюзом компонента,
+   а там, где знак чисто CSS'ный (риска, засечка, точки), — повтором его
+   собственных чисел. */
+.riska{
+  display: block; width: 3px; height: 18px;
+  border-radius: 0 2px 2px 0;
+  background: var(--cu-tone-warning);
+}
+.sample-max{
+  position: relative; display: inline-block; padding-top: 5px;
+  font-size: 11px; font-variant-numeric: tabular-nums;
+  color: var(--cu-content-secondary);
+}
+.sample-max::before{
+  content: ""; position: absolute; top: 0; left: 1px; right: 1px;
+  height: 2px; border-radius: 1px; background: var(--cu-content-placeholder);
+}
+.sample-comment{ display: inline-flex; color: var(--cu-tone-info-ink); }
+.sample-comment svg{ width: 16px; height: 16px; }
+.sample-wait{ display: inline-flex; gap: 3px; align-items: center; }
+.sample-wait i{
+  width: 4px; height: 4px; border-radius: 50%;
+  background: var(--cu-content-placeholder);
+}
+
+/* Правило разведения справочных слоёв — подвал панели. */
+.rule{
+  margin-top: 6px; padding: 8px 8px 4px;
+  border-top: 1px solid var(--cu-border-default);
+  font-size: 11px; line-height: 16px; color: var(--cu-content-tertiary);
+}
+
+/* Линейка разброса в легенде — тот же глиф на currentColor, тон задаётся
+   атрибутом: три правила вместо трёх копий SVG. */
+.spread-glyph{ display: inline-flex; width: 24px; height: 16px; flex: none; }
+.spread-glyph[data-tone='low']{ color: var(--cu-tone-success); }
+.spread-glyph[data-tone='not']{ color: var(--cu-tone-warning); }
+.spread-glyph[data-tone='high']{ color: var(--cu-tone-danger); }
+.spread-glyph svg{ width: 100%; height: 100%; }
