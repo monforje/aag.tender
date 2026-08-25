@@ -945,7 +945,10 @@ export function TenderCompare({
               </th>
               <th scope="col" className={cx(tableCell.numeric, s.headRule)}>Количество</th>
               <th scope="col" className={s.headRule}>Единица</th>
-              <th scope="col" className={cx(tableCell.numeric, s.headRule)}>Разброс</th>
+              <th
+                scope="col"
+                className={cx(tableCell.numeric, s.headRule, !view.showPotential && s.headShade)}
+              >Разброс</th>
               {/* ПОЯВЛЕНИЕ КОЛОНКИ ПОДЧЁРКНУТО (§1.6): шапка вспыхивает
                   инфо-тоном, ячейки въезжают слева каскадом. Снятие галочки
                   мгновенное — вход подтверждаем, обратный ход ничего не
@@ -954,7 +957,7 @@ export function TenderCompare({
               {view.showPotential ? (
                 <th
                   scope="col"
-                  className={cx(tableCell.numeric, s.headRule, s.thNew)}
+                  className={cx(tableCell.numeric, s.headRule, s.thNew, s.headShade)}
                 >
                   Потенциал
                   {view.rowView === 'potential' ? (
@@ -969,6 +972,7 @@ export function TenderCompare({
                 className={cx(
                   tableCell.card,
                   i < bids.length - 1 && s.headRule,
+                  (onInvite || i < bids.length - 1) && s.headShade,
                   flashCols?.has(bid.contractor.id) && s.colFlash,
                 )}
               >
