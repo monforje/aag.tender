@@ -866,13 +866,20 @@ export function TenderCompare({
             <col className={s.colRule} style={pxStyle(layout?.title)} />
             <col className={s.colRule} style={pxStyle(layout?.qty)} />
             <col className={s.colRule} style={pxStyle(layout?.unit)} />
-            <col className={s.colRule} style={pxStyle(layout?.spread)} />
+            {/* Тень на правой кромке — ТОЛЬКО у последней колонки левого
+                блока: за ней начинаются предложения, и это граница другого
+                веса, чем «Количество | Единица». Когда включён «Потенциал»,
+                последняя — он. */}
+            <col
+              className={cx(s.colRule, !view.showPotential && s.colShade)}
+              style={pxStyle(layout?.spread)}
+            />
             {/* УСЛОВНЫЙ СТОЛБЕЦ «ПОТЕНЦИАЛ» (§1.6) — пятым, сразу за
                 «Разбросом»: обе колонки описывают СТРОКУ, а не предложение, и
                 разрывать их колонкой КП нельзя. Ширина приходит из того же
                 расчёта, что и у соседей. */}
             {view.showPotential
-              ? <col className={s.colRule} style={pxStyle(layout?.potential)} />
+              ? <col className={cx(s.colRule, s.colShade)} style={pxStyle(layout?.potential)} />
               : null}
             {bids.map((bid, i) => {
               const col = colorOf(bid);
@@ -882,6 +889,9 @@ export function TenderCompare({
                   className={cx(
                     col && s.colTint,
                     (onInvite || i < bids.length - 1) && s.colRule,
+                    /* Тень между подрядчиками — на тех же границах, что и
+                       линейка: у последней колонки ленты её нет, там край. */
+                    (onInvite || i < bids.length - 1) && s.colShade,
                   )}
                   style={{
                     ...pxStyle(layout?.bids[bid.contractor.id]),
