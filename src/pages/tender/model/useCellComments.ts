@@ -27,7 +27,8 @@ const ME = 'Закупки';
  * ОТПРАВКА ОБНОВЛЯЕТ КАРТУ ЛОКАЛЬНО, а не перечитывает весь ресурс: тред
  * открыт в этот самый момент, и полная перезагрузка мигнула бы им. Ответ
  * сервера при этом — источник истины: в карту кладётся то, что вернулось, а
- * не то, что отправили.
+ * не то, что отправили. Промис отправки уезжает наверх целиком: сбой в нём —
+ * единственный сигнал «запись не сохранена», и разбирать его обязан композер.
  */
 export function useCellComments(tenderId: string) {
   const state = useAsync(() => fetchComments(tenderId), [tenderId]);
@@ -55,20 +56,28 @@ export function useCellComments(tenderId: string) {
     [map],
   );
 
+  /* Отправка отдаёт промис НАВЕРХ: композер держит поле занятым, пока запись
+     едет, и возвращает черновик, если она не уехала. Сбой пробрасывается
+     исключением — это единственный канал «не сохранено» для треда; пустой
+     текст и отказ api сходятся в один `null`-результат. */
   const send = useCallback(async (
     contractorId: string, positionId: string, text: string, parentId?: string,
   ) => {
     const comment = await postComment({ tenderId, contractorId, positionId, text, parentId, author: ME });
-    if (!comment) return;
+    if (!comment) return null;
     const key = commentKey(contractorId, positionId);
     setPatch((prev) => ({ ...prev, [key]: [...(map[key] ?? []), comment] }));
+    return comment;
   }, [tenderId, map]);
 
   /* `ids` названы — просмотрены именно эти записи (их показали в ленте);
-     нет — кнопка «Отметить все прочитанными». Ранний выход обязателен: на
-     прокрутке уже прочитанного треда наблюдатель зовёт колбэк каждым
-     появлением записи, и без него каждый такой вызов сажал бы в `patch`
-     новый объект — то есть перерисовывал бы карту тредов на всю таблицу. */
+      нет — кнопка «Отметить все прочитанными». Ранний выход обязателен: на
+      прокрутке уже прочитанного треда наблюдатель зовёт колбэк каждым
+      появлением записи, и без него каждый такой вызов сажал бы в `patch`
+      новый объект — то есть перерисовывал бы карту тредов на всю таблицу.
+      СВОЙ СБОЙ МЕТОД ГАСИТ: галочка прочтения не стоит того, чтобы ронять
+      вызывающую сторону (`void` наверху всё равно никому её не отдаёт) —
+      записи остаются непрочитанными и уйдут следующим нажатием. */
   const markSeen = useCallback(async (
     contractorId: string, positionId: string, ids?: readonly string[],
   ) => {
@@ -76,7 +85,12 @@ export function useCellComments(tenderId: string) {
     const list = map[key] ?? [];
     const hit = (c: CellComment) => c.unread === true && (!ids || ids.includes(c.id));
     if (!list.some(hit)) return;
-    await markThreadSeen({ tenderId, contractorId, positionId, ids });
+    try {
+      await markThreadSeen({ tenderId, contractorId, positionId, ids });
+    } catch (error) {
+      console.error('markThreadSeen:', error);
+      return;
+    }
     setPatch((prev) => ({
       ...prev,
       [key]: list.map((c) => (hit(c) ? (({ unread: _unread, ...rest }) => rest)(c) : c)),

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Button } from '@/shared/ui/Button';
 import { Icon } from '@/shared/ui/Icon';
 import { Modal } from '@/shared/ui/Modal';
@@ -47,6 +48,12 @@ export function ExportDialog({ open, onClose, tenderId, contractors, rows }: {
   const versionsLine = exportVersionsLine(picked);
   const fileName = exportFileName(tenderId);
 
+  /* Задание на генерацию ЕДЕТ по сети, и окно живёт эти секунды открытым:
+     повторный клик плодил бы одинаковые выгрузки, а закрытие до ответа
+     обещало файл, которого ещё нет. Сбой запроса окно тоже переживает —
+     кнопки оживают, состав можно поправить и попросить снова. */
+  const [sending, setSending] = useState(false);
+
   return (
     <Modal open={open} onClose={onClose} label="Выгрузка сравнения" className={s.dialog}>
       <h4 className={s.title}>Выгрузка сравнения</h4>
@@ -73,17 +80,27 @@ export function ExportDialog({ open, onClose, tenderId, contractors, rows }: {
           готовится; подсовывать вместо .xlsx переименованный CSV значило бы
           отдать пользователю сломанный документ. */}
       <div className={s.actions}>
-        <Button variant="secondary" onClick={onClose}>Отмена</Button>
+        <Button variant="secondary" disabled={sending} onClick={onClose}>Отмена</Button>
         <Button
           variant="primary"
+          disabled={sending}
           onClick={async () => {
-            await requestExport({
-              tenderId,
-              versions: contractors.map((c) => ({
-                contractorId: c.id, versionId: currentVersion(c)?.id ?? '',
-              })),
-            });
-            onClose();
+            setSending(true);
+            try {
+              await requestExport({
+                tenderId,
+                versions: contractors.map((c) => ({
+                  contractorId: c.id, versionId: currentVersion(c)?.id ?? '',
+                })),
+              });
+              onClose();
+            } catch (error) {
+              /* Файл не выехал — окно остаётся открытым, и это весь ответ:
+                 «Выгрузить» снова доступно, ничего на диске не появилось. */
+              console.error('requestExport:', error);
+            } finally {
+              setSending(false);
+            }
           }}
         >
           <Icon name="download" className={s.btnIcon} />

@@ -106,8 +106,12 @@ export function CommentThread({
   subtitle: string;
   comments: readonly CellComment[];
   onClose: () => void;
-  /** Отправка записи или ответа. Текст уже обрезан по краям вызывающим. */
-  onSend: (text: string, parentId?: string) => void;
+  /** Отправка записи или ответа. Текст уже обрезан по краям вызывающим.
+   *  Промис — часть контракта: композер ждёт его и считает РЕКТОРНЫЙ отказ
+   *  сигналом «запись не сохранилась» — черновик и режим ответа возвращаются
+   *  в поле. Пока промис едет, отправка закрыта: второй Enter не плодит
+   *  одинаковые записи. */
+  onSend: (text: string, parentId?: string) => void | Promise<unknown>;
   /** Просмотренность. `ids` названы — прочитаны именно эти записи (их показала
    *  лента); без аргумента — «Отметить все прочитанными» кнопкой. */
   onSeen: (ids?: readonly string[]) => void;
@@ -165,10 +169,29 @@ export function CommentThread({
     return () => io.disconnect();
   }, [at, unreadKey]);
 
-  const send = () => {
+  /* ЕДЕТ ЛИ ЗАПИСЬ. С моком пауза невидима; с сетью она реальна, и без
+     состояния второй Enter отправил бы черновик дважды. */
+  const [sending, setSending] = useState(false);
+
+  const send = async () => {
     const text = draft.trim();
-    if (!text) return;
-    onSend(text, replyTo ?? undefined);
+    if (!text || sending) return;
+    const reply = replyTo;
+    setSending(true);
+    try {
+      await onSend(text, reply ?? undefined);
+    } catch {
+      /* НЕ СОХРАНИЛОСЬ — вернуть всё как было: текст, режим ответа, фокус.
+         Молча стереть чужие слова значило бы потерять их безвозвратно:
+         набранное существует только здесь. Экран при этом честен — в ленте
+         записи нет, значит её и нет. */
+      setDraft(text);
+      setReplyTo(reply);
+      fieldRef.current?.focus();
+      setSending(false);
+      return;
+    }
+    setSending(false);
     setDraft('');
     setReplyTo(null);
     /* Поле выросло под черновик СВОИМ инлайновым height — вернуть его обязан
@@ -346,9 +369,9 @@ export function CommentThread({
             <button
               type="button"
               className={s.send}
-              disabled={!draft.trim()}
-              aria-label="Отправить комментарий"
-              title="Отправить (Enter)"
+              disabled={!draft.trim() || sending}
+              aria-label={sending ? 'Отправляется' : 'Отправить комментарий'}
+              title={sending ? 'Отправляется…' : 'Отправить (Enter)'}
               onClick={send}
             >
               <Icon name="send" />

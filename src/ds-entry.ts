@@ -55,6 +55,7 @@ export * from './shared/ui/Page';
 export * from './shared/ui/Pagination';
 export * from './shared/ui/Popover';
 export * from './shared/ui/Progress';
+export * from './shared/ui/ProgressBar';
 export * from './shared/ui/Radio';
 export * from './shared/ui/RangeCalendar';
 export * from './shared/ui/ScrollArea';

@@ -169,11 +169,13 @@ export function TenderCompare({
    *  призрака в конце ленты тоже. */
   onInvite?: () => void;
   /** Решение по корректировке объёма (§2.7). Не задано — прав на решение
-   *  нет, и панель открывается только на чтение. */
+   *  нет, и панель открывается только на чтение. Возвращает запись: `false` —
+   *  решение не сохранено (нечего решать или запрос не дошёл), панель в этом
+   *  случае остаётся открытой. */
   onDecideCorrection?: (
     contractorId: string, positionId: string,
     decision: 'accepted' | 'declined', note?: string,
-  ) => Promise<void> | void;
+  ) => Promise<boolean> | boolean;
 }) {
   /* Плоский список позиций и ранжир ВЫВОДЯТСЯ из пришедшего, а не приходят
       полями: два перечня одних и тех же строк разъехались бы на первой правке.
@@ -680,6 +682,9 @@ export function TenderCompare({
       ) : null}
 
       {cell.action === 'thread' ? (
+        /* Промис отправки отдаётся треду ЦЕЛИКОМ: он держит композер
+           занятым и возвращает черновик, если запись не уехала. Сбои наружу
+           не выходят — их погашает сам хук. */
         <CommentThread
           at={cell.at}
           title={openRow.position.title}
@@ -688,7 +693,7 @@ export function TenderCompare({
           author={comments.author}
           onClose={closeCell}
           onSend={(text, parentId) =>
-            void comments.send(cell.contractorId, cell.positionId, text, parentId)}
+            comments.send(cell.contractorId, cell.positionId, text, parentId)}
           onSeen={(ids) => void comments.markSeen(cell.contractorId, cell.positionId, ids)}
         />
       ) : null}
@@ -707,9 +712,13 @@ export function TenderCompare({
           onDecide={async (decision, note) => {
             if (!onDecideCorrection) return;
             setDeciding(true);
-            await onDecideCorrection(cell.contractorId, cell.positionId, decision, note);
+            /* Панель закрывается ТОЛЬКО записанным решением: `false` (нечего
+               решать или сеть не ответила) оставляет её открытой — busy снят,
+               кнопки живы, решение можно повторить. Броска здесь не бывает:
+               мутация сбои не пробрасывает. */
+            const ok = await onDecideCorrection(cell.contractorId, cell.positionId, decision, note);
             setDeciding(false);
-            closeCell();
+            if (ok) closeCell();
           }}
           onClose={closeCell}
         />

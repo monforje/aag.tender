@@ -9,11 +9,23 @@
 - переносится **вся дизайн-система и компоненты** (`shared/ui`, токены `global.css`);
 - остальное приложение (`/suppliers`, `/budget`, `/quotes`, `/chats`, …) **не трогаем**.
 
+> **РЕВИЗИЯ 2 — 25.08.2026, вечер.** Повторный полный аудит обеих кодовых баз после
+> четырёх волн правок владельца в источнике (`e4143e5..8eefae4`). Обновлены объёмы
+> и карта файлов (§1, Приложения А/Б/Д/Ж), состав ДС — **52 слайса** (+ProgressBar);
+> **решение В4 закрыто источником** (`viewUrl.ts` — вид сравнения сериализуется в URL,
+> §2.4); потери §7.2 №8 и частично №13 закрыты прототипом; в Ф4 добавлены перенос
+> ~2 300 новых строк UI и четыре поверхности адаптера — мутации корректировок/версий,
+> комментарии ячеек (§4.8), экспорт .xlsx (§4.9); гэпы бэкенда дополнены (в12–в13);
+> оценки подняты (§0, Приложение Е). Архитектурный каркас плана не изменился.
+
 Документ составлен по полному обходу обоих кодовых баз:
-- `aag.tender/src` — 27 601 строка (ts/tsx/css, включая ds-entry.ts), все слои FSD до файла;
-- `c.aag.tender-supplier/web/src` — 34 656 строк, шелл/страницы/API-слой;
+- `aag.tender/src` — **35 237** строк (ts/tsx/css, включая ds-entry.ts), все слои FSD до файла;
+- `c.aag.tender-supplier/web/src` — **39 501** строка, шелл/страницы/API-слой
+  (цель с 24.08 не менялась; рабочая ветка `cursor/sprint-wave-async-jobs-ui-kit` — базу
+  для `feat/cu-integration` согласовать до Ф0);
 - контракты данных сверены поле-в-поле: прототип ↔ `tendersApi.ts` ↔ FastAPI
-  (`build_comparison`, `comparison_analytics.py`, роутеры tenders/rounds/insights).
+  (`build_comparison`, роутеры tenders/rounds/insights/comments/reports; повторно
+  сверено кодом при ревизии 2).
 
 Статусы действий в чек-листах:
 
@@ -30,11 +42,14 @@
 ## 0. Резюме
 
 **Что легко.** Прототип изначально спроектирован под подмену мока сервером: вся работа
-с данными изолирована в двух дверях (`entities/tender/api/tenders.api.ts` — 23 строки,
-`entities/comparison/api/comparison.api.ts` — 69 строк), функции асинхронные, экраны моков
-не импортируют. Бэкенд уже имеет все смысловые эндпоинты (`/tenders/{id}/comparison`,
-`/rounds`, `/insights*`) и даже считает аналитику на сервере. Обе кодовые базы — React 19,
-CSS Modules, TypeScript strict. Авторизация прикручивается одним вызовом `apiFetch`.
+с данными изолирована в пяти дверях (`entities/tender/api/tenders.api.ts`,
+`entities/comparison/api/{comparison,comments,export}.api.ts`,
+`features/ai-analysis/api/analysis.api.ts`), функции асинхронные, экраны моков
+не импортируют, а мутации не бросают и отвечают успехом — сбой запроса уже
+вписан в контракты. Бэкенд уже имеет все смысловые эндпоинты
+(`/tenders/{id}/comparison`, `/rounds`, `/insights*`) и даже считает аналитику
+на сервере. Обе кодовые базы — React 19, CSS Modules, TypeScript strict.
+Авторизация прикручивается одним вызовом `apiFetch`.
 
 **Что дорогое.**
 
@@ -45,14 +60,18 @@ CSS Modules, TypeScript strict. Авторизация прикручивает�
    ~978 классов) и голым элементным CSS (`input/select/textarea/button` на всё приложение).
    Чужая ДС на CSS Modules в него вживляется, но элементный каскад придётся гасить
    compat-слоем в корне новой секции (§3.2).
-3. **Замена карточки тендера теряет функциональность**: текущая карточка (3 219 строк)
+3. **Замена карточки тендера теряет функциональность**: текущая карточка (3 501 строка)
    умеет то, чего в прототипе нет — документы, комментарии, чаты, КП/приглашения,
    уточнения, активность, победителя, FKP-версии. В прототипе эти вкладки — заглушки.
-   Это главный продуктовый риск; список потерь и план достройки — §7.2.
+   Это главный продуктовый риск; список потерь и план достройки — §7.2 (с 25.08
+   прототип закрыл два пункта списка: экспорт .xlsx и частично детали ячейки).
 4. **Две несовместимые модели ИИ-разбора** (прототипная секционная vs серверная
    blocks-with-tokens). Рекомендованное решение — поэтапное, §4.5.
+5. **Источник живёт параллельно и БЫСТРО**: +7 636 строк за один день правок владельца
+   (комментарии ячеек, корректировки, экспорт, URL-вид, стадии КП). Правило
+   однонаправленного diff-переноса (§7.1) — рабочий режим, а не запасной план.
 
-**Оценка:** Ф0–Ф5 основного пути — 15–22 рабочих дня одного фронтендера при решённых
+**Оценка:** Ф0–Ф6 основного пути — **16,5–23,5 рабочих дня** одного фронтендера при решённых
 продуктовых вопросах §7.3; без потери функционала карточки (Ф7) — кратно больше.
 
 ---
@@ -61,21 +80,30 @@ CSS Modules, TypeScript strict. Авторизация прикручивает�
 
 ### 1.1 Объёмы по слоям `aag.tender/src`
 
+Числа строк сняты wc -l по состоянию на 25.08.2026 (после спринта переписки,
+решений и выноса счёта в model — см. Часть XXII DESIGN-NOTES; против первой
+редакции документа карточка выросла вдвое, comparison — на комментарии,
+выгрузку и кодек вида в URL).
+
 | Слой | Всего строк | TS/TSX | CSS | Судьба в целевом репо |
 |---|---:|---:|---:|---|
-| `app/` | 663 | 103 | 560 | PORT (роутер → layout), global.css MOVE |
-| `pages/tender-registry` | 465 | ~400 | 66 | PORT |
-| `pages/tender` | 6 908 | ~5 400 | ~1 480 | PORT (модель почти MOVE) |
-| `widgets/` | 1 406 | ~700 | ~700 | PORT (router-хуки), остальное MOVE |
-| `features/flyout` | 190 | 190 | — | MOVE |
-| `features/ai-analysis` | 4 961 | ~4 200 | ~750 | ADAPT/PORT, решение §4.5 |
-| `entities/comparison` | 2 321 | 2 321 | — | MOVE + NEW адаптеры API |
-| `entities/tender` | 324 | 324 | — | MOVE + NEW адаптеры API |
+| `app/` | 673 | 103 | 570 | PORT (роутер → layout), global.css MOVE |
+| `pages/tender-registry` | 470 | 404 | 66 | PORT |
+| `pages/tender` | 12 291 | 8 437 | 3 854 | PORT (model почти MOVE) |
+| `widgets/` | 1 406 | 774 | 632 | PORT (router-хуки), остальное MOVE |
+| `features/flyout` | 242 | 191 | 51 | MOVE |
+| `features/ai-analysis` | 4 917 | 3 766 | 1 151 | ADAPT/PORT, решение §4.5 |
+| `entities/comparison` | 4 185 | 4 185 | — | MOVE + NEW адаптеры API |
+| `entities/tender` | 360 | 360 | — | MOVE + NEW адаптеры API |
 | `entities/workspace` | 59 | 59 | — | MOVE |
-| `entities/section` | 86 | 86 | — | ADAPT (деревья разделов) |
-| `shared/ui` | 9 649 | 6 290 | 3 359 | MOVE ×51, ADAPT ×3 (Link/Breadcrumbs/Icon) |
+| `entities/section` | 84 | 84 | — | ADAPT (деревья разделов) |
+| `shared/ui` | 10 149 | 6 555 | 3 594 | MOVE ×52, ADAPT ×3 (Link/Breadcrumbs/Icon) |
 | `shared/lib` | 277 | 277 | — | MOVE целиком |
-| **Итого** | **27 601** | | | |
+| **Итого** | **35 237** | | | |
+
+Оценка Ф4 ниже (4–6 дней) писалась до спринта 25.08 и теперь оптимистична:
+карточка выросла с 6.9k до 12.3k строк. Пересчёт — при планировании; сам план
+не меняется, MOVE-доля растёт быстрее адаптируемой.
 
 Вне `src/`: `vite.lib.config.ts` + `src/ds-entry.ts` (library-сборка ДС для Claude Design)
 и `.design-sync/` — в merged-контексте замораживаются (§7.1).
@@ -137,42 +165,52 @@ DOM каркаса (`widgets/workspace/ui/Workspace.tsx`):
 (табы Активные/Закрытые/Черновики — состояние страницы, не URL) `> RegistryFilters >
 ScrollArea(Table | Skeleton×6 | ErrorState)`. Строки кликабельны, настоящая ссылка — на номере.
 
-**Карточка** (`pages/tender`, 6 908 строк). Модель (`model/`, 1 058) переносится
+**Карточка** (`pages/tender`, 12 291 строка). Модель (`model/`, 1 611) переносится
 почти целиком:
 
 | Файл | Строк | Действие |
 |---|---:|---|
-| `columns.ts` | 206 | MOVE — чистая функция ширин колонок |
-| `columns.check.ts` | 168 | MOVE — assert-скрипт |
-| `compareFormat.ts` | 104 | MOVE |
+| `columns.ts` | 261 | MOVE — чистая функция ширин колонок |
+| `columns.check.ts` | 174 | MOVE — assert-скрипт |
+| `compareFormat.ts` | 539 | MOVE — вырос вчетверо (25.08: паспорт позиции, разбор разброса) |
 | `scroll-parent.ts` | 17 | MOVE |
 | `useBandMaxHeight.ts` / `useBandWidth.ts` | 67+45 | MOVE |
-| `useCompareScreen.ts` | 143 | ADAPT — источник данных меняется на адаптер (§4.3) |
-| `useComparisonData.ts` | 58 | REWRITE — тело двух функций на `apiFetch` (§4.3) |
+| `useCellComments.ts` | 101 | **NEW 25.08** MOVE — тред комментария ячейки |
+| `useCompareScreen.ts` | 174 | ADAPT — источник данных меняется на адаптер (§4.3); + viewUrl (§2.4) |
+| `useComparisonData.ts` | 113 | REWRITE — тело на `apiFetch` (§4.3) |
 | `useTableDock.ts` | 280 | MOVE |
 
-UI (`ui/`, 5 849):
+UI (`ui/`, 10 679):
 
 | Файл | Строк | Действие |
 |---|---:|---|
-| `TenderPage.tsx` | 264 | PORT: useParams/Navigate → next; портал в #ai-panel-slot остаётся |
-| `TenderCompare.tsx` | 660 | MOVE |
-| `TenderCompare.module.css` | 1212 | MOVE (самый большой CSS проекта) |
-| `CompareToolbar.tsx` | 327 | MOVE |
-| `CompareSettings.tsx` | 492 | MOVE (экспортирует и CompareFilters) |
-| `BidCell.tsx` | 358 | MOVE |
-| `CompareRow.tsx` | 187 | MOVE (memo) |
-| `TenderSummary.tsx` | 200+295css | MOVE — единственный h1 страницы |
-| `ContractorCard.tsx` | 198 | MOVE |
-| `CornerTab.tsx` | 119 | MOVE |
-| `DossierModal.tsx` | 111+38css | MOVE (нативный Modal) |
-| `TermsBand.tsx` | 141 | MOVE |
-| `RoundsPanel.tsx` | 107+54css | MOVE |
-| `TotalRow.tsx` | 79 | MOVE |
-| `SpreadCell.tsx` | 88 | MOVE |
-| `CompareLegend.tsx` | 137 | MOVE |
-| `ColumnPainter.tsx` | 45+15css | MOVE (ColorPicker+Popover) |
-| `assets/*` глифы | 135 | MOVE (инлайн-SVG пометок) |
+| `TenderPage.tsx` | 313 | PORT: useParams/Navigate → next; портал в #ai-panel-slot остаётся |
+| `TenderCompare.tsx` | 1 454 | MOVE (+794 к ревизии 1) |
+| `TenderCompare.module.css` | 2 167 | MOVE (самый большой CSS проекта) |
+| `CompareToolbar.tsx`(+css) | 457+193 | MOVE |
+| `CompareSettings.tsx`(+css) | 516+242 | MOVE (экспортирует и CompareFilters) |
+| `BidCell.tsx` | 413 | MOVE |
+| `CellCard.tsx`(+css) | 241+148 | **NEW 25.08** MOVE — попап-таблица ячейки, два яруса карточки |
+| `CommentThread.tsx`(+css) | 384+280 | **NEW 25.08** MOVE — переписка ячейки |
+| `CorrectionPanel.tsx`(+css) | 173+73 | **NEW 25.08** MOVE — решение по корректировке объёма |
+| `CutLine.tsx` | 86 | **NEW 25.08** MOVE |
+| `ExportButton.tsx` / `ExportDialog.tsx`(+css) | 62+112+42 | **NEW 25.08** MOVE — выгрузка .xlsx (§4.9) |
+| `GhostColumn.tsx` | 62 | **NEW 25.08** MOVE |
+| `InviteDialog.tsx` | 61 | **NEW 25.08** MOVE — приглашение из карточки |
+| `PotentialCell.tsx` | 82 | **NEW 25.08** MOVE |
+| `SliceLink.tsx`(+css) | 67+57 | **NEW 25.08** MOVE — пилюля «ссылка на срез» (viewUrl) |
+| `CompareRow.tsx` | 277 | MOVE (memo) |
+| `TenderSummary.tsx`(+css) | 200+295 | MOVE — единственный h1 страницы |
+| `ContractorCard.tsx` | 502 | MOVE (+304: два яруса, счёт узла) |
+| `CornerTab.tsx` | 123 | MOVE |
+| `DossierModal.tsx`(+css) | 189+75 | MOVE (нативный Modal) |
+| `TermsBand.tsx` | 150 | MOVE |
+| `RoundsPanel.tsx`(+css) | 107+54 | MOVE |
+| `TotalRow.tsx` | 134 | MOVE |
+| `SpreadCell.tsx` | 103 | MOVE |
+| `CompareLegend.tsx`(+css) | 169+170 | MOVE |
+| `ColumnPainter.tsx`(+css) | 45+15 | MOVE (ColorPicker+Popover) |
+| `assets/*` глифы (8 шт + index) | 183 | MOVE (+ CommentMark, CorrectionMark) |
 | `TenderPage.module.css` | 43 | MOVE |
 
 Вкладки карточки в прототипе: **Сравнение** (полная) и **Раунды** (полная);
@@ -184,15 +222,20 @@ UI (`ui/`, 5 849):
 - **section** (86): `SectionId = home|tenders|more|opcii|admin`; `NAV_TOP` — 5 пунктов рейла;
   деревья `HOME/TENDERS/MORE/FALLBACK` в `contentFor(id)`; кликабельны только `kind:'link'`.
   ADAPT: содержимое деревьев переписывается под реальные разделы целевого приложения (§5, Ф2).
-- **tender** (324): `STATUS` (open/closed/cancelled/draft → label/tone/icon),
+- **tender** (360): `STATUS` (open/closed/cancelled/draft → label/tone/icon),
   `TenderRow`, `tenderPath(id) = /tenders/registry/{id}`, `bidsDue(row)`
   (overdue/urgent≤7д/soon≤30д/calm/idle), `facetsOf(rows)` + `applyFilters`.
   ADAPT: `tenderPath` — если сохраняем URL целевого приложения, путь станет `/tenders/{id}` (§2.2).
-- **comparison** (2 321): контракт `contract.ts` (296) — см. приложение В; пороги
-  `thresholds.ts` (SYSTEM_THRESHOLDS {15,40,k=3,80}); счёт `calc.ts` (analyzeComparison
-  единым проходом); предикаты `filters.ts`; оси вида `view.ts` (3 пресета, 3 метрики,
-  3 rowView); матрица условий `terms.ts`; формат `lib/format.ts` (money/moneyCompact/decimal).
-  Мок `api/comparison.mock.ts` (772) — DROP из рантайма, KEEP для превью ДС (§7.1).
+- **comparison** (4 185): контракт `contract.ts` (481; с 25.08 — стадии КП:
+  `BidStage/bidStage/stageLabel`, версии `BidVersion/currentVersion/isStaleVersion`,
+  `isWaiting/withVersion/sectionPathOf`) — см. приложение В; пороги
+  `thresholds.ts` (58); счёт `calc.ts` (560); предикаты `filters.ts` (57); оси
+  `view.ts` (235); **`viewUrl.ts` (106)+check — сериализация вида в URL, §2.4**;
+  модель комментариев `comments.ts` (122); матрица условий `terms.ts` (43);
+  формат `lib/format.ts` (26). Двери: `comparison.api.ts` (176; fetchComparison
+  + мутации `decideCorrection`/`selectBidVersion`), `comments.api.ts` (83, §4.8),
+  `export.api.ts` (66, §4.9). Мок `api/comparison.mock.ts` (1 009) — DROP из
+  рантайма, KEEP для превью ДС (§7.1).
 - **workspace** (59): zustand-стор `useWorkspaceStore` — activeId (проекция URL),
   sidebarOpen, aiPanelOpen; `openAiPanel()` закрывает сайдбар НАВСЕГДА (не возвращает).
 
@@ -211,7 +254,7 @@ UI (`ui/`, 5 849):
 | `ui/AiTrigger.tsx` | 172 | бирка-триггер AI_TRIGGER_ID |
 | `ui/RichText.tsx` + `assets/SparkGlyph.tsx` | 74+115 | мини-разметка чата, спектральный глиф |
 
-### 1.6 Дизайн-система (`shared/ui` — 51 слайс, 9 649 строк)
+### 1.6 Дизайн-система (`shared/ui` — 52 слайса, 10 149 строк)
 
 Полный реестр компонентов с props и зависимостями — **Приложение А**. Здесь — только то,
 что важно для интеграции:
@@ -226,17 +269,20 @@ UI (`ui/`, 5 849):
   `.route-fallback` (fallback роутера). Они обязаны грузиться до компонентов — в merged app
   их импорт ставим первым в layout новой секции.
 - Прямой импорт react-router в shared/ui ровно в двух: `Link`, `Breadcrumbs` — PORT (§2.2).
-- `Icon` — таблица `icon-map.ts` (178): имя спрайта эталона → Solar-компонент поштучно
+- `Icon` — таблица `icon-map.ts` (221, +43 к ревизии 1: глифы комментариев/экспорта/стадий):
+  имя спрайта эталона → Solar-компонент поштучно
   (`@solar-icons/react/linear/*`, `/bold/*`) + 4 локальных SVG (docs/funnel/target/planet).
   Размер/толщина задаются CSS (`--icon-size`, SolarProvider strokeWidth={1.5} в корне).
-- Table (154 tsx + 381 css): layout fixed/stickyHead/stickyCol, объект модификаторов
+- **ProgressBar** (69+62css) — полоса ВЕЛИЧИНЫ (доля 0…100), появилась 25.08; НЕ для хода
+  процесса (это `Progress`), нормируется снаружи. Единственный новый слайс ревизии 2.
+- Table (164 tsx + 406 css): layout fixed/stickyHead/stickyCol, объект модификаторов
   `tableCell {numeric, roomy, mono, strong, muted, sub, link, rowLink, card, fullRow, empty}`;
   ширины через `<col>` исполняются только при `layout="fixed"`; арифметика ширин в cqw.
 - Layout-семья: Stack/Inline/Grid/Divider + шкала GapIndex 0…9 (`gap(n)`, `gapStyle`).
 - Page-семья: Screen/PageHeader/PageTitle/PageActions/ChipButton/ScreenPlaceholder/
   SecondaryHeader (табы APG через lib/roving).
 
-### 1.7 Токены (`app/styles/global.css`, 560 строк)
+### 1.7 Токены (`app/styles/global.css`, 570 строк)
 
 Группы переменных (все с префиксом `--cu-*`, кроме каркасных):
 
@@ -299,7 +345,7 @@ web/src/
 + ├── cu/                            # НОВАЯ СЕКЦИЯ: перенесённый aag.tender
 + │   ├── layout.tsx                 # NEW: AuthGuard + CuProviders + <CuWorkspace>{children}
 + │   ├── styles/cu-global.css       # MOVE app/styles/global.css (+ compat-reset §3.2)
-+ │   ├── shared/ui/*                # MOVE 51 слайс shared/ui
++ │   ├── shared/ui/*                # MOVE 52 слайса shared/ui
 + │   ├── shared/lib/*               # MOVE shared/lib
 + │   ├── entities/{section,tender,comparison,workspace}/*
 + │   ├── features/{flyout,ai-analysis}/*
@@ -384,7 +430,7 @@ deep-link'и уведомлений (`TopbarExtras`: deep-link `/tenders/{id}`),
 | положение сайдбара | стор (`sidebarOpen`) | как есть («мебель» в URL не попадает) |
 | табы карточки | состояние страницы | **ИЗМЕНИТЬ**: принять `?tab=` как в текущей карточке — deep-link на вкладку «Раунды» из уведомлений и восстановление F5; дефолт comparison |
 | фильтры реестра | состояние страницы | как есть (осознанный долг прототипа) |
-| workspace сравнения | стор useCompareScreen | как есть (в текущем web cmp-состояние синхронизируется в query-string — упрощаем до прототипного поведения, обратная совместимость ссылок с cmp-параметрами теряется: см. §7.3-В4) |
+| workspace сравнения | **URL — `viewUrl.ts` (NEW 25.08)** | ПРИНЯТЬ сериализацию прототипа: короткие стабильные ключи `p/m/dev/dyn/pot/sort/f`, пишется ТОЛЬКО отличие от пресета, мусор в адресе не роняет экран. В Next: `useSearchParams` + `router.replace(scroll:false)`; `hasViewParams()` отличает «ссылку коллеги» от обычного входа. Решение В4 ЗАКРЫТО источником; ссылки старой карточки с `cmp-*` совместимости НЕ имеют — задокументировать в релизных заметках |
 
 ### 2.5 Зависимости `web/package.json` (diff)
 
@@ -467,11 +513,13 @@ rail при открытии панели Анализа, `tenders/[id]/page.tsx
 
 | | текущий web | переносимая ДС |
 |---|---|---|
-| модель | глобальные классы (~978) + inline-стили | CSS Modules (camelCaseOnly) |
+| модель | глобальные классы (~1 000) + inline-стили | CSS Modules (camelCaseOnly) |
 | токены | `--bg/--surface/--accent/--s-*` (~25 шт.) | `--cu-*` (~120 шт.) |
-| элементный каскад | `input/select/textarea/button {…}` на всё приложение | reset свой |
+| элементный каскад | `input/select/textarea/button {…}` на всё приложение (globals.css:62–99) | reset свой |
 | базовый кегль | body 14px | body 13px antialiased |
-| z-index | topbar 50, модалки ~100+ | rail 999 / topbar 1200 / menu 1300 / toast 1350 |
+| z-index | topbar 50, модалки ~100–1200 | rail 999 / topbar 1200 / menu 1300 / toast 1350 |
+
+(Числа web — по состоянию на 25.08: `globals.css` — 6 164 строки.)
 
 Точных коллизий имён классов нет (глобальные классы cu живут только в трёх
 безопасных именах `.inline-edit/.visually-hidden/.route-fallback`). Реальные риски:
@@ -659,8 +707,20 @@ analytics.works[wid].cells[cid]         → marks[posId].anomaly: is_anomaly ? �
 `useComparisonData` уже делает второй запрос — меняется только источник.
 
 `simulateNextSubmission()` — DROP: подача КП в проде приходит от поставщика
-через `/invite/{token}/quote`. Демо-кнопка «подать следующее КП» удаляется вместе
-с курсором таймлайна.
+через `/invite/{token}/quote`. Демо-кнопка «подать следующее КП» удаляется
+вместе с курсором таймлайна.
+
+**Мутации двери (NEW 25.08).** Прототип перестал быть read-only — в
+`comparison.api.ts` появились две записи:
+
+- `decideCorrection({tenderId, contractorId, positionId, decision, ...})` → бэкенд:
+  маршрут ревью корректировки объёма (`quantity_override/review_status/comment`
+  уже приходят в снимке сравнения; точный путь PATCH сверить по `quotes.py`
+  при работе — контракт полей совпадает с §4.3-marks);
+- `selectBidVersion({...})` → семантику сверить на стенде: скорее всего это
+  ЧТЕНИЕ с пином `versions={sid}:{n}` (§4.3 prev-round), а не запись.
+
+Обе отвечают `boolean` и НЕ БРОСАЮТ наружу (правило мутаций сохраняется).
 
 ### 4.4 Что досчитывает клиент (даже при живом analytics)
 
@@ -739,6 +799,8 @@ TenderRound                      → ComparisonRound
 8. TenderRow[] ← дерево портфелей (flattenPortfolios готов)
 9. TenderInsight → карточки Insights (этап B)
 10. conditions[] ← склейка field_name:value
+11. postComment ← POST /comments?entity_type=tender_item (NEW 25.08, §4.8; author ставит сервер из JWT)
+12. requestExport ← GET /tenders/{id}/comparison/export — эндпоинт СУЩЕСТВУЕТ (tenders.py:410, §4.9)
 
 **(б) Вычисления клиента — средне (Ф4):**
 единичная ставка (§4.4-1); fill по стоимости (-2); spread от минимума (-4); bestId (-5);
@@ -758,6 +820,53 @@ bidsDue; deriveInsights/buildAnalysis этапа A.
 9. Ручная пометка key на позиции (сейчас только выведенная is_key_work)
 10. Плоский GET /tenders с суммами/количеством КП (или жить на /portfolios+/reports/tenders)
 11. Секционный контракт анализа с typed items/brief/mute/popupNotes (если хотим паритет прототипа на этапе B)
+12. **NEW 25.08**: пакетная выборка комментариев тендера — прототипу нужна ОДНА выборка
+    всего треда (`fetchComments(tenderId)` — маркеры рисуются у каждой ячейки заранее),
+    бэкенд умеет только поштучный `GET /comments?entity_type=&entity_id=`;
+    нужен `GET /tenders/{id}/comments` (иначе 650 запросов на экран)
+13. **NEW 25.08**: отметка просмотров комментариев («отметить всё просмотренным» —
+    ЗАПИСЬ, результат видит только этому пользователю; эндпоинта нет)
+
+### 4.8 Комментарии ячеек: `fetchComments` / `postComment` ← `/comments`
+
+Дверь появилась 25.08 (`entities/comparison/api/comments.api.ts`, модель
+`model/comments.ts`, хук `useCellComments.ts`). Бэкенд уже имеет полиморфный ресурс
+`GET|POST /comments` (роутер `comments.py`; entity_type из
+`tender|quote|tender_item|supplier`, один уровень вложенности `parent_comment_id`):
+
+```
+CellComment.id            ← id:number → String(id)
+CellComment.parentId      ↔ parent_comment_id (один уровень вложенности — совпадает)
+CellComment.author        ← author_name: КЛИЕНТСКИЙ проп author в адаптере ОТБРОСИТЬ —
+                            автора ставит сервер из JWT (прототипный проп остаётся
+                            в сигнатуре двери, адаптер его игнорирует)
+CellComment.at            ← created_at "%d.%m.%Y %H:%M" → формат «словами»
+                            ('только что'/'сегодня 14:05'/дата) делает адаптер
+postComment{text,...}     ← POST /comments {entity_type:'tender_item',
+                            entity_id:Number(positionId), comment_text,
+                            parent_comment_id?}; пустой текст не отправлять
+commentKey(contractorId, positionId) — клиентский ключ треда; серверу известен
+                            только positionId: автор треда восстанавливается из
+                            первого комментария (или гэп в12-бис: supplier_id в ответе)
+```
+
+ЧТЕНИЕ упирается в гэп в12 (пакетная выборка): до его закрытия адаптер ставит
+заглушку «треды недоступны», НЕ обходя все items запросами.
+
+### 4.9 Экспорт .xlsx: `requestExport` ← `/tenders/{id}/comparison/export`
+
+Эндпоинт существует и зрелый (`tenders.py:410`: `build_comparison_workbook`,
+`prepare_comparison_for_export` скрывает часть колонок в режиме коммерческой
+тайны). Дверь прототипа появилась 25.08 (`api/export.api.ts` + `ExportButton/
+ExportDialog`):
+
+- состав файла — канон `EXPORT_CONTENT` (5 пунктов чеклиста модалки), галочки
+  показывают канон, не набирают его;
+- имя файла считает `exportFileName()` на клиенте ДО запроса и сверяет с ответом;
+- выгрузка фиксирует ИМЕННО открытые версии (`versions=` пин) — строка
+  «Выбранные версии зафиксированы» идёт в модалку из данных экрана;
+- ответ — blob; событие ИБ логирует сервер (права проверяет он же).
+Клиентская часть — MOVE без изменений, адаптер подставляет apiFetch+blob.
 
 ---
 
@@ -799,7 +908,8 @@ bidsDue; deriveInsights/buildAnalysis этапа A.
 - [ ] MOVE составные: Table, Tabs, Segmented, Select, SearchInput, SearchTrigger,
       FacetFilter, Pagination, ScrollArea (+use-scrolled), EmptyState, ErrorState,
       Alert, Avatar, Breadcrumbs(PORT §2.2), Link(PORT), InlineInput, Page-семья,
-      Tree/TreeRow/NestedTreeNode, ButtonGroup, ColorPicker(+color.ts+check).
+      Tree/TreeRow/NestedTreeNode, ButtonGroup, ColorPicker(+color.ts+check),
+      ProgressBar (52-й слайс, NEW 25.08).
 - [ ] PORT `Link` и `Breadcrumbs` на адаптер routerLink (единственные роутерные).
 - [ ] NEW `cu/app/providers/CuProviders.tsx`: SolarProvider(strokeWidth 1.5) +
       ToastProvider (+ ChatDrawer при решении §3.5).
@@ -848,31 +958,44 @@ bidsDue; deriveInsights/buildAnalysis этапа A.
 
 ### Ф4. Карточка: сравнение и раунды (4–6 дней)
 
-- [ ] MOVE модель целиком: columns(+check), compareFormat, scroll-parent,
-      useBandMaxHeight, useBandWidth, useTableDock.
+- [ ] MOVE модель целиком: columns(+check), compareFormat (539!), scroll-parent,
+      useBandMaxHeight, useBandWidth, useTableDock, useCellComments (NEW).
 - [ ] REWRITE `useComparisonData.ts`: два вызова fetchComparison (текущий + пин версий
       прошлого круга), submitNext → DROP.
-- [ ] ADAPT `useCompareScreen.ts` (источник данных уже новый; flash/переходы без изменений).
-- [ ] MOVE ui-дерево сравнения: TenderCompare(+css 1212), CompareToolbar,
-      CompareSettings, BidCell, CompareRow, SpreadCell, TotalRow, ContractorCard,
-      CornerTab, DossierModal, TermsBand, ColumnPainter, CompareLegend, assets/*,
-      TenderSummary, RoundsPanel.
+- [ ] ADAPT `useCompareScreen.ts` (источник данных уже новый; flash/переходы без изменений;
+      вид сериализуется viewUrl — строка ниже).
+- [ ] Подключить `viewUrl.ts` к Next: serializeView/parseView через useSearchParams +
+      router.replace(scroll:false); hasViewParams() отличает ссылку коллеги от обычного
+      входа (§2.4 — решение В4). SliceLink MOVE без правок.
+- [ ] MOVE ui-дерево сравнения: TenderCompare(+css 2167), CompareToolbar,
+      CompareSettings, BidCell, CellCard(NEW), CommentThread(NEW), CorrectionPanel(NEW),
+      CutLine(NEW), ExportButton+ExportDialog(NEW), GhostColumn(NEW), InviteDialog(NEW),
+      PotentialCell(NEW), SliceLink(NEW), CompareRow, SpreadCell, TotalRow, ContractorCard,
+      CornerTab, DossierModal, TermsBand, ColumnPainter, CompareLegend, assets/*
+      (8 глифов), TenderSummary, RoundsPanel.
 - [ ] NEW адаптер comparison (§4.3): маппинг ComparisonData→Comparison + analytics
       (normalized_rate/potential/pair_deltas/named_filters), пороги в query,
       второй запрос prevPrices/prevConditions.
+- [ ] NEW мутации адаптера: decideCorrection / selectBidVersion (§4.3, семантику
+      selectBidVersion сверить на стенде — возможно чтение с пином versions).
 - [ ] NEW адаптер rounds (§4.6) + submittedInRound-сборка (§4.4-9).
+- [ ] NEW адаптер комментариев (§4.8): postComment работает сразу; чтение тредов —
+      ЗАГЛУШКА до закрытия гэпа в12; просмотренность — гэп в13.
+- [ ] NEW адаптер экспорта (§4.9): requestExport → /comparison/export, blob + имя файла.
 - [ ] PORT `TenderPage.tsx`: useParams/Navigate→next; портал в #ai-panel-slot;
       табы → `?tab=` (§2.4); заглушки вкладок Уточнения/КП/Обзор/Документы/Активность
       оставить ScreenPlaceholder (потери §7.2 зафиксированы).
 - [ ] NEW route `app/(cu-shell)/tenders/[id]/page.tsx`; DELETE старой карточки
-      `app/(app)/tenders/[id]/page.tsx` — ПОСЛЕ этого удалить useSidebarChrome-импорт
-      (сам компонент остаётся другим страницам).
+      `app/(app)/tenders/[id]/page.tsx` (3 501 стр.) — ПОСЛЕ этого удалить
+      useSidebarChrome-импорт (сам компонент остаётся другим страницам).
 - [ ] Смоук на демо-тендере: таблица, липкая шапка/колонка, панорама на узком окне,
-      CellPopup, инлайн-объёмы (qtyOrig diff), корректировки, матрица условий,
-      раунды, dossier, звёзды/фильтры/пресеты, переход ширины колонок монотонен
-      (columns.check зелёный).
+      CellPopup (+CellCard), инлайн-объёмы (qtyOrig diff), корректировки (решение
+      уходит на бэкенд и возвращается решённым), матрица условий, раунды, dossier,
+      звёзды/фильтры/пресеты, комментарий ячейки отправляется и виден, экспорт
+      скачивает .xlsx, переход ширины колонок монотонен (columns.check зелёный),
+      ссылка с ?p=&m=… воспроизводит срез (viewUrl.check зелёный).
 - **DoD:** обе страницы живут на живом бэкенде; старая карточка удалена;
-  глубокие ссылки `/tenders/{id}?tab=rounds` работают.
+  глубокие ссылки `/tenders/{id}?tab=rounds` и ссылки среза работают.
 
 ### Ф5. Панель ИИ-анализа (этап A) (2–3 дня)
 
@@ -919,14 +1042,15 @@ node:assert + TS). Список:
 |---|---|---|
 | `shared/lib/date.check.ts` | разбор ДД.ММ.ГГГГ (31.02 → null, а не 3 марта), daysUntil, DST | shared/lib |
 | `entities/tender/model/tender.check.ts` | bidsDue-режимы, фильтры периода | entities/tender |
-| `entities/comparison/model/comparison.check.ts` | rankBids/spread/analyzeComparison — 591 строка контракта счёта | entities/comparison |
+| `entities/comparison/model/comparison.check.ts` | rankBids/spread/analyzeComparison — 948 строк контракта счёта | entities/comparison |
 | `entities/comparison/model/terms.check.ts` | termRows объединение по label | entities/comparison |
+| `entities/comparison/model/viewUrl.check.ts` | сериализация вида ↔ URL, устойчивость к мусору в адресе | entities/comparison |
 | `features/ai-analysis/model/analysis.check.ts` | buildAnalysis секции/лимиты | features |
 | `features/ai-analysis/model/insights.check.ts` | deriveInsights пороги | features |
 | `pages/tender/model/columns.check.ts` | монотонность ширин колонок | pages/tender |
 | `shared/ui/ColorPicker/color.check.ts` | hsv↔rgb, parse css-цвета | shared/ui |
 
-Добавить npm-script: `"check:cu": "tsx src/cu/shared/lib/date.check.ts && …"` (все восемь).
+Добавить npm-script: `"check:cu": "tsx src/cu/shared/lib/date.check.ts && …"` (все девять).
 Адаптеры данных покрываются НИМИ ЖЕ частично (чистые функции), но сетевые маппинги
 тестируются только смоуком на стенде — автотестов в обоих проектах нет.
 
@@ -941,7 +1065,8 @@ node:assert + TS). Список:
 1. Логин (JWT) → `/tenders`: каркас cu, реестр живыми данными, табы/фильтры.
 2. Клик по тендеру → карточка: сводка (bidsDue корректен у просрочки),
    таблица сравнения на живом тендере с ≥3 КП.
-3. Ячейка: CellPopup с полями; аномальная ячейка помечена; отказ виден.
+3. Ячейка: CellPopup с полями; аномальная ячейка помечена; отказ виден;
+   комментарий отправляется, ответ в треде виден (чтение тредов — до гэпа в12).
 4. Инлайн-объём: правка сохраняется (PATCH), qtyOrig-diff показывается.
 5. Пресеты Обзор/Торги/Аномалии переключают оси; «Вернуть мой вид» после перехода из разбора.
 6. Раунды: снимок прошлого круга (prevPrices) строит секцию «Изменения поставщика».
@@ -986,6 +1111,7 @@ MOVE'ом diff'а в cu/ (однонаправленная синхрониза�
 1. **КП/приглашения**: карточки приглашений, копия ссылки `/fill/{token}`,
    перевыпуск/отзыв, запрос корректировки, прогресс заполнения, InviteParticipantsModal
    (в т.ч. приглашение неодобренных) — 431 строка модалка одна.
+   *Частично закрыто 25.08: InviteDialog в прототипе.*
 2. **Уточнения**: TenderCorrectionsPanel (правки ФКП: объём/удаление/добавление,
    PUT structure), ревью предложенных позиций, CommentsThread.
 3. **Документы**: слоты документов тендера, upload/download, RD URL.
@@ -994,14 +1120,17 @@ MOVE'ом diff'а в cu/ (однонаправленная синхрониза�
    этапом B анализа).
 6. **Чаты**: кнопка чата у подрядчика, ChatDrawer, счётчики непрочитанных.
 7. **Победитель**: форма выбора + баннер завершения со скачиванием файла.
-8. **Excel**: «Полный Excel», экспорт сравнения xlsx (эндпоинт export есть — кнопки нет).
+8. ~~**Excel**: экспорт сравнения xlsx~~ — **ЗАКРЫТО 25.08**: ExportButton/ExportDialog
+   в прототипе + серверный `GET /tenders/{id}/comparison/export` (§4.9).
+   «Полный Excel» РЕЕСТРА остаётся за Ф7 (эндпоинт /reports/tenders.xlsx есть — кнопки нет).
 9. **Управление раундами**: черновик/отправка/завершение, автосейв, preview получателей,
    retry-delivery (RoundsPanel прототипа — витрина без управления).
 10. **Бюджет**: правка бюджетной позиции из карточки.
 11. **«Как работает»**: help-панель сравнения (контент comparisonHelp.ts переносим легко).
 12. **FKP-версии**: разослать vN, история версий, уведомления.
 13. **Детали ячейки**: ComparisonDetailDrawer/PairDiff из analytics (частично закрывается
-    CellPopup; pair_deltas сервер уже отдаёт).
+    CellPopup; pair_deltas сервер уже отдаёт). *Частично закрыто 25.08: CellCard —
+    попап-таблица ячейки с двумя ярусами карточки.*
 
 Каждый пункт Ф7 = экран в новом дизайне поверх существующего API (бэкенд менять
 не нужно ни для одного из списка, кроме п.12-notify — он уже есть).
@@ -1013,35 +1142,51 @@ MOVE'ом diff'а в cu/ (однонаправленная синхрониза�
 | В1 | Чем наполнить topbar cu (колокольчик/юзер)? | а) заглушки прототипа; б) подключить существующие API уведомлений/профиля | Ф2 |
 | В2 | Кнопка чата в карточке? | а) потеря до Ф7; б) монтировать ChatDrawer в CuProviders сразу | Ф4 |
 | В3 | Чьи формулы считать истиной? | а) клиентские spread/min, keyDerived/max-price-weight (прототип); б) серверные spread/median, key_work_ids/median-weight | адаптеры Ф4, гэпы в3/б3/б8 |
-| В4 | URL-совместимость cmp-состояния? | а) упростить до стор-состояния прототипа (ссылки с cmp-параметрами старой карточки теряют вид); б) сохранить writeCmpQuery | Ф4 |
+| В4 | URL-совместимость cmp-состояния? | ✅ **РЕШЕНО ИСТОЧНИКОМ (25.08)**: вид сериализуется `viewUrl.ts` — короткие ключи `p/m/dev/dyn/pot/sort/f`, пишется отличие от пресета. Принимаем прототипную схему (§2.4); ссылки старой карточки с `cmp-*` не поддерживаются — зафиксировать в релизных заметках | Ф4 |
 | В5 | Тихий авто-refresh 20с? | а) как в старой карточке; б) руками, как в прототипе | Ф4/Ф6 |
 | В6 | Глоссарий статусов | «Открыт» vs «Сбор предложений» | Ф3 |
 
+### 7.3-бис. Новые решения ревизии 2 (появились с новыми возможностями прототипа)
+
+| # | Вопрос | Варианты | Затрагивает |
+|---|---|---|---|
+| В7 | Комментарии ячеек до закрытия гэпа в12: а) чтение заглушкой (запись работает); б) ждать эндпоинт `GET /tenders/{id}/comments` | рекомендую (а): запись и маркеры локально, треды по клику — когда бэкенд догонит | Ф4 |
+| В8 | Экспорт: показывать модалку канона сразу или после в12-в13? | независим от В7 — эндпоинт готов | Ф4 |
+
 ### 7.4 Трекинг изменений бэкенда (не блокирует основной путь)
 
-Список (в) из §4.7 — завести эпик в delivery/backlog при старте Ф3. Приоритет внутри:
+Список (в) из §4.7 — завести эпик в delivery/backlog при старте Ф3 (**сделать это
+до Ф3 обязательно; на 25.08 эпика в бэклоге ещё нет** — проверено поиском по
+`delivery/backlog/`, `planning/`, `docs/`). Приоритет внутри:
 revisionNote (плашка устаревания без него врёт текстом «данные изменились» без причины),
 submitted/submittedInRound (история раундов), anomaly-причина строкой, popupNotes
-(персистентность комментариев разбора), kind условий, плоский GET /tenders.
+(персистентность комментариев разбора), kind условий, плоский GET /tenders,
+**пакетная выборка комментариев тендера и отметка просмотров (в12–в13, NEW 25.08)**.
+
+Процессная заметка ревизии 2: целевой репо живёт на ветке
+`cursor/sprint-wave-async-jobs-ui-kit`; базу для `feat/cu-integration`
+(и слот в роадмапе — естественное место: волна 4, П12) согласовать до Ф0.
 
 ### 7.5 Технические риски
 
 | Риск | Вероятность | Митигация |
 |---|---|---|
 | Элементный каскад web портит cu-инпуты несмотря на compat | средняя | превью-страница Ф1 + смоук §6.3-10; точечные усиления селекторов compat |
-| Расхождение источник↔цель при жизни обоих репо | высокая | однонаправленный diff-перенос до Ф7; после — решить владельца ДС |
+| **Расхождение источник↔цель: АКТИВЕН.** Четыре волны правок владельца легли ПОСЛЕ ревизии 1 (+7 636 строк за день); допущение «источник стабилен во время Ф1–Ф5» сегодня НЕ выполняется | высокая | однонаправленный diff-перенос — РАБОЧИЙ режим (§7.1); либо договорная заморозка источника на Ф1–Ф5; перед стартом фазы — `git diff` источника с момента прошлой фазы |
+| Целевая база не зафиксирована: web живёт на ветке `cursor/sprint-wave-async-jobs-ui-kit`, интеграционный эпик в бэклоге отсутствует | средняя | согласовать базу и слот (волна 4 / П12) до Ф0; эпик завести в delivery/backlog до Ф3 |
 | z-index конфликтов DialogHost/ChatDrawer с cu-меню | низкая | проверка §6.4; при конфликте поднять только DialogHost |
 | SSR/prerender падения (matchMedia, document) | средняя | ssr:false на страницах; guard в сторе; правило «use client» на слой |
-| Тяжёлый chunk карточки (1212-строчный css + таблица) | низкая | dynamic import страниц; контроль веса в Ф6 |
+| Тяжёлый chunk карточки: css сравнения вырос до 2 167 строк, TenderCompare.tsx до 1 454 | низкая→средняя | dynamic import страниц; контроль веса в Ф6; при необходимости вынести CommentThread/ExportDialog в отдельные chunks (уже next/dynamic-кандидаты) |
 | TS5 vs TS7 нюансы (exactOptionalPropertyTypes=false в источнике) | низкая | typecheck после каждой фазы; strict совпадает |
 | Потеря функционала незамеченной (тихая) | высокая | список §7.2 показать ПМ/заказчику ДО старта Ф4; каждый пункт = тикет Ф7 |
 | columns.ts рассчитан на прототипные данные (qty≠null) | средняя | адаптер подставляет qty=1 при null (семантика analytics); columns.check ловит регресс монотонности |
 | React 19.2.4 (web) vs ^19.2.8 (прототип) | нулевая | совместимые миноры |
 | Иконки Solar тянут весь пакет | низкая | импорты поштучные linear/bold — tree-shaking работает и в Next |
+| Мутации прототипа против продового ACL: decideCorrection/postComment пишут на живой бэкенд с ролями/доступом по проекту (`_check_project_access`) | средняя | смоук под ОБЕМИ ролями (тендерщик + поставщик-владелец КП где применимо); отказ маппить в тихий `false` двери |
 
 ---
 
-## Приложение А. Реестр компонентов shared/ui (51 слайс)
+## Приложение А. Реестр компонентов shared/ui (52 слайса)
 
 Формат: компонент — файлы(строк) — ключевой контракт — зависимости — примечания.
 «dialog» = использует нативный `<dialog>`; «css» = есть свой module.css.
@@ -1082,6 +1227,7 @@ submitted/submittedInRound (история раундов), anomaly-причин
 | 32 | Popover | Popover.tsx(102) | `{anchor:DOMRect\|null;onClose;label?}`; привязка вправо, flip вверх (data-up); GAP=4 EDGE=12 | cx | **dialog showModal**; замер высоты после открытия |
 | 33 | Progress | Progress.tsx(53) | value? (без → indeterminate); tone?; aria-label! | cx, Tone | css; role=progressbar |
 | 34 | Radio | Radio.tsx(105) | Radio(value!) бросает вне группы; RadioGroup{label;value;onChange;gap?=2}; name через контекст | Layout | css |
+| 34-бис | ProgressBar (NEW 25.08) | ProgressBar.tsx(69)+css(62)+idx(4) | `{value:number 0…100 clamp; tone?:'neutral'\|'info'\|'success'; width?; className?}`; aria-hidden — дублирует соседнее число | cx | css; полоса ВЕЛИЧИНЫ, НЕ хода процесса (для него #33 Progress); нормировка снаружи |
 | 35 | RangeCalendar | RangeCalendar.tsx(179)+css | `{from;to;onChange(from,to)}`; две независимые сетки; границы полями ДД.ММ.ГГГГ; перевёрнутая пара меняется местами; ghost-hover | lib/date, Calendar | css |
 | 36 | ScrollArea | ScrollArea.tsx(43), use-scrolled.ts(28) | `{variant?:'page'\|'panel';onScroll?}`; useScrolled()→{scrolled,onScroll} | cx | css |
 | 37 | SearchInput | SearchInput.tsx(67) | `{value;onChange;label!;variant:'capsule'\|'field';action?}`; крестик очистки | Icon | css |
@@ -1102,7 +1248,7 @@ submitted/submittedInRound (история раундов), anomaly-причин
 
 ---
 
-## Приложение Б. Карта файлов aag.tender → действие (полный обход, 27 601 строка)
+## Приложение Б. Карта файлов aag.tender → действие (полный обход, 35 237 строк; ревизия 2)
 
 Действия: MOVE (как есть, + «use client» где хуки) · ADAPT · PORT · REWRITE ·
 DROP · FREEZE. Пути от `src/`; целевые — `web/src/cu/…` если не сказано иное.
@@ -1115,35 +1261,41 @@ DROP · FREEZE. Пути от `src/`; целевые — `web/src/cu/…` есл
 | app/providers/router.tsx | 81 | DROP+PORT | createBrowserRouter умирает; RouteSync PORT в cu/app/providers; lazy → next/dynamic в route-файлах |
 | app/styles/global.css | 560 | MOVE→cu/styles/cu-global.css | префиксование reset под .cu-root (§3.2); без html/body-правил |
 
-### entities/comparison/ (2321)
+### entities/comparison/ (4185)
 
 | Файл | Строк | Действие | Примечание |
 |---|---:|---|---|
-| api/comparison.api.ts | 69 | REWRITE | тело на apiFetch + адаптер §4.3; сигнатуры сохранить |
-| api/comparison.mock.ts | 772 | KEEP(локально) | рантайм мимо; превью ДС/офлайн |
-| model/contract.ts | 296 | MOVE | контракт домена |
-| model/thresholds.ts | 62 | MOVE | SYSTEM_THRESHOLDS, clampThresholds |
-| model/calc.ts | 311 | MOVE | analyzeComparison единым проходом |
-| model/filters.ts | 43 | MOVE | предикаты |
-| model/view.ts | 149 | MOVE | оси/пресеты/transition |
+| api/comparison.api.ts | 176 | REWRITE | тело на apiFetch + адаптер §4.3; сигнатуры сохранить; + мутации decideCorrection/selectBidVersion (NEW 25.08) |
+| api/comments.api.ts | 83 | REWRITE | §4.8; чтение — заглушка до гэпа в12 |
+| api/export.api.ts | 66 | REWRITE | §4.9; EXPORT_CONTENT/exportFileName MOVE как есть |
+| api/comparison.mock.ts | 1009 | KEEP(локально) | рантайм мимо; превью ДС/офлайн |
+| model/contract.ts | 481 | MOVE | контракт домена; + стадии КП BidStage/BidVersion (NEW 25.08) |
+| model/thresholds.ts | 58 | MOVE | SYSTEM_THRESHOLDS, clampThresholds |
+| model/calc.ts | 560 | MOVE | analyzeComparison единым проходом |
+| model/filters.ts | 57 | MOVE | предикаты |
+| model/view.ts | 235 | MOVE | оси/пресеты/transition |
+| model/viewUrl.ts + viewUrl.check.ts | 106+130 | MOVE | сериализация вида ↔ URL (§2.4, В4); NEW 25.08 |
+| model/comments.ts | 122 | MOVE | CellComment/CommentMap/commentKey |
 | model/terms.ts | 43 | MOVE | termRows |
 | lib/format.ts | 26 | MOVE | money/moneyCompact/decimal |
-| comparison.check.ts | 591 | MOVE | assert-контракт счёта |
+| comparison.check.ts | 948 | MOVE | assert-контракт счёта |
 | terms.check.ts | 50 | MOVE | |
-| index.ts | 28 | ADAPT | api-экспорт остаётся, mock наружу НЕ реэкспортировать |
+| index.ts | 35 | ADAPT | api-экспорт остаётся, mock наружу НЕ реэкспортировать |
 
-### entities/tender/ (324)
+### entities/tender/ (360)
 
 | Файл | Строк | Действие | Примечание |
 |---|---:|---|---|
-| api/tenders.api.ts | 23 | REWRITE | §4.1 portfolios-flatten (+reports/trends опц.) |
-| api/tenders.mock.ts | 75 | KEEP(локально) | |
-| model/tender.ts | 119 | MOVE | ADAPT tenderPath → /tenders/${id} |
-| model/filters.ts | 87 | MOVE | facetsOf/applyFilters |
-| tender.check.ts | 42 | MOVE | |
-| index.ts | 14 | MOVE | |
+| api/tenders.api.ts | 59 | REWRITE | §4.1 portfolios-flatten (+reports/tenders опц.) |
+| api/tenders.mock.ts | 75+ | KEEP(локально) | |
+| model/tender.ts | 119+ | MOVE | ADAPT tenderPath → /tenders/${id} |
+| model/filters.ts | 87+ | MOVE | facetsOf/applyFilters |
+| tender.check.ts | 42+ | MOVE | |
+| index.ts | 14+ | MOVE | |
 
-### entities/section/ · entities/workspace/ (145)
+(«+» — точный wc не снимался на ревизии 2, слой в целом: 360 строк.)
+
+### entities/section/ · entities/workspace/ (143)
 
 | Файл | Строк | Действие | Примечание |
 |---|---:|---|---|
@@ -1182,42 +1334,51 @@ DROP · FREEZE. Пути от `src/`; целевые — `web/src/cu/…` есл
 
 use-flyout.ts(135) MOVE · Flyout.tsx(54)+css(51) MOVE · index.ts(2) MOVE.
 
-### pages/tender/ (6908)
+### pages/tender/ (12291)
 
 | Файл | Строк | Действие |
 |---|---:|---|
-| model/columns.ts | 206 | MOVE |
-| model/columns.check.ts | 168 | MOVE |
-| model/compareFormat.ts | 104 | MOVE |
+| model/columns.ts | 261 | MOVE |
+| model/columns.check.ts | 174 | MOVE |
+| model/compareFormat.ts | 539 | MOVE (вырос вчетверо 25.08) |
+| model/useCellComments.ts | 101 | MOVE (NEW) |
 | model/scroll-parent.ts | 17 | MOVE |
 | model/useBandMaxHeight.ts | 67 | MOVE |
 | model/useBandWidth.ts | 45 | MOVE |
-| model/useCompareScreen.ts | 143 | ADAPT |
-| model/useComparisonData.ts | 58 | REWRITE (§4.3) |
+| model/useCompareScreen.ts | 174 | ADAPT (+viewUrl §2.4) |
+| model/useComparisonData.ts | 113 | REWRITE (§4.3) |
 | model/useTableDock.ts | 280 | MOVE |
-| ui/TenderPage.tsx | 264 | PORT (§2.2; табы ?tab= §2.4) |
+| ui/TenderPage.tsx | 313 | PORT (§2.2; табы ?tab= §2.4) |
 | TenderPage.module.css | 43 | MOVE |
-| ui/TenderCompare.tsx | 660 | MOVE |
-| TenderCompare.module.css | 1212 | MOVE |
-| ui/CompareToolbar.tsx | 327 | MOVE |
-| CompareToolbar.module.css | 164 | MOVE |
-| ui/CompareSettings.tsx | 492 | MOVE (внутри и CompareFilters) |
-| CompareSettings.module.css | 228 | MOVE |
-| ui/BidCell.tsx | 358 | MOVE |
-| ui/CompareRow.tsx | 187 | MOVE |
-| ui/ContractorCard.tsx | 198 | MOVE |
-| ui/CornerTab.tsx | 119 | MOVE |
-| ui/DossierModal.tsx(+css) | 111+38 | MOVE |
-| ui/TermsBand.tsx | 141 | MOVE |
+| ui/TenderCompare.tsx | 1454 | MOVE |
+| TenderCompare.module.css | 2167 | MOVE |
+| ui/CompareToolbar.tsx(+css) | 457+193 | MOVE |
+| ui/CompareSettings.tsx(+css) | 516+242 | MOVE (внутри и CompareFilters) |
+| ui/BidCell.tsx | 413 | MOVE |
+| ui/CellCard.tsx(+css) | 241+148 | MOVE (NEW) |
+| ui/CommentThread.tsx(+css) | 384+280 | MOVE (NEW) |
+| ui/CorrectionPanel.tsx(+css) | 173+73 | MOVE (NEW) |
+| ui/CutLine.tsx | 86 | MOVE (NEW) |
+| ui/ExportButton.tsx | 62 | MOVE (NEW, §4.9) |
+| ui/ExportDialog.tsx(+css) | 112+42 | MOVE (NEW, §4.9) |
+| ui/GhostColumn.tsx | 62 | MOVE (NEW) |
+| ui/InviteDialog.tsx | 61 | MOVE (NEW) |
+| ui/PotentialCell.tsx | 82 | MOVE (NEW) |
+| ui/SliceLink.tsx(+css) | 67+57 | MOVE (NEW, viewUrl) |
+| ui/CompareRow.tsx | 277 | MOVE |
+| ui/ContractorCard.tsx | 502 | MOVE |
+| ui/CornerTab.tsx | 123 | MOVE |
+| ui/DossierModal.tsx(+css) | 189+75 | MOVE |
+| ui/TermsBand.tsx | 150 | MOVE |
 | ui/RoundsPanel.tsx(+css) | 107+54 | MOVE |
-| ui/TotalRow.tsx | 79 | MOVE |
-| ui/SpreadCell.tsx | 88 | MOVE |
-| ui/CompareLegend.tsx(+css) | 137+137 | MOVE |
+| ui/TotalRow.tsx | 134 | MOVE |
+| ui/SpreadCell.tsx | 103 | MOVE |
+| ui/CompareLegend.tsx(+css) | 169+170 | MOVE |
 | ui/ColumnPainter.tsx(+css) | 45+15 | MOVE |
-| ui/assets/* (6 глифов + index) | 135 | MOVE |
+| ui/assets/* (8 глифов + index) | 183 | MOVE |
 | index.ts | 1 | MOVE |
 
-### pages/tender-registry/ (465)
+### pages/tender-registry/ (470)
 
 TenderRegistryPage.tsx(156) PORT · RegistryFilters.tsx(247)+css(66) MOVE · index.ts(1) MOVE.
 
@@ -1226,16 +1387,16 @@ TenderRegistryPage.tsx(156) PORT · RegistryFilters.tsx(247)+css(66) MOVE · ind
 cx(5) date(82)+check(49) plural(17) reducedMotion(10) roving(46) toggle(7) useAsync(61)
 — все MOVE.
 
-### shared/ui/ (51 слайс, 9649) — группами
+### shared/ui/ (52 слайса, 10149) — группами
 
-- MOVE без правок (44): Alert, Avatar, Badge, Button, ButtonGroup, Calendar,
+- MOVE без правок (45): Alert, Avatar, Badge, Button, ButtonGroup, Calendar,
   CellPopup, Checkbox, ColorPicker(+check), ConfirmDialog, Counter, DatePicker,
   Drawer, Dropdown-семья (5 файлов), EmptyState, ErrorState, FacetFilter, Field,
   Icon(icon-map+local-icons), IconButton, InlineInput, Input/Textarea, Layout-семья,
   Micro-семья (3), Modal, NumberInput, Page-семья (8), Pagination, Popover, Progress,
-  Radio, RangeCalendar, ScrollArea(+use-scrolled), SearchInput, SearchTrigger,
-  Segmented, Select, Skeleton, Spinner, Switch, Table, Tabs, Toast, Tooltip,
-  Tree, TreeRow-семья, Typography, VisuallyHidden.
+  **ProgressBar**, Radio, RangeCalendar, ScrollArea(+use-scrolled), SearchInput,
+  SearchTrigger, Segmented, Select, Skeleton, Spinner, Switch, Table, Tabs, Toast,
+  Tooltip, Tree, TreeRow-семья, Typography, VisuallyHidden.
 - PORT (2): Link, Breadcrumbs — routerLink-адаптер (§2.2).
 
 ### widgets/ (1406)
@@ -1256,8 +1417,8 @@ index.html/bun.lock — DROP/FREEZE (§7.1).
 | Файл | Строк | Причина |
 |---|---:|---|
 | app/(app)/tenders/page.tsx | 25 | заменён |
-| app/(app)/tenders/[id]/page.tsx | 3219 | заменён |
-| components/TendersRegistry.tsx | 480 | заменён |
+| app/(app)/tenders/[id]/page.tsx | 3501 | заменён (было 3219 — страница росла до 24.08) |
+| components/TendersRegistry.tsx | 485 | заменён |
 | lib/tendersRegistry.ts | 87 | ЧАСТИЧНО: flattenPortfolios переиспользуется адаптером |
 | app/page.module.css | 142 | сирота скаффолда |
 | lib/comparisonWorkspace.ts | 150 | заменён view.ts/useCompareScreen (решение В4) |
@@ -1579,11 +1740,11 @@ const selectTab = (t: Tab) =>
 |---|---:|---|
 | app/(app)/layout.tsx | 23 | без изменений (перестаёт видеть /tenders*) |
 | app/(app)/tenders/page.tsx | 25 | DELETE (Ф3) |
-| app/(app)/tenders/new/page.tsx | 1749 | СОХРАНИТЬ: мастер Excel остаётся в старом шелле; точка входа на него — решить (см. ниже) |
-| app/(app)/tenders/[id]/page.tsx | 3219 | DELETE (Ф4) |
-| components/TendersRegistry.tsx | 480 | DELETE |
+| app/(app)/tenders/new/page.tsx | 2507 | СОХРАНИТЬ: мастер Excel остаётся в старом шелле (вырос с 1749 — волна 24.08); точка входа на него — решить (см. ниже) |
+| app/(app)/tenders/[id]/page.tsx | 3501 | DELETE (Ф4) |
+| components/TendersRegistry.tsx | 485 | DELETE |
 | lib/tendersRegistry.ts | 87 | ЧАСТИЧНО: flattenPortfolios живёт, CSV-хелперы умирают |
-| lib/tendersApi.ts | 1509 | ЧАСТИЧНО: адаптеры cu читают формы типов отсюда; сами функции постепенно умирают по мере перехода cu (не удалять до Ф7!) |
+| lib/tendersApi.ts | 1657 | ЧАСТИЧНО: адаптеры cu читают формы типов отсюда; сами функции постепенно умирают по мере перехода cu (не удалять до Ф7!) |
 | lib/portfoliosApi.ts / portfolios.ts | 89+64 | переиспользуются адаптером реестра |
 | lib/apiClient.ts | 80 | переиспользуется как есть |
 | components/AuthGuard.tsx | 61 | переиспользуется в (cu)/layout |
@@ -1617,17 +1778,18 @@ fill/[token](1268) — кабинет поставщика, вне шелла ц
 | Фаза | Содержание | Оптимист | Пессимист |
 |---|---|---:|---:|
 | Ф0 | подготовка, решения | 0.5 | 0.5 |
-| Ф1 | дизайн-система 51+токены | 2 | 3 |
+| Ф1 | дизайн-система 52+токены | 2 | 3 |
 | Ф2 | каркас 4 виджета+стор+роутинг | 2 | 3 |
 | Ф3 | реестр+адаптер списков | 1.5 | 2 |
-| Ф4 | карточка: сравнение, раунды, адаптеры | 4 | 6 |
+| Ф4 | карточка: сравнение, раунды, комментарии/корректировки/экспорт, viewUrl, адаптеры (карточка выросла до 12 291 строк) | 7 | 10 |
 | Ф5 | ИИ-панель этап A | 2 | 3 |
 | Ф6 | чистка, чекеры, стенд | 1.5 | 2 |
-| **Итого основной путь** | | **13.5** | **19.5** |
-| Ф7 | потери функционала (13 пунктов §7.2) | от 15 | 30+ |
+| **Итого основной путь** | | **16.5** | **23.5** |
+| Ф7 | потери функционала (13 пунктов §7.2, из них №8 и №13 частично закрыты) | от 14 | 28+ |
 
-Допущения: один фронтендер, бэкенд не меняется, решения §7.3 приняты заранее,
-источник стабилен (нет параллельной разработки в aag.tender во время Ф1–Ф5).
+Допущения: один фронтендер, бэкенд не меняется (кроме трекинга §7.4), решения §7.3 приняты
+заранее. «Источник стабилен во время Ф1–Ф5» — УСЛОВИЕ СЕЙЧАС НАРУШЕНО (§7.5): без
+договорной заморозки источника правило diff-переноса §7.1 добавляет ~1–2 дня на фазу.
 
 Критический путь: Ф1 → Ф2 → Ф4 (Ф3 параллелит второй человек при наличии).
 
@@ -1647,6 +1809,9 @@ fill/[token](1268) — кабинет поставщика, вне шелла ц
 | Аномалия | выброс цены по k-формуле от отклонений остальных |
 | named_filters | серверные готовые срезы работ: has_potential/anomalies/high_spread/key |
 | Stale/partial | устаревание сохранённого разбора относительно ревизии данных |
+| viewUrl | сериализация рабочего контекста сравнения в URL (`?p=&m=&dev=…`); пишется только отличие от пресета (§2.4) |
+| Стадия КП (BidStage) | состояние предложения подрядчика: ждём / черновик / подано / запрошена правка; бейджи стадий в таблице |
+| Просмотренность комментариев | «отметить всё прочитанным» — ЗАПИСЬ от имени пользователя; эндпоинта в бэкенде нет (в13) |
 | «дверь» | api-сегмент слайса: единственное место, где экран встречает данные |
 | MOVE/ADAPT/PORT/REWRITE/DROP/FREEZE | коды действий приложения Б |
 
@@ -1690,6 +1855,7 @@ fill/[token](1268) — кабинет поставщика, вне шелла ц
 | Pagination | Pagination.tsx / css / idx | 97+69+5 | [ ] |
 | Popover | Popover.tsx / css / idx | 102+59+1 | [ ] |
 | Progress | Progress.tsx / css / idx | 53+30+4 | [ ] |
+| ProgressBar (NEW 25.08) | ProgressBar.tsx / css / idx | 69+62+4 | [ ] |
 | Radio | Radio.tsx / css / idx | 105+80+5 | [ ] |
 | RangeCalendar | RangeCalendar.tsx / css / idx | 179+91+1 | [ ] |
 | ScrollArea | ScrollArea.tsx / use-scrolled.ts / css / idx | 43+28+27+2 | [ ] |
@@ -1709,7 +1875,7 @@ fill/[token](1268) — кабинет поставщика, вне шелла ц
 | Typography | Typography.tsx / css / idx | 122+30+9 | [ ] |
 | VisuallyHidden | VisuallyHidden.tsx / idx | 25+1 | [ ] |
 
-Итого shared/ui: 9649 строк, 51 слайс, 0 PORT кроме Link/Breadcrumbs.
+Итого shared/ui: 10149 строк, 52 слайса, 0 PORT кроме Link/Breadcrumbs.
 Порядок переноса внутри Ф1 — по списку сверху вниз (зависимости уже отсортированы:
 Badge(Tone) раньше потребителей, Layout раньше ButtonGroup, Field раньше Input).
 
@@ -1729,6 +1895,7 @@ npx tsx src/cu/shared/lib/date.check.ts
 npx tsx src/cu/entities/tender/model/tender.check.ts
 npx tsx src/cu/entities/comparison/model/comparison.check.ts
 npx tsx src/cu/entities/comparison/model/terms.check.ts
+npx tsx src/cu/entities/comparison/model/viewUrl.check.ts
 npx tsx src/cu/features/ai-analysis/model/analysis.check.ts
 npx tsx src/cu/features/ai-analysis/model/insights.check.ts
 npx tsx src/cu/pages/tender/model/columns.check.ts

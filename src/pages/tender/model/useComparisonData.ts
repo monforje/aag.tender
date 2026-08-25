@@ -55,24 +55,43 @@ export function useComparisonData(tenderId: string) {
   }
 
   /* Обе мутации ПЕРЕЧИТЫВАЮТ снимок тем же путём, что и первая загрузка:
-     api отдаёт НОВЫЙ объект (см. `replaceContractor`), и мемоизации таблицы
-     честно пересчитываются. Своего оптимистичного состояния здесь нет —
-     решение по корректировке двигает медианы, ранжир и счётчики шапки, и
-     подделать это на клиенте значило бы завести второй расчёт. */
+      api отдаёт НОВЫЙ объект (см. `replaceContractor`), и мемоизации таблицы
+      честно пересчитываются. Своего оптимистичного состояния здесь нет —
+      решение по корректировке двигает медианы, ранжир и счётчики шапки, и
+      подделать это на клиенте значило бы завести второй расчёт.
+
+      ОБЕ ВОЗВРАЩАЮТ УСПЕХ И НЕ БРОСАЮТ. Мок ответить ошибкой не может, сеть —
+      может, и панель решения обязана узнать об отказе фактом («ничего не
+      изменилось, можно повторить»), а не зависшим `busy`: перечитывать
+      снимок после неудачи нечего. `false` здесь значит «не записано» —
+      и «нечего решать», и «запрос не дошёл»; экрану достаточно одного
+      ответа, потому что выглядит он одинаково. */
   const reloadRef = useRef(state.reload);
   reloadRef.current = state.reload;
 
   const decide = useCallback(async (
     contractorId: string, positionId: string,
     decision: 'accepted' | 'declined', note?: string,
-  ) => {
-    await decideCorrection({ tenderId, contractorId, positionId, decision, note });
-    reloadRef.current();
+  ): Promise<boolean> => {
+    try {
+      const ok = await decideCorrection({ tenderId, contractorId, positionId, decision, note });
+      if (ok) reloadRef.current();
+      return ok;
+    } catch (error) {
+      console.error('decideCorrection:', error);
+      return false;
+    }
   }, [tenderId]);
 
-  const pickVersion = useCallback(async (contractorId: string, versionId: string) => {
-    await selectBidVersion({ tenderId, contractorId, versionId });
-    reloadRef.current();
+  const pickVersion = useCallback(async (contractorId: string, versionId: string): Promise<boolean> => {
+    try {
+      const ok = await selectBidVersion({ tenderId, contractorId, versionId });
+      if (ok) reloadRef.current();
+      return ok;
+    } catch (error) {
+      console.error('selectBidVersion:', error);
+      return false;
+    }
   }, [tenderId]);
 
   return {
@@ -86,9 +105,16 @@ export function useComparisonData(tenderId: string) {
     pickVersion,
     /** ДЕМО: следующий молчащий подрядчик подаёт КП. Перечитывать нечего,
      *  когда подавать больше некому — лента об этом и сообщает. Тендер назван
-     *  явно: у статических снимков ленты подач нет, и кнопка гаснет сразу. */
+     *  явно: у статических снимков ленты подач нет, и кнопка гаснет сразу.
+     *  Свой сбой метод гасит: кнопка демо-подачи не стоит того, чтобы ронять
+     *  страницу, — данные просто остаются прежними, ленту можно попросить
+     *  снова. */
     submitNext: async () => {
-      if (await simulateNextSubmission(tenderId)) setSubmissions((n) => n + 1);
+      try {
+        if (await simulateNextSubmission(tenderId)) setSubmissions((n) => n + 1);
+      } catch (error) {
+        console.error('simulateNextSubmission:', error);
+      }
     },
   };
 }
