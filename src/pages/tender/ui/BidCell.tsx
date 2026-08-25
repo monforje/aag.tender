@@ -110,7 +110,7 @@ export type CellActionHandler = (
  *          thresholds={thresholds} bind={popup.bind} onAction={onCellAction} />
  */
 export function BidCell({
-  row, contractor, view, thresholds, bind, note, flash, comments, onAction,
+  row, contractor, view, thresholds, bind, note, flash, comments, onAction, shade,
 }: {
   row: RowFacts;
   contractor: Contractor;
@@ -126,6 +126,9 @@ export function BidCell({
    *  Пусто — истории нет, маркер не рисуется вовсе. */
   comments?: { total: number; unread: boolean };
   onAction: CellActionHandler;
+  /** Правая кромка — граница между подрядчиками: мягкая полоса тени.
+   *  У последней колонки ленты её нет — там край. */
+  shade?: boolean;
 }) {
   const { position } = row;
   const cellId = `${contractor.id}:${position.id}`;
@@ -224,7 +227,7 @@ export function BidCell({
      знаков у неё нет — решать по позиции, которой в смете нет, нечего. */
   if (state === 'removed') {
     return (
-      <td className={cx(tableCell.numeric, s.bidCell, flash && s.cellFlash)}>
+      <td className={cx(tableCell.numeric, s.bidCell, flash && s.cellFlash, shade && s.cellShade)}>
         <span className={s.dash}>—</span>
       </td>
     );
@@ -361,6 +364,7 @@ export function BidCell({
         state === 'missing' && s.cellMissing,
         isMin && s.cellMin,
         flash && s.cellFlash,
+        shade && s.cellShade,
       )}
       data-cell={cellId}
       data-marks={marks || undefined}

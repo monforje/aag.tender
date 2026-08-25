@@ -56,7 +56,7 @@ const TIER = {
  * @example
  * <SpreadCell row={row} bind={popup.bind} thresholds={thresholds} nameOf={nameOf} />
  */
-export function SpreadCell({ row, bind, thresholds, nameOf }: {
+export function SpreadCell({ row, bind, thresholds, nameOf, shade }: {
   row: RowFacts;
   bind: CellPopupBind;
   /** Пороги тендера: ярус, нормировка шкалы и текст причины делят одни
@@ -65,12 +65,15 @@ export function SpreadCell({ row, bind, thresholds, nameOf }: {
   /** Имя подрядчика по id — для поимённых краёв диапазона. Функцией, а не
    *  списком: <CompareRow> мемоизирован, и стабильный колбэк дешевле массива. */
   nameOf: (contractorId: string) => string;
+  /** Правая кромка — граница сравниваемого: мягкая полоса тени. Пока
+   *  включён столбец «Потенциал», граница стоит за ним, не здесь. */
+  shade?: boolean;
 }) {
   const { position, spread, spreadTag } = row;
 
   if (position.removed || spread === null || spreadTag === null) {
     return (
-      <td className={cx(tableCell.numeric, tableCell.muted)}>
+      <td className={cx(tableCell.numeric, tableCell.muted, shade && s.cellShade)}>
         <span className={s.dash}>—</span>
         {/* Причина отсутствия — не «разброс 0 %», а «сравнивать не с чем»
             (§1.5, хвост сортировки по разбросу читает то же правило). */}
@@ -87,7 +90,7 @@ export function SpreadCell({ row, bind, thresholds, nameOf }: {
 
   return (
     <td
-      className={cx(tableCell.numeric, tier.cell, s.spreadCell)}
+      className={cx(tableCell.numeric, tier.cell, s.spreadCell, shade && s.cellShade)}
       aria-label={`Разброс ${decimal(spread)} ${plural(Math.round(spread), 'процент', 'процента', 'процентов')} — ${word}`}
       {...bind(spreadSummary({ row, thresholds, nameOf }))}
     >

@@ -232,13 +232,17 @@ function CompareRowImpl({
       </td>
       <td className={tableCell.muted}>{removed ? '—' : position.unit}</td>
 
-      <SpreadCell row={row} bind={bind} thresholds={thresholds} nameOf={nameOf} />
+      {/* Граница сравниваемого — за «Разбросом», а при включённом
+          «Потенциале» за ним; тень на кромке несёт сама ячейка (.cell-shade):
+          фон <col> не рисуется Firefox вовсе и артефачит в Chrome. */}
+      <SpreadCell row={row} bind={bind} thresholds={thresholds} nameOf={nameOf}
+        shade={!view.showPotential} />
 
       {view.showPotential ? (
         <PotentialCell row={row} bind={bind} nameOf={nameOf} sorted={view.rowView === 'potential'} />
       ) : null}
 
-      {bids.map((bid) => (
+      {bids.map((bid, i) => (
         <BidCell
           key={bid.contractor.id}
           row={row}
@@ -250,6 +254,7 @@ function CompareRowImpl({
           flash={flashOf(bid.contractor.id)}
           comments={commentsFor(bid.contractor.id, position.id)}
           onAction={onAction}
+          shade={i < bids.length - 1}
         />
       ))}
     </tr>

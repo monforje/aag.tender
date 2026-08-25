@@ -41,7 +41,7 @@ export function PotentialCell({ row, bind, nameOf, sorted }: {
 
   if (position.removed || !row.maxPot) {
     return (
-      <td className={cx(tableCell.numeric, tableCell.muted, sorted && s.colSorted)}>
+      <td className={cx(tableCell.numeric, tableCell.muted, sorted && s.colSorted, s.cellShade)}>
         <span className={s.dash}>—</span>
       </td>
     );
@@ -49,7 +49,7 @@ export function PotentialCell({ row, bind, nameOf, sorted }: {
 
   return (
     <td
-      className={cx(tableCell.numeric, s.potCell, sorted && s.colSorted)}
+      className={cx(tableCell.numeric, s.potCell, sorted && s.colSorted, s.cellShade)}
       {...bind({
         tone: 'info',
         title: `Потенциал строки — ${money(row.maxPot)}`,
