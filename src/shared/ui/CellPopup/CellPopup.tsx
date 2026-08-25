@@ -1,20 +1,52 @@
 import {
   useCallback, useEffect, useId, useLayoutEffect, useRef, useState,
-  type FocusEventHandler, type MouseEventHandler, type ReactNode, type RefCallback,
+  type CSSProperties, type FocusEventHandler, type MouseEventHandler, type ReactNode,
+  type RefCallback,
 } from 'react';
 import { cx } from '@/shared/lib/cx';
 import type { Tone } from '@/shared/ui/Badge';
 import s from './CellPopup.module.css';
+
+/** Одно поле подсказки — пара «подпись · значение». Строка таблицы, а не
+ *  строка текста: колонки отделены линейкой, и значения соседних полей
+ *  читаются вертикалью (правка владельца 25.08.2026, §9).
+ *
+ *  `span` снимает колонку подписи и отдаёт строке всю ширину — им набраны
+ *  ПЕРЕЧИСЛЕНИЯ («Стройсервис — отказ от позиции»): у них подписи нет вовсе,
+ *  и пустая колонка слева резала бы им ширину ни за чем. */
+export interface CellPopupField {
+  label: string;
+  /** Значение прижато вправо: это числа. У `span` — влево: это фраза. */
+  value: ReactNode;
+  tone?: boolean;
+  span?: boolean;
+}
+
+/** Полоска распределения — ФОРМА ряда цен, а не масштаб (§3 правок владельца
+ *  25.08.2026). Каждая строка нормирована по собственным MIN–MAX, поэтому
+ *  `at` это доля 0…1, а не деньги; `n` больше единицы — маркер количества
+ *  вместо разведённых точек. Края подписаны словами. */
+export interface CellPopupStrip {
+  min: string;
+  max: string;
+  points: ReadonlyArray<{ at: number; n?: number; title?: string }>;
+}
 
 /** Содержимое подсказки приходит ГОТОВЫМ: попап ничего не считает — числа
  *  и формулировки отдаёт ячейка (§4.6 аудита). */
 export interface CellPopupData {
   tone?: Tone;
   title: string;
-  /** Поля «подпись · значение». Значение прижато вправо: это числа. */
-  fields: Array<{ label: string; value: ReactNode; tone?: boolean }>;
+  /** Вторая строка шапки: путь ФКП, единица и объём, версия КП. Всё, что
+   *  ОТВЕЧАЕТ НА «ЧТО ЭТО», а не «сколько тут»: в таблице полей такие строки
+   *  занимали колонку значений и сравнивались с числами, которыми не
+   *  являются. */
+  sub?: string;
+  fields: CellPopupField[];
   /** Поле со шкалой: доля заливки 0…1, красится тоном карточки. */
   meter?: { label: string; value: ReactNode; fraction: number };
+  /** Полоска распределения — ПОСЛЕДНЕЙ строкой тела (§3). */
+  strip?: CellPopupStrip;
   /** Всё, что пояснение, а не число — причина аномалии, критерий минимума. */
   note?: string;
   /** ФАКТ, а не пояснение: «есть комментарий», «ещё 2 в истории». Отдельно от
@@ -24,6 +56,11 @@ export interface CellPopupData {
    *  его). Стоит ПОСЛЕ пояснения: сначала «почему так», потом «где ещё
    *  смотреть». */
   fact?: string;
+  /** Ширина панели в пикселях. По умолчанию 340; паспорт позиции и разбор
+   *  разброса просят больше — у них не пары «слово · число», а фразы, и на
+   *  узкой панели каждая ломалась на три строки (правка владельца
+   *  25.08.2026: «не боимся делать их широкими»). */
+  width?: number;
 }
 
 export interface CellPopupTarget {
@@ -241,6 +278,14 @@ export function useCellPopup() {
 
 const EDGE = 12;
 
+/* ШИРИНА ПАНЕЛИ ПО УМОЛЧАНИЮ. 288 стояло здесь до 25.08.2026 и было подобрано
+   под пары «слово · число»; с паспортом позиции и разбором разброса в панель
+   приехали ФРАЗЫ («ООО «РегионЭлектроКомплект» — позиция пропущена»), и каждая
+   ломалась на три строки. Правка владельца прямая: «не боимся делать их
+   широкими». Зажим по области контента остаётся — панель не выходит за ленту
+   ни на пиксель. */
+const DEFAULT_W = 340;
+
 function CellPopupPanel({ id, target, open, register }: {
   id: string;
   target: CellPopupTarget | null;
@@ -328,10 +373,16 @@ function CellPopupPanel({ id, target, open, register }: {
       role="tooltip"
       className={s.popup}
       data-tone={data.tone ?? 'neutral'}
+      style={{ '--pop-w': `${data.width ?? DEFAULT_W}px` } as CSSProperties}
       onClick={(e) => { if (e.target === e.currentTarget) e.currentTarget.close(); }}
     >
       <div className={s.head}>
         <span className={s.title}>{data.title}</span>
+        {/* ВТОРАЯ СТРОКА ШАПКИ — «что это», а не «сколько тут»: путь ФКП,
+            единица и объём, версия КП. Полем таблицы такая строка занимала
+            колонку значений и вставала в один столбик с деньгами, которыми
+            не является. */}
+        {data.sub ? <span className={s.sub}>{data.sub}</span> : null}
       </div>
       <div className={s.body}>
         {/* Ключ — ИНДЕКС, а не подпись: у перечислений («кто отказался»,
@@ -339,16 +390,16 @@ function CellPopupPanel({ id, target, open, register }: {
             схлопнул бы такие строки в одну. Порядок полей задаёт вызывающий
             и внутри одного показа не меняет — перестановок, ради которых
             нужен стабильный ключ, здесь не бывает. */}
-        {data.fields.map((field, i) => (
+        {data.fields.map((field, i) => (field.span ? (
+          <div key={i} className={cx(s.field, s.fieldSpan)}>
+            <span className={s.spanValue}>{field.value}</span>
+          </div>
+        ) : (
           <div key={i} className={s.field}>
             <span className={s.label}>{field.label}</span>
-            {field.tone ? (
-              <span className={cx(s.value, s.valueTone)}>{field.value}</span>
-            ) : (
-              <span className={s.value}>{field.value}</span>
-            )}
+            <span className={cx(s.value, field.tone && s.valueTone)}>{field.value}</span>
           </div>
-        ))}
+        )))}
         {data.meter ? (
           <div className={s.field} title="Шкала общая для всех строк: 25 % — вся длина">
             <span className={s.label}>{data.meter.label}</span>
@@ -358,6 +409,29 @@ function CellPopupPanel({ id, target, open, register }: {
               </span>
               <span className={cx(s.value, s.valueTone)}>{data.meter.value}</span>
             </span>
+          </div>
+        ) : null}
+        {/* ПОЛОСКА РАСПРЕДЕЛЕНИЯ — ПОСЛЕДНЕЙ СТРОКОЙ (§3 правок владельца
+            25.08.2026). Показывает ФОРМУ ряда: где сбились предложения, где
+            стоит одинокая цена. Нормирована по собственным MIN–MAX строки,
+            поэтому абсолютный масштаб по ней не читается и подписаны только
+            края. Точек у пропусков и отказов нет — цены нет вовсе. */}
+        {data.strip ? (
+          <div className={cx(s.field, s.fieldSpan, s.stripRow)}>
+            <span className={s.stripEnd}>{data.strip.min}</span>
+            <span className={s.stripTrack} aria-hidden="true">
+              {data.strip.points.map((p, i) => (
+                <i
+                  key={i}
+                  className={cx(s.stripDot, (p.n ?? 1) > 1 && s.stripDotMany)}
+                  style={{ left: `${Math.min(Math.max(p.at, 0), 1) * 100}%` }}
+                  title={p.title}
+                >
+                  {(p.n ?? 1) > 1 ? p.n : null}
+                </i>
+              ))}
+            </span>
+            <span className={s.stripEnd}>{data.strip.max}</span>
           </div>
         ) : null}
       </div>

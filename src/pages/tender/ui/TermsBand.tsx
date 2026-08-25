@@ -32,12 +32,18 @@ import s from './TenderCompare.module.css';
  *         ширину (tableCell.fullRow): липкая первая колонка его не рвёт.
  *
  * @example
- * <TermsBand bids={bids} bind={popup.bind} />
+ * <TermsBand bids={bids} bind={popup.bind} lead={3} span={9} />
  */
-export function TermsBand({ bids, bind }: {
+export function TermsBand({ bids, bind, lead, span }: {
   bids: Bid[];
   /** Общий попап таблицы: один слой обслуживает и пометки цен, и условия. */
   bind: CellPopupBind;
+  /** Сколько пустых колонок добрать ПОСЛЕ якоря — как у <TotalRow>. Пропом, а
+   *  не литералом: колонок левого блока то четыре, то пять («Потенциал»), и
+   *  забытое число уводит всю матрицу на клетку вбок МОЛЧА. */
+  lead: number;
+  /** Все колонки таблицы — ширина полосы-заголовка. */
+  span: number;
 }) {
   /* Строки матрицы собирает модель (model/terms.ts): объединение вопросов
      по колонкам, порядок — первое появление. */
@@ -50,7 +56,7 @@ export function TermsBand({ bids, bind }: {
       <tr className={s.groupRow}>
         <th
           scope="rowgroup"
-          colSpan={4 + bids.length}
+          colSpan={span}
           className={cx(tableCell.card, tableCell.fullRow, s.groupHead)}
         >
           <div className={s.termsCap}>Условия поставщиков</div>
@@ -58,10 +64,13 @@ export function TermsBand({ bids, bind }: {
       </tr>
       {rows.map(({ label, cells }) => (
         <tr key={label}>
+          {/* Пустая ячейка под «№»: закреплённая пара — это ПЕРВАЯ и ВТОРАЯ
+              ячейки строки, и якорь обязан оказаться вторым. */}
+          <td className={s.numCell} />
           <th scope="row" className={cx(tableCell.strong, s.termLabel)}>{label}</th>
           {/* Пустые колонки объёма добираются одним colSpan — якорь остаётся
               самостоятельной ячейкой ради sticky-col. */}
-          <td colSpan={3} />
+          <td colSpan={lead} />
           {cells.map((term, i) => (
             <TermCell key={bids[i].contractor.id} term={term} bind={bind} />
           ))}

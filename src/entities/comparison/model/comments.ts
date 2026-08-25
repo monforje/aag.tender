@@ -20,7 +20,15 @@
  *  бы третьего. */
 export interface CellComment {
   id: string;
-  /** Ответ на запись треда (`parent_id` канона). Ключа нет — корневая. */
+  /** Ответ на КОНКРЕТНУЮ запись треда (`parent_id` канона) — не на её корень.
+   *  Ключа нет — запись корневая.
+   *
+   *  ССЫЛКА ИМЕННО НА АДРЕСАТА, хотя показываются ответы одним уровнем
+   *  отступа (см. `threadOrder`). Пока сюда клался корень, «ответить» на
+   *  третьей реплике подряд теряло, КОМУ отвечают: в ленте оставалось четыре
+   *  одинаково вложенных записи без единого признака, какая какой возражает.
+   *  Хранение адресата и ПОКАЗ вложенности — разные вопросы, и решать их
+   *  одним полем значило отвечать на второй ценой первого. */
   parentId?: string;
   author: string;
   /** Когда написано, словами: «сегодня, 11:42». Строкой, а не датой: формат
@@ -46,16 +54,40 @@ export type CommentMap = Readonly<Record<string, CellComment[]>>;
 export const commentKey = (contractorId: string, positionId: string): string =>
   `${contractorId}:${positionId}`;
 
-/** Записи треда в порядке показа: корневые по времени прихода, ответ — сразу
- *  за своим родителем. Плоский список, а не дерево: глубина в треде ровно
- *  одна (ответ на ответ канон не заводит), и рекурсия здесь была бы
- *  устройством ради устройства. */
+/** Записи треда в порядке показа: корневая, следом ВСЯ её ветка сверху вниз.
+ *  Список плоский — вложенность на экране ровно одна (канон), — но обход
+ *  честно рекурсивный: ответ на ответ существует (см. `parentId`), и порядок
+ *  «сразу за своим адресатом» единственный, при котором переписку можно
+ *  читать подряд.
+ *
+ *  СИРОТЫ НЕ ТЕРЯЮТСЯ: запись, чей `parentId` указывает в никуда (адресата
+ *  удалили, ответ пришёл раньше родителя), дописывается в хвост. Молча
+ *  выпасть из ленты она права не имеет — это чужие слова. */
 export function threadOrder(comments: readonly CellComment[]): CellComment[] {
-  const roots = comments.filter((c) => !c.parentId);
-  return roots.flatMap((root) => [
-    root,
-    ...comments.filter((c) => c.parentId === root.id),
-  ]);
+  const kids = new Map<string, CellComment[]>();
+  for (const c of comments) {
+    if (!c.parentId) continue;
+    const list = kids.get(c.parentId);
+    if (list) list.push(c); else kids.set(c.parentId, [c]);
+  }
+  const out: CellComment[] = [];
+  const walk = (c: CellComment) => {
+    out.push(c);
+    for (const kid of kids.get(c.id) ?? []) walk(kid);
+  };
+  for (const root of comments) if (!root.parentId) walk(root);
+  const seen = new Set(out.map((c) => c.id));
+  return [...out, ...comments.filter((c) => !seen.has(c.id))];
+}
+
+/** Кому адресована запись — имя автора её родителя. `undefined` у корневой и
+ *  у сироты. Считается по треду, а не хранится при записи: имя автора живёт
+ *  в одном месте, и вторая копия разъехалась бы с ним при переименовании. */
+export function addresseeOf(
+  comment: CellComment, comments: readonly CellComment[],
+): string | undefined {
+  if (!comment.parentId) return undefined;
+  return comments.find((c) => c.id === comment.parentId)?.author;
 }
 
 /** Есть ли в треде непросмотренное — им и различаются два глифа маркера

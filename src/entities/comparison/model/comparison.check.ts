@@ -15,8 +15,9 @@ import {
   moneyCompact, pendingCorrection, predicateCount, predicatePasses, PREDICATES, PRESETS,
   rankBids, sanitizeFilters, spread, sumOf,
   SYSTEM_THRESHOLDS, termRows, hasTerms, countsInAnalysis, isWaiting,
-  type CellLine, type ComparePosition, type CompareThresholds, type CompareView,
-  type Contractor, type PositionGroup,
+  addresseeOf, hasUnread, threadOrder, anomalyRatio, spreadPoints,
+  type CellComment, type CellLine, type ComparePosition, type CompareThresholds,
+  type CompareView, type Contractor, type PositionGroup, type RowFacts,
 } from '..';
 import { MOCK_AXP, MOCK_COMPARISON } from '../api/comparison.mock';
 
@@ -372,7 +373,7 @@ assert.ok(Object.values(PRESETS).every((p) => p.showDynamics === false));
 const planOf = (v: CompareView) => cellLines(v);
 assert.deepEqual(
   planOf(view),
-  { lines: [{ kind: 'main', metric: 'cost' }], deviationOn: null },
+  { lines: [{ kind: 'main', metric: 'cost' }], deviationOn: null, dynamicsOn: null },
   'основной «Стоимость» без спутников — одна строка',
 );
 const potentialView: CompareView = {
@@ -387,6 +388,19 @@ const costFullPlan = planOf({ ...view, showDeviation: true, showRate: true });
 assert.deepEqual(costFullPlan.lines.map((l: CellLine) => l.kind), ['main', 'rate'],
   'основной «Стоимость» — база не дублируется, ставка последней');
 assert.equal(costFullPlan.deviationOn, 'main');
+
+/* ДИНАМИКА ЛИПНЕТ ТУДА ЖЕ, КУДА ОТКЛОНЕНИЕ — к строке СТОИМОСТИ, где бы та
+   ни стояла (§3.1). Проверяется отдельно от отклонения ровно потому, что
+   независимы они только по включённости: слоты у них общие, и разъехаться
+   слоты могут молча — суффикс просто окажется под другим числом. */
+assert.equal(planOf({ ...view, showDynamics: true }).dynamicsOn, 'main',
+  'основной «Стоимость» — динамика на главной строке');
+assert.equal(
+  planOf({ ...potentialView, showDynamics: true }).dynamicsOn, 'base',
+  'основной «Потенциал» — динамика уезжает на строку-базу вслед за стоимостью',
+);
+assert.equal(planOf({ ...view, showDynamics: false }).dynamicsOn, null,
+  'галочка выключена — суффикса нет вовсе');
 
 /* Пресеты выражаются теми же осями и повторяются руками. Состав «Аномалий»
    приведён к канону 25.08.2026 (§3.2): порядок строк — по РАЗБРОСУ, фильтр
@@ -805,6 +819,93 @@ for (const id of ['a28', 'b31']) {
     SYSTEM_THRESHOLDS,
   );
   assert.deepEqual(dropped.rows[0].corrections, [], 'по снятой строке решать нечего');
+}
+
+/* ── ТРЕД КОММЕНТАРИЕВ: ПОРЯДОК ПОКАЗА ─────────────────────────────────────
+   Десятое тихое место. Обход дерева ответов не падает — он молча ТЕРЯЕТ
+   записи: реплика, чей адресат не корневой, при плоской выборке
+   `parentId === root.id` просто не попадала в ленту, и человек читал тред без
+   половины ответов, ни о чём не подозревая. Глазами это не ловится — список
+   выглядит целым в любом составе. */
+{
+  const c = (id: string, author: string, parentId?: string): CellComment =>
+    ({ id, author, at: 'сегодня', text: id, ...(parentId ? { parentId } : {}) });
+
+  // Ветка идёт СРАЗУ за своим адресатом, на любую глубину.
+  const tree = [c('r1', 'A'), c('r2', 'B'), c('a1', 'C', 'r1'), c('a2', 'D', 'a1')];
+  assert.deepEqual(threadOrder(tree).map((x) => x.id), ['r1', 'a1', 'a2', 'r2'],
+    'ответ на ответ стоит за своим адресатом, а не в хвосте корня');
+
+  // Порядок корневых сохраняется, состав не меняется никогда.
+  assert.equal(threadOrder(tree).length, tree.length, 'ни одна запись не потеряна');
+
+  // Сирота (адресат удалён) дописывается в хвост, а не исчезает.
+  const orphan = [c('r1', 'A'), c('x', 'E', 'gone')];
+  assert.deepEqual(threadOrder(orphan).map((x) => x.id), ['r1', 'x'],
+    'запись с ссылкой в никуда остаётся в ленте');
+
+  // Адресата называет ИМЯ автора родителя, а не поле записи.
+  assert.equal(addresseeOf(tree[3], tree), 'C', 'ответ на ответ адресован его автору');
+  assert.equal(addresseeOf(tree[0], tree), undefined, 'у корневой адресата нет');
+  assert.equal(addresseeOf(orphan[1], orphan), undefined, 'у сироты адресата нет');
+
+  // Просмотренность — свойство ТРЕДА, а не первой записи.
+  assert.equal(hasUnread(tree), false);
+  assert.equal(hasUnread([...tree, { ...c('n', 'F'), unread: true }]), true);
+}
+
+/* ── ФОРМА РЯДА ЦЕН: точки полоски распределения (§3 правок 25.08.2026) ─────
+   Нормировка, слияние близких и порядок — числа, а числа экрана проверяются
+   здесь. Глазами неверную нормировку не поймать вовсе: точки правдоподобны в
+   любом положении, и «сбились слева» от «сбились справа» на живом экране
+   отличает только тот, кто знает исходные цены наизусть. */
+{
+  const rowOf = (prices: Array<[string, number, boolean?]>): RowFacts => ({
+    position: { id: 'p', title: 'p', qty: 1, unit: 'шт' },
+    bids: prices.map(([contractorId, price, anomaly]) => ({
+      contractorId, price, anomaly: anomaly === true,
+    })),
+    median: null, spread: null, spreadTag: null, bestIds: [], maxIds: [],
+    anomaly: false, declined: false, missing: false, waiting: false,
+    maxPot: 0, pots: [], weight: 0, keyDerived: false, corrections: [],
+  });
+
+  // Края ряда — ровно 0 и 1: полоска нормирована по СОБСТВЕННЫМ MIN–MAX.
+  const spread3 = spreadPoints(rowOf([['a', 100], ['b', 200], ['c', 300]]));
+  assert.deepEqual(spread3.map((p) => p.at), [0, 0.5, 1],
+    'нормировка по своим краям: MIN в нуле, MAX в единице');
+
+  // Порядок — ПО ЦЕНЕ, а не по порядку колонок: полоска читается слева направо.
+  assert.deepEqual(
+    spreadPoints(rowOf([['c', 300], ['a', 100], ['b', 200]])).map((p) => p.ids[0]),
+    ['a', 'b', 'c'],
+  );
+
+  // Близкие цены схлопываются в маркер количества, далёкие — нет.
+  const clustered = spreadPoints(rowOf([['a', 100], ['b', 101], ['c', 300]]));
+  assert.equal(clustered.length, 2, 'две цены в пределах 4 % длины — один маркер');
+  assert.equal(clustered[0].n, 2);
+  assert.deepEqual(clustered[0].ids, ['a', 'b']);
+
+  // Аномальная цена ряд не растягивает: иначе честные предложения сплющило бы
+  // в кляксу у края — ровно то, ради чего полоску и смотрят.
+  const withOutlier = spreadPoints(rowOf([['a', 100], ['b', 200], ['x', 900, true]]));
+  assert.deepEqual(withOutlier.map((p) => p.ids[0]), ['a', 'b'],
+    'выброс в полоску не входит — он назван отдельной строкой разбора');
+
+  // Все цены равны — деление на ноль штатно: стопка встаёт по центру.
+  assert.deepEqual(spreadPoints(rowOf([['a', 500], ['b', 500]])), [
+    { at: 0.5, n: 2, ids: ['a', 'b'] },
+  ]);
+
+  // Одна сопоставимая цена — полоски нет: это не форма ряда, а её отсутствие.
+  assert.deepEqual(spreadPoints(rowOf([['a', 100]])), []);
+  assert.deepEqual(spreadPoints(rowOf([['a', 100], ['x', 900, true]])), []);
+
+  // k аномалии — отношение к медиане, и ноль в знаменателе не даёт Infinity.
+  assert.equal(anomalyRatio(240, 100), 2.4);
+  assert.equal(anomalyRatio(240, null), null);
+  assert.equal(anomalyRatio(240, 0), null);
 }
 
 console.log('comparison: ok');

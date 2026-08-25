@@ -55,19 +55,29 @@ export async function postComment(input: {
   return comment;
 }
 
-/** «Отметить всё просмотренным» по одному треду. Флаг снимается со ВСЕХ
- *  записей разом: маркер ячейки различает два состояния, а не считает —
- *  счётчика у него нет (решение владельца 25.08.2026). */
+/** Просмотренность треда. `ids` названы — просмотрены ИМЕННО ЭТИ записи (их
+ *  прочитали глазами, см. `CommentThread`); `ids` нет — «отметить всё
+ *  просмотренным» кнопкой панели.
+ *
+ *  ОДИН МЕТОД НА ОБА СЛУЧАЯ, а не «отметить запись» рядом с «отметить тред»:
+ *  разница между ними ровно в перечне, и вторая дверь означала бы второй
+ *  путь к тому же состоянию — расходятся такие пары на первой же правке. */
 export async function markThreadSeen(input: {
   tenderId: string;
   contractorId: string;
   positionId: string;
+  ids?: readonly string[];
 }): Promise<void> {
   const key = commentKey(input.contractorId, input.positionId);
   const list = threads[key];
-  if (!list?.some((c) => c.unread)) return;
+  const hit = (c: { id: string; unread?: true }) =>
+    c.unread === true && (!input.ids || input.ids.includes(c.id));
+  /* Нечего снимать — не запрос вовсе: наблюдатель видимости зовёт этот метод
+     на каждом появлении записи в ленте, и без отсечки он писал бы состояние
+     при каждой прокрутке уже прочитанного треда. */
+  if (!list?.some(hit)) return;
   threads = {
     ...threads,
-    [key]: list.map(({ unread: _unread, ...rest }) => rest),
+    [key]: list.map((c) => (hit(c) ? (({ unread: _unread, ...rest }) => rest)(c) : c)),
   };
 }

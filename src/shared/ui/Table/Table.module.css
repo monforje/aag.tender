@@ -277,7 +277,9 @@
    край — честный ответ на «эта колонка закреплена», а не украшение
    прокрутки. */
 .table--sticky-col th:first-child::before,
-.table--sticky-col td:first-child::before{
+.table--sticky-col td:first-child::before,
+.table--sticky-col-2 th:nth-child(2)::before,
+.table--sticky-col-2 td:nth-child(2)::before{
   content: ''; position: absolute; z-index: 1;
   top: 0; bottom: 0; right: 0; width: max(1px, .5px);
   /* Цвет — --cu-content-placeholder, а не --cu-border-default: это не линейка
@@ -288,11 +290,30 @@
   box-shadow: 4px 0 6px -4px rgba(0, 0, 0, .14);
 }
 
+/* ── ВТОРАЯ КОЛОНКА ЗАКРЕПЛЁННОГО БЛОКА (stickyCol={2}) ────────────────────
+   Пара «№ + название» едет как одно целое: номер сам по себе строку не
+   называет, а название без номера теряет связь с выгрузкой и с разговором
+   («смотри 47-ю»). Смещение второй колонки — ширина первой, и знает её только
+   потребитель: --sticky-col-1 наследуется по DOM и хэшей не имеет, то есть
+   пересекает границу модулей законно (тот же мост, что у --col колонки).
+   Кромку блока рисует ВТОРАЯ ячейка — у первой она гасится ниже: край один и
+   проходит он по правому обрезу пары. */
+.table--sticky-col-2 th:nth-child(2),
+.table--sticky-col-2 td:nth-child(2){
+  position: sticky; left: var(--sticky-col-1, 0); z-index: 4;
+  background-color: var(--cu-background-main);
+}
+.table--sticky-col-2 thead th:nth-child(2){ z-index: 6; }
+.table--sticky-col-2 th:first-child::before,
+.table--sticky-col-2 td:first-child::before{ content: none; }
+
 /* Строчные тона поверх непрозрачной базы якоря. Без них прокрученная строка
    теряет на якоре и ховер, и заливку раздела/итога — тон остался бы только у
    уехавших колонок, и строка читалась бы разорванной. */
 .table--sticky-col:not([data-row-hover='off']) tbody tr:hover th:first-child,
-.table--sticky-col:not([data-row-hover='off']) tbody tr:hover td:first-child{
+.table--sticky-col:not([data-row-hover='off']) tbody tr:hover td:first-child,
+.table--sticky-col-2:not([data-row-hover='off']) tbody tr:hover th:nth-child(2),
+.table--sticky-col-2:not([data-row-hover='off']) tbody tr:hover td:nth-child(2){
   background-image: linear-gradient(var(--row-hover-bg, var(--cu-state-hover-subtle)), var(--row-hover-bg, var(--cu-state-hover-subtle)));
 }
 
@@ -302,14 +323,18 @@
    собственный colSpan; ей у кромки нечего держать. Селектор с тем же началом,
    что у правила выше, — порядок в файле решает ничью специфичности. */
 .table--sticky-col th.cell-full-row,
-.table--sticky-col td.cell-full-row{
+.table--sticky-col td.cell-full-row,
+.table--sticky-col-2 th.cell-full-row,
+.table--sticky-col-2 td.cell-full-row{
   position: static;
   background-color: transparent;
 }
 /* Кромку гасим у псевдоэлемента: анимация живёт теперь на нём, и `animation:
    none` на самой ячейке до него уже не достаёт. */
 .table--sticky-col th.cell-full-row::before,
-.table--sticky-col td.cell-full-row::before{ content: none; }
+.table--sticky-col td.cell-full-row::before,
+.table--sticky-col-2 th.cell-full-row::before,
+.table--sticky-col-2 td.cell-full-row::before{ content: none; }
 
 /* ── модификаторы ячеек ─────────────────────────────────────────────────── */
 /* Их отдаёт tableCell из Table.tsx, а не подмешивает вызывающая сторона своим

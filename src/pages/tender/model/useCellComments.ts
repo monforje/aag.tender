@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import {
   commentKey, fetchComments, hasUnread, markThreadSeen, postComment,
-  type CommentMap,
+  type CellComment, type CommentMap,
 } from '@/entities/comparison';
 import { useAsync } from '@/shared/lib/useAsync';
 
@@ -64,12 +64,22 @@ export function useCellComments(tenderId: string) {
     setPatch((prev) => ({ ...prev, [key]: [...(map[key] ?? []), comment] }));
   }, [tenderId, map]);
 
-  const markSeen = useCallback(async (contractorId: string, positionId: string) => {
-    await markThreadSeen({ tenderId, contractorId, positionId });
+  /* `ids` названы — просмотрены именно эти записи (их показали в ленте);
+     нет — кнопка «Отметить все прочитанными». Ранний выход обязателен: на
+     прокрутке уже прочитанного треда наблюдатель зовёт колбэк каждым
+     появлением записи, и без него каждый такой вызов сажал бы в `patch`
+     новый объект — то есть перерисовывал бы карту тредов на всю таблицу. */
+  const markSeen = useCallback(async (
+    contractorId: string, positionId: string, ids?: readonly string[],
+  ) => {
     const key = commentKey(contractorId, positionId);
+    const list = map[key] ?? [];
+    const hit = (c: CellComment) => c.unread === true && (!ids || ids.includes(c.id));
+    if (!list.some(hit)) return;
+    await markThreadSeen({ tenderId, contractorId, positionId, ids });
     setPatch((prev) => ({
       ...prev,
-      [key]: (map[key] ?? []).map(({ unread: _unread, ...rest }) => rest),
+      [key]: list.map((c) => (hit(c) ? (({ unread: _unread, ...rest }) => rest)(c) : c)),
     }));
   }, [tenderId, map]);
 

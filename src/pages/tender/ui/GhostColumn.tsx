@@ -1,3 +1,4 @@
+import { cx } from '@/shared/lib/cx';
 import { Icon } from '@/shared/ui/Icon';
 import s from './TenderCompare.module.css';
 
@@ -15,18 +16,47 @@ import s from './TenderCompare.module.css';
  *         контекст, ради которого туда и шли.
  *         ПУНКТИР, А НЕ ЗАЛИВКА: колонка-призрак — место, которого пока нет,
  *         и рисовать её как настоящую значило бы обещать данные.
+ *         СЛЕДУЕТ ЗА СВЁРТКОЙ КАРТОЧЕК (правка владельца 25.08.2026). Пока
+ *         призрак не знал про `collapsed`, он оставался о двух строках с
+ *         подписью «новая колонка подрядчика» — и ЭТО ОН задавал высоту ряда:
+ *         свёрнутые карточки уезжали в 47px, а ряд стоял на 78, потому что
+ *         тянется он по самой высокой ячейке. Свёрнутый вид — один ряд «плюс
+ *         и слово», ровно по высоте свёрнутой шапки колонки; пояснение под
+ *         кнопкой исчезает вместе с прочими подробностями шапок.
  * A11Y:   обычная кнопка со своим именем; в шапке таблицы стоит в `<th>` без
- *         scope — она не заголовок ни для чего, это действие.
+ *         scope — она не заголовок ни для чего, это действие. Полное имя
+ *         действия не зависит от свёртки — оно в самой надписи, а не в
+ *         подписи под ней.
  *
  * @example
- * <GhostColumn onInvite={invite} />
+ * <GhostColumn onInvite={invite} collapsed={collapsed} />
  */
-export function GhostColumn({ onInvite }: { onInvite: () => void }) {
+export function GhostColumn({ onInvite, collapsed }: {
+  onInvite: () => void;
+  /** Карточки подрядчиков свёрнуты — призрак обязан свернуться вместе с ними:
+   *  высоту ряда шапки задаёт самая высокая ячейка. */
+  collapsed?: boolean;
+}) {
   return (
-    <button type="button" className={s.ghost} onClick={onInvite}>
-      <Icon name="add" className={s.ghostIcon} />
-      Пригласить в тендер
-      <span className={s.ghostSub}>новая колонка подрядчика</span>
+    <button
+      type="button"
+      className={cx(s.ghost, collapsed && s.ghostSlim)}
+      onClick={onInvite}
+    >
+      {/* ПЛЮС В СВОЁМ КРУГЕ, а не голым глифом в потоке: соседние колонки —
+          карточки с собственной поверхностью, и призрак рядом с ними без
+          центра тяжести читался надписью посреди пустоты. */}
+      <span className={s.ghostBadge} aria-hidden="true">
+        <Icon name="add" className={s.ghostIcon} />
+      </span>
+      {/* КАЖДАЯ СТРОКА — СВОЙ ЭЛЕМЕНТ, анонимных текстовых узлов внутри
+          флекса нет ни одного. Подпись лежала голым текстом рядом со спаном
+          `.ghost-sub`, и её анонимный флекс-бокс не подчинялся ни выравниванию
+          контейнера, ни его `gap` — отсюда и разъехавшаяся вёрстка. */}
+      <span className={s.ghostLabel}>Пригласить в тендер</span>
+      {collapsed ? null : (
+        <span className={s.ghostSub}>новая колонка подрядчика</span>
+      )}
     </button>
   );
 }

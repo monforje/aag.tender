@@ -505,7 +505,8 @@ export function TenderCompare({
       Нужен только сумме ширины таблицы: шапка секции берёт то же число из
       colSpan своей ячейки, без чисел в разметке. */
   const leadWidth = layout == null ? null
-    : layout.title + layout.qty + layout.unit + layout.spread + (layout.potential ?? 0);
+    : layout.num + layout.title + layout.qty + layout.unit + layout.spread
+      + (layout.potential ?? 0);
   /* Ширина таблицы = сумма колонок ровно до пикселя: с ней исполняются
       ширины <col> при layout="fixed" (max-content их теряет). Инлайном на
       самой таблице — смена ширины валидирует её РАСКЛАДКУ, но не стиль
@@ -528,7 +529,7 @@ export function TenderCompare({
      ячеек в итоге, ширина пустого результата. С условным столбцом
      «Потенциал» и колонкой-призраком любое забытое число уводит всю строку
      на клетку вбок, причём МОЛЧА: таблица остаётся валидной, просто кривой. */
-  const leadCols = 4 + (view.showPotential ? 1 : 0);
+  const leadCols = 5 + (view.showPotential ? 1 : 0);
   const tailCols = bids.length + (onInvite ? 1 : 0);
   const allCols = leadCols + tailCols;
 
@@ -567,11 +568,28 @@ export function TenderCompare({
       weight: r.weight,
     })), [facts]);
 
-  /* ── ПАСПОРТ ПОЗИЦИИ (§4.1) ──────────────────────────────────────────────
-     Наведение на название раскрывает то, чего нет в строке: полный путь ФКП,
-     единицу и шаблонный объём, медианную стоимость, УЧАСТИЕ ПОИМЁННО
-     (сколько подано из скольких, кто отказался, кто пропустил, кого ждём) и
-     ожидающие корректировки. Только чтение — кнопок в нём нет.
+  /* ── ПАСПОРТ ПОЗИЦИИ (§4.1, вёрстка §2 правок владельца 25.08.2026) ──────
+     Наведение на название раскрывает то, чего нет в строке. Пять блоков в
+     фиксированном порядке, и порядок этот — порядок вопросов, которые
+     задают:
+
+       идентификация  — полное имя, путь ФКП, единица и шаблонный объём;
+       медиана        — база, от которой считаются вклад и отклонения;
+       участие        — сколько цен подано из скольких, сколько сопоставимо,
+                        и ПОИМЁННО те, кто отказался, пропустил или молчит;
+       условия        — условия КП, названные по этой позиции, со счётом;
+       корректировки  — кто ждёт решения по иному объёму.
+
+     Первые три есть всегда, последние два — только когда есть. Пустой блок
+     не рисуется вовсе: «условий нет» это не сообщение.
+
+     ИМЯ И ПУТЬ УШЛИ В ШАПКУ панели (`title`/`sub`), а не стоят полями
+     таблицы: полем «ФКП» вставало в колонку ЗНАЧЕНИЙ, то есть в один столбик
+     с деньгами, которыми путь не является.
+
+     ВСЁ ВЫВОДИТСЯ ИЗ ДАННЫХ, ни одна строка не написана заранее (правило
+     владельца о non-AI фичах): участие считается по КП, условия — по их
+     `conditions`, корректировки — по `pendingCorrection`.
 
      Собирается ЗДЕСЬ, а не в строке: участие считается по КП, а строка о них
      не знает — ей приходят только `bids` своих ячеек. */
@@ -585,6 +603,11 @@ export function TenderCompare({
     const skipped: string[] = [];
     const waiting: string[] = [];
     const pending: string[] = [];
+    /* УСЛОВИЯ СО СЧЁТОМ КП. Считаются по тем предложениям, где цена по ЭТОЙ
+       позиции названа: условие подрядчика, не закрывшего строку, к её цене
+       отношения не имеет и в счёт идти не должно. Ключ — сам текст условия:
+       формулировку задаёт источник, и словаря у нас нет. */
+    const conditions = new Map<string, number>();
     let counted = 0;
     for (const bid of bids) {
       const c = bid.contractor;
@@ -594,6 +617,10 @@ export function TenderCompare({
       if (mark.declined) declined.push(c.name);
       else if (c.prices[positionId] === undefined) {
         (isWaiting(c, positionId) ? waiting : skipped).push(c.name);
+      } else {
+        for (const cond of c.conditions ?? []) {
+          conditions.set(cond, (conditions.get(cond) ?? 0) + 1);
+        }
       }
       if (pendingCorrection(mark)) pending.push(c.name);
     }
@@ -601,9 +628,14 @@ export function TenderCompare({
 
     return {
       title: position.title,
+      /* Подзаголовок отвечает на «что это»: путь ФКП и мера. Обе величины
+         именующие, а не сравниваемые — в колонке значений им места нет. */
+      sub: [
+        path.length ? `ФКП: ${path.join(' › ')}` : null,
+        `единица ${position.unit} · шаблонный объём ${decimal(position.qty)}`,
+      ].filter(Boolean).join('\n'),
+      width: 400,
       fields: [
-        ...(path.length ? [{ label: 'ФКП', value: path.join(' › ') }] : []),
-        { label: 'единица · объём', value: `${position.unit} · ${decimal(position.qty)}` },
         {
           label: 'медианная стоимость',
           value: row.median === null ? '—' : money(row.median * position.qty),
@@ -612,9 +644,17 @@ export function TenderCompare({
           label: 'цен подано',
           value: `${row.bids.length} из ${counted} · сопоставимо ${fair}`,
         },
-        ...declined.map((name) => ({ label: '', value: `${name} — отказ от позиции` })),
-        ...skipped.map((name) => ({ label: '', value: `${name} — позиция пропущена` })),
-        ...waiting.map((name) => ({ label: '', value: `${name} — ждём ответ` })),
+        /* ПОИМЁННО — строками во всю ширину: у них нет подписи, и пустая
+           колонка слева резала бы фразе место ни за чем. */
+        ...declined.map((name) => ({ span: true as const, label: '', value: `${name} — отказ от позиции` })),
+        ...skipped.map((name) => ({ span: true as const, label: '', value: `${name} — позиция пропущена` })),
+        ...waiting.map((name) => ({ span: true as const, label: '', value: `${name} — ждём ответ` })),
+        ...([...conditions].map(([cond, n]) => ({
+          label: 'условия',
+          /* «КП» не склоняется — plural здесь был бы тремя одинаковыми
+             формами; счёт даёт число. */
+          value: `${cond} · ${n} КП`,
+        }))),
         ...(pending.length
           ? [{ label: 'на рассмотрении', value: `иной объём — ${pending.join(', ')}` }]
           : []),
@@ -731,7 +771,7 @@ export function TenderCompare({
           onClose={closeCell}
           onSend={(text, parentId) =>
             void comments.send(cell.contractorId, cell.positionId, text, parentId)}
-          onSeen={() => void comments.markSeen(cell.contractorId, cell.positionId)}
+          onSeen={(ids) => void comments.markSeen(cell.contractorId, cell.positionId, ids)}
         />
       ) : null}
 
@@ -863,10 +903,18 @@ export function TenderCompare({
             строки: перенос включается одной CSS-переменной, наследуемой вниз,
             и memo пятисот <CompareRow> от этого не ломается — им меняется
             только целое число лимита. */}
-        <div className={cx(s.density, wideTitle && s.densityWide, error && s.stale)}>
+        {/* --sticky-col-1 — МОСТ ЧЕРЕЗ ГРАНИЦУ МОДУЛЯ: <Table> закрепляет пару
+            «№ + Позиция», а ширину первой колонки знает только расчётчик
+            (model/columns.ts). Переменная наследуется по DOM и хэшированию не
+            подлежит; селектором сюда не дотянуться — классы обоих модулей
+            хэшируются порознь. */}
+        <div
+          className={cx(s.density, wideTitle && s.densityWide, error && s.stale)}
+          style={{ '--sticky-col-1': `${layout?.num ?? 0}px` } as CSSProperties}
+        >
         <Table
           stickyHead
-          stickyCol={pinned}
+          stickyCol={pinned ? 2 : undefined}
           layout="fixed"
           width={tableWidth}
           caption={[
@@ -888,6 +936,15 @@ export function TenderCompare({
               (model/columns.ts) инлайном: до первого замера кадр живёт без них,
               дальше ширина есть у каждого <col>. */}
           <colgroup className={s.cols}>
+            {/* ЛИНЕЙКА У «№» ЕСТЬ (правка владельца 25.08.2026, §10). Сутки
+                её здесь не было по доводу «номер и название — один блок»,
+                и довод оказался неверным на практике: без границы номер
+                читался ПРЕФИКСОМ названия, то есть частью текста строки, а
+                не отдельной величиной со своим заголовком. Закреплению пары
+                линейка не мешает — `stickyCol={2}` возит обе ячейки вместе,
+                а граница между ними такая же, как между всеми колонками
+                левого блока. */}
+            <col className={s.colRule} style={pxStyle(layout?.num)} />
             <col className={s.colRule} style={pxStyle(layout?.title)} />
             <col className={s.colRule} style={pxStyle(layout?.qty)} />
             <col className={s.colRule} style={pxStyle(layout?.unit)} />
@@ -934,6 +991,13 @@ export function TenderCompare({
                   при влезающей таблице ничего не меняет и ничего не ломает,
                   а предсказуемое место контрола дороже экономии на одном
                   глифе. */}
+              {/* §7 (правка владельца 25.08.2026, вечер): номер позиции —
+                  СВОЯ КОЛОНКА, а не строка в углу якоря. Углом он поднимал
+                  каждую строку таблицы на 13px и ни с чем не выравнивался;
+                  колонкой он стоит по центру своей строки, как объём и
+                  единица, а левые края названий совпадают по построению — их
+                  задаёт край колонки, а не длина числа. */}
+              <th scope="col" className={cx(s.numHead, s.headRule)}>№</th>
               <th scope="col" className={s.headRule}>
                 Позиция
                 <button
@@ -1004,7 +1068,7 @@ export function TenderCompare({
                 для неё не заводится, ячейка берёт остаток. */}
             {onInvite ? (
               <th className={cx(tableCell.card, s.ghostHead)}>
-                <GhostColumn onInvite={onInvite} />
+                <GhostColumn onInvite={onInvite} collapsed={collapsed} />
               </th>
             ) : null}
             </tr>
@@ -1033,57 +1097,62 @@ export function TenderCompare({
                 позиций» с прочерком говорит, почему строк нет. */
              groups.map((group) => {
                const rows = rowsOfGroup(group);
+               /* Полный состав узла — независимо от фильтров: он нужен и
+                  подытогу ниже, и счёту в шапке секции. */
+               const allRows = allRowsOfGroup(group);
+               const count = allRows.length;
                const open = !folded[group.id];
                return (
                  <tbody key={group.id}>
-                   {/* Шапка секции — ДВЕ ячейки, а не одна на всю таблицу:
-                       левый блок отдан заголовку (его colSpan и задаёт ширину
-                       полосы — ровно до правого края «Разброса»), хвост под
-                       колонками КП несёт только заливку ряда.
+                   {/* Шапка секции — РЯД ОТДЕЛЬНЫХ ЯЧЕЕК, а не одна на всю
+                       таблицу: заголовок занимает колонку «Позиция» и только её,
+                       счёт позиций стоит в своих колонках «Объём» и «Ед.»,
+                       хвост за «Разбросом» несёт одну заливку ряда.
+                       НЕПРЕРЫВНОСТЬ ПОЛОСЫ от разделения ячеек не страдает:
+                       заливку даёт правило .group-row на КАЖДУЮ ячейку ряда.
                        tableCell.fullRow здесь НЕ СТАВИТСЯ намеренно: он гасит
-                       липкость колонки-якоря, а ячейка секции первая в своём
-                       ряду — и потому обязана слушаться булавки ровно как
-                       якорь. Своего механизма у заголовка нет (разбор —
+                       липкость колонки-якоря, а ячейка секции вторая в своём
+                       ряду — и обязана слушаться булавки ровно как якорь.
+                       Своего механизма у заголовка нет (разбор —
                        .section-toggle в модуле стилей).
-                       COLSPAN СЛЕДУЕТ ЗА БУЛАВКОЙ (решение владельца
-                       24.08.2026). С нажатой булавкой застывает и якорь, и
-                       ячейка секции, но якорь — это ОДНА колонка, а полоса
-                       была четырьмя: заголовок выступал за край якоря на
-                       275px, и вместо одной вертикали получалась лесенка из
-                       двух. Теперь при закреплении полоса ровно колонка
-                       «Позиция» — край один. Отжата булавка — полоса снова
-                       весь левый блок, до правого края «Разброса»: там
-                       выступать не за что и обрезать название раньше времени
-                       незачем.
-                       Счётчика позиций здесь нет — это строка-заголовок блока,
-                       а не ряд значений. scope="rowgroup": заголовок для СТРОК
-                       под ним. */}
+                       СЧЁТ — ПОЛНЫЙ СОСТАВ УЗЛА, фильтром не пересчитывается:
+                       так же считает подытог («фильтр прячет строки, но суммы
+                       не двигает»), а видимое срезом называет строка
+                       «Показано». scope="rowgroup": заголовок для СТРОК под ним. */}
                    <tr className={s.groupRow}>
-                     <th
-                       scope="rowgroup"
-                       colSpan={pinned ? 1 : leadCols}
-                       className={cx(tableCell.card, s.groupHead)}
-                     >
-                       {/* Кнопка занимает свою ячейку целиком — ровно до
-                           правого края «Разброса» (решение владельца
-                           24.08.2026, третья волна): там кончается зона
-                           описания работы, и заголовок раздела описывает
-                           именно её, а не колонки с ценами. Отсюда всё
-                           остальное: название прижато влево, на общую линию
-                           с названиями позиций под ним, а стрелка стоит на
-                           дальнем краю блока и НЕ ДВИГАЕТСЯ от длины
-                           названия. Название длиннее блока режется
-                           многоточием, полное всплывает <Tooltip>'ом.
-                           Ширина больше не приезжает инлайном: её даёт
-                           colSpan={4} самой ячейки — то же число, но без
-                           записи в DOM на каждом кадре анимации панели. */}
-                       <button
-                         type="button"
-                         className={s.sectionToggle}
-                         aria-expanded={open}
-                         aria-label={`${group.title}: ${open ? 'свернуть' : 'развернуть'} секцию`}
-                         onClick={() => setFolded((all) => ({ ...all, [group.id]: open }))}
-                       >
+                     {/* Пустая ячейка под «№» — ОБЯЗАТЕЛЬНА, а не «для
+                         красоты»: при закреплённой паре липнут первая и
+                         ВТОРАЯ ячейки строки, и заголовок раздела обязан
+                         оказаться именно вторым. Слей его с номером одним
+                         colSpan — у кромки застыл бы хвост ряда. */}
+                     <td className={s.groupNum} />
+                      <th
+                        scope="rowgroup"
+                        className={cx(tableCell.card, s.groupHead)}
+                      >
+                         {/* Кнопка занимает свою ячейку целиком — ячейку
+                             колонки «Позиция». Название прижато влево, на общую
+                             линию с названиями позиций под ним; длиннее своего
+                             места режется многоточием, полное всплывает
+                             <Tooltip>'ом.
+                             СТРЕЛКА — У ПРАВОГО КРАЯ КОЛОНКИ «ПОЗИЦИЯ»: --fold-at
+                             несёт ширину якоря из model/columns.ts — то же
+                             число, что стоит на <col>, и глиф встаёт на границу
+                             «Позиция | Объём» при любой плотности. Зона клика от
+                             этого не меняется — вся кнопка. До первого замера
+                             кадр живёт без переменной — как и <col> без ширин. */}
+                        <button
+                          type="button"
+                          className={s.sectionToggle}
+                          aria-expanded={open}
+                          aria-label={`${group.title}: ${open ? 'свернуть' : 'развернуть'} секцию`}
+                          onClick={() => setFolded((all) => ({ ...all, [group.id]: open }))}
+                          style={
+                            layout
+                              ? ({ '--fold-at': `${layout.title}px` } as CSSProperties)
+                              : undefined
+                          }
+                        >
                          <Tooltip text={group.title}>
                            <span className={s.sectionTitle}>{group.title}</span>
                          </Tooltip>
@@ -1091,13 +1160,23 @@ export function TenderCompare({
                            <Icon name="chevronDown" />
                          </span>
                        </button>
-                     </th>
-                     {/* Хвост ряда: заливку секции держит правило .group-row td,
-                         содержимого у него нет — заголовку раздела писать под
-                         колонками нечего. Ширина — всё, что не занял
-                         заголовок, поэтому и она следует за булавкой. */}
-                     <td colSpan={(pinned ? leadCols - 1 : 0) + tailCols} />
-                   </tr>
+                      </th>
+                      {/* СЧЁТ ПОЗИЦИЙ УЗЛА — в своих колонках, как у всякой
+                          строки данных: число в «Объёме», слово — в «Ед.»
+                          (склоняется plural'ом: 1 позиция, 2 позиции,
+                          5 позиций). КЛАССЫ СВОИ, без tableCell.numeric/muted:
+                          их выравнивание (0,2,1) не перебить из этого модуля,
+                          а счёт стоит по ЦЕНТРУ ячейки (см. .group-count).
+                          Тон — метаданные узла, а не значение строки. */}
+                      <td className={s.groupCount}>{count}</td>
+                      <td className={s.groupUnit}>
+                        {plural(count, 'позиция', 'позиции', 'позиций')}
+                      </td>
+                      {/* Хвост ряда: заливку секции держит правило .group-row td,
+                          содержимого у него нет. Разброс (+ условный
+                          «Потенциал») и все колонки КП. */}
+                      <td colSpan={leadCols - 4 + tailCols} />
+                    </tr>
 
                   {/* Итог остаётся и у свёрнутого раздела: ради него и сворачивают.
                       Строки въезжают каскадом по индексу — раскрытие подтверждается
@@ -1143,15 +1222,15 @@ export function TenderCompare({
                       rows={rows}
                       bids={bids}
                       metric={view.mainMetric}
-                      lead={leadCols - 1}
+                      lead={leadCols - 2}
                     />
                   ) : null}
 
                   <TotalRow
-                    rows={allRowsOfGroup(group)}
+                    rows={allRows}
                     bids={bids}
                     metric={view.mainMetric}
-                    lead={leadCols - 1}
+                    lead={leadCols - 2}
                   />
                 </tbody>
               );
@@ -1239,15 +1318,15 @@ export function TenderCompare({
                 rows={visible}
                 bids={bids}
                 metric={view.mainMetric}
-                lead={leadCols - 1}
+                lead={leadCols - 2}
               />
             ) : null}
-            <TotalRow grand rows={facts.rows} bids={bids} metric={view.mainMetric} lead={leadCols - 1} />
+            <TotalRow grand rows={facts.rows} bids={bids} metric={view.mainMetric} lead={leadCols - 2} />
           </tbody>
 
           {/* Условия поставщиков — матрица ответов формы КП вне цен, выровненная
               по тем же колонкам. Тендеров без `terms` она не касается вовсе. */}
-          <TermsBand bids={bids} bind={popup.bind} />
+          <TermsBand bids={bids} bind={popup.bind} lead={leadCols - 2} span={allCols} />
         </Table>
         </div>
       </div>
@@ -1266,7 +1345,18 @@ export function TenderCompare({
           Три разные двери из одной ячейки, и каждая помнит свой адрес.
           Рендерятся ОДНОЙ веткой на всю таблицу, а не в самой ячейке: панель
           обязана пережить перерисовку строки, а 780 незаполненных <dialog>
-          в DOM стоили бы дороже всего экрана. */}
+          в DOM стоили бы дороже всего экрана.
+
+          ЦЕНА ОТКРЫТИЯ ЛЮБОЙ ПАНЕЛИ — ПОЛНЫЙ ПЕРЕСЧЁТ СТИЛЯ ДОКУМЕНТА, и это
+          измеренный потолок, а не недоделка. <Popover> открывается через
+          `showModal()`; платформа делает остальную страницу inert, то есть
+          трогает КАЖДЫЙ узел, а узлов здесь 780 ячеек с пометками. Замер
+          (profile-compare, 20 открытий треда, --cpu 4): пересчёт стиля 8,8 с
+          за прогон, p95 кадра 333 мс. Схлопывание четырёх `:has()`-правил
+          ячейки в одно (`.sgn`) сняло с этого числа ~9 %; остальное держит
+          сам размер документа.
+          ponytail: потолок — размер таблицы в DOM; понадобится больше —
+          виртуализация тела таблицы, а не правки панелей. */}
       {cellPanels}
 
       {/* МИНИ-СПИСОК КОРРЕКТИРОВОК КОЛОНКИ (§5.3, `contractor.md` §2).

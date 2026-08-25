@@ -21,7 +21,15 @@
    приложения — туда подсказка и не дотягивается, её зажимает по горизонтали
    область контента (см. `position()`). */
 .popup{
-  position: fixed; margin: 0; width: 288px; max-width: calc(100vw - 24px); padding: 0;
+  position: fixed; margin: 0;
+  /* Ширину задаёт содержимое через --pop-w (по умолчанию 340): у пары
+     «слово · число» и у паспорта позиции с поимённым участием разная нужда в
+     месте, и одна константа обслуживала их обоих плохо. */
+  width: var(--pop-w, 340px); max-width: calc(100vw - 24px); padding: 0;
+  /* Ширина колонки подписей — ОДНО число на два свойства: раскладку грида и
+     позицию вертикальной линейки. Порознь они разъезжались бы молча, и линия
+     оказывалась бы посреди текста. */
+  --pop-key: 132px;
   border: 0; border-radius: var(--cu-radii-6);
   background: var(--cu-background-main); color: var(--cu-content-primary);
   box-shadow: var(--cu-elevation-border-4);
@@ -51,27 +59,53 @@
 .popup::backdrop{ background: transparent; }
 
 /* Шапка — капитель по центру, как заголовки разделов таблицы: цвет состояния
-   остаётся значениям тела. */
+   остаётся значениям тела. Линейка под ней — ЕДИНСТВЕННАЯ, доходящая до краёв
+   панели: она отделяет не строку от строки, а шапку от таблицы. */
 .head{
-  padding: 10px 16px 8px;
+  padding: 10px 16px 9px;
   border-bottom: 1px solid var(--cu-border-default);
   text-align: center;
 }
+/* ЗАГОЛОВОК — ИМЯ, А НЕ КАПИТЕЛЬ (правка владельца 25.08.2026, §9). Капитель
+   с разрядкой ставилась под короткие ярлыки («минимальная стоимость»), а в
+   шапку приезжают ИМЕНА произвольной длины: название позиции на 53 знака и
+   «ООО «РегионЭлектроКомплект»». В верхнем регистре они не читаются — набор
+   прописных теряет форму слова, — и занимают на треть больше строк. Кегль
+   поднят до 13: это заголовок панели, а не подпись к ней. */
 .title{
   display: block;
   overflow-wrap: anywhere;
-  font-size: 11px; line-height: 14px;
+  font-size: 13px; line-height: 17px;
   font-weight: var(--cu-font-weight-semibold);
-  letter-spacing: .07em; text-transform: uppercase;
-  color: var(--cu-content-secondary);
+  color: var(--cu-content-primary);
 }
 
-/* Тело — поля «подпись · значение»: фиксированная колонка подписи выстраивает
-   все строки на общей вертикали; значения прижаты вправо — они числа. */
-.body{
-  display: flex; flex-direction: column; gap: 2px;
-  padding: 9px 16px;
+/* ПОДЗАГОЛОВОК ШАПКИ — «что это»: путь ФКП, единица и объём, версия КП.
+   Переносится, потому что путь бывает в три звена, и обрезать его нечем —
+   именно он отвечает на вопрос «та ли это позиция». */
+.sub{
+  display: block; margin-top: 3px;
+  /* Переводы строк приходят в самом тексте: путь ФКП и мера — две разные
+     мысли, и склеивать их точкой значило бы сделать из них одну. */
+  white-space: pre-line;
+  font-size: 11.5px; line-height: 15px;
+  overflow-wrap: anywhere;
+  color: var(--cu-content-tertiary);
 }
+
+/* ТЕЛО — ТАБЛИЧКА, А НЕ СПИСОК (правка владельца 25.08.2026, §9). Строки
+   отделены линейками, колонка подписи — вертикальной чертой, и обе линии
+   НЕ ДОХОДЯТ ДО КРАЁВ панели: горизонталь во всю ширину читалась бы вторым
+   разделом карточки, а не строкой таблицы. Инсет даёт `margin-inline` самой
+   строки — псевдоэлементы с абсолютными координатами здесь были бы лишним
+   боксом на каждое поле, а полей в паспорте позиции бывает пятнадцать. */
+.body{
+  display: flex; flex-direction: column;
+}
+/* Хвост под последней строкой нужен только там, где ниже НЕТ подвала: иначе
+   линейка строки упиралась бы в скругление панели. При подвале его не бывает
+   — там границу рисует он сам. */
+.body:last-child{ padding-bottom: 6px; }
 /* ПОЛЕ ПЕРЕНОСИТСЯ, А НЕ ВЫЛЕЗАЕТ (правка владельца 25.08.2026). Обе колонки
    стояли `white-space: nowrap` — расчёт был на короткие пары «подпись ·
    число», и он неверен: в паспорте позиции значение это «ООО
@@ -82,24 +116,90 @@
    которого в вёрстке не предусмотреть: артикул или ссылку без единого
    пробела. Табличные цифры при этом остаются — числа в колонке значений всё
    так же сравнивают разряд в разряд. */
+/* ВЕРТИКАЛЬНАЯ ЛИНЕЙКА — ФОНОМ СТРОКИ, А НЕ БОРДЕРОМ ПОДПИСИ (правка
+   владельца 25.08.2026). Бордером она жила ровно на высоте текста подписи:
+   строки выровнены по БАЗОВОЙ ЛИНИИ, поэтому у однострочной подписи отрезок
+   выходил 18px при высоте строки 28 — и между горизонтальными линейками
+   зияли разрывы, решётка рассыпалась на отдельные чёрточки. Фон растянут на
+   всю высоту падинг-бокса, поэтому отрезки СТЫКУЮТСЯ с горизонталями соседних
+   строк и складываются в непрерывную таблицу.
+   Позиция 118px — ровно граница колонок грида; линия попадает в зазор между
+   правым полем подписи и левым полем значения. */
 .field{
-  display: grid; grid-template-columns: 104px minmax(0, 1fr);
-  align-items: baseline; column-gap: 12px;
+  display: grid; grid-template-columns: var(--pop-key) minmax(0, 1fr);
+  align-items: baseline;
+  margin-inline: 14px; padding: 5px 0;
+  background: linear-gradient(var(--cu-border-default), var(--cu-border-default))
+              var(--pop-key) 0 / 1px 100% no-repeat;
 }
+/* Линейка МЕЖДУ строками, а не под каждой: под последней она повторяла бы
+   границу подвала в двух пикселях от неё. */
+.field + .field{ border-top: 1px solid var(--cu-border-default); }
 .label{
   min-width: 0;
+  padding-right: 11px;
   font-size: 13px; line-height: 18px;
   overflow-wrap: anywhere;
   color: var(--cu-content-secondary);
 }
 .value{
   min-width: 0;
+  padding-left: 11px;
   font-size: 13px; line-height: 18px;
   font-weight: var(--cu-font-weight-medium);
   font-variant-numeric: tabular-nums;
   color: var(--cu-content-primary);
   overflow-wrap: anywhere; text-align: right;
 }
+
+/* СТРОКА ВО ВСЮ ШИРИНУ — перечисление поимённо («Стройсервис — отказ от
+   позиции»). Колонки подписи у неё нет вовсе: пустая клетка слева резала бы
+   фразе ширину ни за чем, а вертикальная черта обещала бы столбец, которого
+   в этой строке не существует. Выравнивание влево — это предложение, а не
+   число. */
+/* У строки во всю ширину колонки нет — значит нет и вертикальной линейки:
+   она обещала бы столбец, которого в этой строке не существует. */
+.field--span{ grid-template-columns: minmax(0, 1fr); background: none; }
+.span-value{
+  min-width: 0;
+  font-size: 12.5px; line-height: 17px;
+  overflow-wrap: anywhere;
+  color: var(--cu-content-secondary);
+}
+
+/* ── ПОЛОСКА РАСПРЕДЕЛЕНИЯ (§3 правок владельца 25.08.2026) ────────────────
+   Форма ряда цен: где сбились предложения, где стоит одинокая. Нормирована
+   по собственным MIN–MAX строки, поэтому подписаны только края — абсолютный
+   масштаб по ней не читается и читаться не должен. */
+.strip-row{
+  display: flex; align-items: center; gap: 8px;
+  padding-top: 9px; padding-bottom: 3px;
+}
+.strip-end{
+  flex: none;
+  font-size: 10px; line-height: 13px;
+  font-weight: var(--cu-font-weight-semibold);
+  letter-spacing: .06em;
+  color: var(--cu-content-tertiary);
+}
+.strip-track{
+  position: relative; flex: 1 1 auto; height: 14px;
+  border-radius: var(--cu-radii-round);
+  background: linear-gradient(var(--cu-state-hover), var(--cu-state-hover)) 0 50% / 100% 2px no-repeat;
+}
+.strip-dot{
+  position: absolute; top: 50%;
+  display: flex; align-items: center; justify-content: center;
+  min-width: 8px; height: 8px; padding: 0 1px;
+  border-radius: var(--cu-radii-round);
+  background: var(--pop-tone, var(--cu-tone-neutral));
+  transform: translate(-50%, -50%);
+  font-size: 8px; line-height: 1; font-style: normal;
+  font-weight: var(--cu-font-weight-bold);
+  color: var(--cu-background-main);
+}
+/* Маркер количества: близкие цены не разводятся в кашу, а называются числом. */
+.strip-dot--many{ min-width: 13px; height: 13px; font-size: 9px; }
 /* Состояние читается ЗНАЧЕНИЕМ, а не глифом в шапке. */
 .value--tone{ color: var(--pop-ink, var(--cu-content-primary)); }
 
@@ -126,7 +226,7 @@
    скругление повторяет нижние углы карточки (overflow:hidden нельзя —
    срезал бы хвостик). */
 .foot{
-  margin-top: 7px; padding: 9px 16px 10px;
+  padding: 9px 16px 10px;
   border-top: 1px solid var(--cu-border-default);
   background: var(--cu-fill-subtle);
   border-radius: 0 0 calc(var(--cu-radii-6) - 1px) calc(var(--cu-radii-6) - 1px);

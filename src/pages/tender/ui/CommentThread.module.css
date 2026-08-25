@@ -83,8 +83,31 @@
 .item{ display: flex; gap: 10px; padding: 10px 0; }
 .item + .item{ border-top: 1px solid var(--cu-border-default); }
 /* Ответ — отступом, а не уменьшенным аватаром: размер аватара означал бы
-   разный статус участников (правка владельца 25.08.2026). */
+   разный статус участников (правка владельца 25.08.2026).
+   ОТСТУП ОДИН НА ЛЮБУЮ ГЛУБИНУ: ответ на ответ существует (см. threadOrder),
+   но лесенка из пяти ступеней в панели шириной 400px оставила бы последней
+   реплике полторы сотни пикселей. Кто кому отвечает, говорит имя адресата
+   строкой над текстом — канал, который от глубины не зависит вовсе. */
 .item--reply{ padding-left: 38px; }
+/* Запись, на которую сейчас пишется ответ. Полоса слева, а не заливка: заливка
+   спорила бы с ховером соседних записей, а «вот на эту» — это указатель, а не
+   состояние наведения. */
+.item--target{
+  box-shadow: inset 2px 0 0 var(--cu-tone-info);
+  background: var(--cu-tone-info-fill);
+  border-radius: var(--cu-radii-2);
+  margin-inline: -8px; padding-inline: 8px;
+}
+.item--target.item--reply{ padding-left: 46px; }
+
+/* Адресат ответа — над текстом, тем же кеглем, что время: это служебная
+   подпись, а не часть реплики. */
+.addressee{
+  display: inline-flex; align-items: center; gap: 4px;
+  margin-top: 3px;
+  font-size: 11px; line-height: 15px; color: var(--cu-content-tertiary);
+}
+.addressee-icon{ width: 12px; height: 12px; flex: none; }
 
 /* АВАТАР ЕДИНОГО РАЗМЕРА 28px — и у записи, и у ответа, и у композера. */
 .avatar{
@@ -224,15 +247,34 @@
   .send:hover:not(:disabled) svg{ animation: send-off .45s var(--cu-animation-timing); }
 }
 
-/* Выход из режима ответа. Появляется только В нём — постоянная «Отмена» под
-   пустым полем читалась бы отменой самой панели. */
-.cancel-reply{
-  margin-top: 6px; font-size: 11px; color: var(--cu-content-tertiary);
+/* ПОЛОСА РЕЖИМА ОТВЕТА — НАД композером. Условие ввода читают до набора, а не
+   после отправки; крестик возвращает запись в тред. Появляется только В
+   режиме — постоянная строка под пустым полем читалась бы отменой панели. */
+.reply-bar{
+  display: flex; align-items: center; gap: 6px;
+  margin-top: 12px; padding: 5px 8px;
+  border-radius: var(--cu-radii-3);
+  background: var(--cu-tone-info-fill); color: var(--cu-tone-info-ink);
+  font-size: 12px; line-height: 16px;
 }
-.cancel-reply:hover{ color: var(--cu-content-primary); text-decoration: underline; }
+.reply-bar-icon{ width: 13px; height: 13px; flex: none; }
+.reply-bar-name{ min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reply-bar-drop{
+  display: flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; margin-left: auto; flex: none;
+  border-radius: var(--cu-radii-2);
+  color: inherit; --icon-size: 14px;
+  transition: transform var(--cu-duration-fast) var(--cu-ease-standard);
+}
+.reply-bar-drop:hover{ transform: rotate(90deg); }
+.reply-bar-drop:focus-visible{ outline: var(--cu-focus-ring); outline-offset: 1px; }
+/* Композер после полосы режима прижимается к ней — своя линейка и свой воздух
+   там уже лишние. */
+.reply-bar + .composer{ margin-top: 6px; padding-top: 0; border-top: 0; }
 
 @media (prefers-reduced-motion: reduce){
   .link-like:hover:not(:disabled) .link-icon,
   .send:hover:not(:disabled) svg{ animation: none; }
-  .act:hover .act-icon{ transform: none; }
+  .act:hover .act-icon,
+  .reply-bar-drop:hover{ transform: none; }
 }

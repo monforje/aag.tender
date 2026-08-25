@@ -1,7 +1,7 @@
-import { useId, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import { cx } from '@/shared/lib/cx';
 import {
-  avatarTone, initialsOf, threadOrder, type CellComment,
+  addresseeOf, avatarTone, initialsOf, threadOrder, type CellComment,
 } from '@/entities/comparison';
 import { Icon } from '@/shared/ui/Icon';
 import { Popover } from '@/shared/ui/Popover';
@@ -76,6 +76,17 @@ const isLong = (text: string): boolean =>
  *         лишняя — не отправлять можно, просто не нажимая.
  *         ENTER ОТПРАВЛЯЕТ, Shift+Enter переносит строку: переписка — поток
  *         коротких реплик, и тянуться мышью к кнопке на каждой из них дорого.
+ *         ПРОЧИТАНО = ПОКАЗАНО (правка владельца 25.08.2026): запись снимает с
+ *         непросмотренных сама лента, когда запись в ней действительно видна.
+ *         Кнопка «Отметить все прочитанными» осталась для обратного случая —
+ *         «читать не буду, убери отметку»; раньше она была ЕДИНСТВЕННЫМ
+ *         способом, и тред, прочитанный от первой строки до последней,
+ *         продолжал светиться непрочитанным.
+ *         ОТВЕТ НА ОТВЕТ ЕСТЬ, ВЛОЖЕННОСТЬ ОДНА: `parentId` указывает на
+ *         конкретного адресата, а на экране все ответы стоят одним отступом и
+ *         называют адресата ИМЕНЕМ над текстом. Лесенка отступов на ветке из
+ *         пяти реплик съела бы ширину панели, а плоский список без имени не
+ *         отвечает, кто кому возражает.
  * A11Y:   «Показать полностью» — <label> к настоящему чекбоксу: работает с
  *         клавиатуры и объявляется как переключатель. Поле композера имеет
  *         видимую подпись-плейсхолдер И aria-label, кнопка отправки — своё
@@ -97,8 +108,9 @@ export function CommentThread({
   onClose: () => void;
   /** Отправка записи или ответа. Текст уже обрезан по краям вызывающим. */
   onSend: (text: string, parentId?: string) => void;
-  /** «Отметить все прочитанными» — снимает флаг со всех записей треда. */
-  onSeen: () => void;
+  /** Просмотренность. `ids` названы — прочитаны именно эти записи (их показала
+   *  лента); без аргумента — «Отметить все прочитанными» кнопкой. */
+  onSeen: (ids?: readonly string[]) => void;
   /** Кто пишет — для аватара композера. */
   author: string;
 }) {
@@ -109,11 +121,49 @@ export function CommentThread({
   const [draft, setDraft] = useState('');
   const fieldRef = useRef<HTMLTextAreaElement>(null);
 
+  const listRef = useRef<HTMLOListElement>(null);
+
   const ordered = threadOrder(comments);
   const unread = comments.filter((c) => c.unread).length;
   const replyName = replyTo
     ? comments.find((c) => c.id === replyTo)?.author
     : undefined;
+
+  /* ── ПРОЧИТАНО = ПОКАЗАНО (правка владельца 25.08.2026) ──────────────────
+     Запись, попавшую человеку на глаза, снимает с непросмотренных ЛЕНТА, а не
+     кнопка: кнопка «Отметить все» осталась для тех, кто читать не собирается.
+     Наблюдатель видимости, а не таймер на открытие панели: тред прокручивается
+     сам (max-height у .list), и запись под сгибом человек не видел — списывать
+     её в прочитанные значило бы врать о собственном состоянии.
+     `root` — сама лента, threshold 0.9: считается прочитанной запись, вошедшая
+     в окно почти целиком, а не мелькнувшая кромкой при быстрой прокрутке.
+     Повторных записей состояния не будет: `markSeen` выходит рано, когда
+     снимать нечего, а уже прочитанные записи из наблюдения выпадают вместе с
+     атрибутом. */
+  /* НАБЛЮДАТЕЛЬ ПЕРЕСОБИРАЕТСЯ ТОЛЬКО ПРИ СМЕНЕ СОСТАВА НЕПРОЧИТАННЫХ, а не
+     на каждом рендере. Зависимостями стояли `comments` и `onSeen` — оба
+     МЕНЯЮТСЯ ОТ САМОГО ЭФФЕКТА: списание записи в прочитанные правит карту
+     тредов, карта поднимает рендер таблицы, рендер выдаёт новый инлайновый
+     `onSeen`, эффект срабатывает снова и заново подписывает весь список.
+     Замер (profile-compare, 20 открытий треда, --cpu 4): пересчёт стиля
+     9774 мс за прогон. Ключ по непросмотренным закрывает петлю: когда снимать
+     больше нечего, строка ключа не меняется, и эффект молчит. */
+  const seenRef = useRef(onSeen);
+  seenRef.current = onSeen;
+  const unreadKey = comments.filter((c) => c.unread).map((c) => c.id).join(',');
+  useEffect(() => {
+    const root = listRef.current;
+    if (!at || !unreadKey) return;
+    const io = new IntersectionObserver((entries) => {
+      const ids = entries
+        .filter((e) => e.isIntersecting)
+        .map((e) => (e.target as HTMLElement).dataset.id)
+        .filter((id): id is string => !!id);
+      if (ids.length) seenRef.current(ids);
+    }, { root, threshold: 0.9 });
+    root?.querySelectorAll('[data-unread]').forEach((el) => io.observe(el));
+    return () => io.disconnect();
+  }, [at, unreadKey]);
 
   const send = () => {
     const text = draft.trim();
@@ -161,18 +211,28 @@ export function CommentThread({
             title={unread
               ? 'Снять отметку «не прочитано» со всех записей треда'
               : 'Непрочитанных записей нет'}
-            onClick={onSeen}
+            onClick={() => onSeen()}
           >
             <Icon name="checkCircle" className={s.linkIcon} />
             Отметить все прочитанными
           </button>
         </div>
 
-        <ol className={s.list}>
+        <ol className={s.list} ref={listRef}>
           {ordered.map((c) => {
             const long = isLong(c.text);
+            const to = addresseeOf(c, comments);
             return (
-              <li key={c.id} className={cx(s.item, c.parentId && s.itemReply)}>
+              <li
+                key={c.id}
+                data-id={c.id}
+                data-unread={c.unread ? '' : undefined}
+                className={cx(
+                  s.item,
+                  c.parentId && s.itemReply,
+                  replyTo === c.id && s.itemTarget,
+                )}
+              >
                 <span className={cx(s.avatar, AVATAR[avatarTone(c.author)])}>
                   {initialsOf(c.author)}
                 </span>
@@ -190,6 +250,16 @@ export function CommentThread({
                     </span>
                     {c.unread ? <span className={s.newDot} aria-label="не просмотрено" /> : null}
                   </div>
+                  {/* КОМУ ОТВЕЧАЮТ — строкой над текстом, а не отступом. Все
+                      ответы стоят на ОДНОМ уровне вложенности (канон), поэтому
+                      в ветке из четырёх реплик отступ уже ничего не различает:
+                      адресата называет имя. */}
+                  {to ? (
+                    <span className={s.addressee}>
+                      <Icon name="reply" className={s.addresseeIcon} />
+                      {to}
+                    </span>
+                  ) : null}
                   <div className={cx(s.text, long && s.textClamp)}>{c.text}</div>
                   {long ? (
                     <label className={s.more} htmlFor={`${id}-${c.id}`}>Показать полностью</label>
@@ -199,7 +269,10 @@ export function CommentThread({
                       type="button"
                       className={s.act}
                       onClick={() => {
-                        setReplyTo(c.parentId ?? c.id);
+                        /* Адресат — САМА запись, а не её корень: ответ на ответ
+                           существует, и подмена родителя корнем стирала бы, кому
+                           возражают (см. CellComment.parentId). */
+                        setReplyTo(c.id);
                         fieldRef.current?.focus();
                       }}
                     >
@@ -225,6 +298,27 @@ export function CommentThread({
             Кнопка прижата к НИЗУ обёртки (align-items:flex-end), поэтому при
             двух и более строках она остаётся снизу справа, а не уезжает
             вместе с центром поля. */}
+        {/* РЕЖИМ ОТВЕТА НАЗВАН НАД ПОЛЕМ, а не под ним: «кому я сейчас пишу» —
+            это условие ввода, и читать его надо ДО того, как начал набирать.
+            Строкой ниже поля (так было до 25.08.2026) оно попадало под руку
+            вместе с кнопкой отправки и читалось уже после отправленной не туда
+            реплики. Крестик снимает режим — адресат меняется на «в тред». */}
+        {replyName ? (
+          <div className={s.replyBar}>
+            <Icon name="reply" className={s.replyBarIcon} />
+            <span className={s.replyBarName}>Ответ: {replyName}</span>
+            <button
+              type="button"
+              className={s.replyBarDrop}
+              aria-label={`Отменить ответ участнику ${replyName}`}
+              title="Писать в тред, а не ответом"
+              onClick={() => setReplyTo(null)}
+            >
+              <Icon name="closeCircle" />
+            </button>
+          </div>
+        ) : null}
+
         <div className={s.composer}>
           <span className={cx(s.avatar, AVATAR[avatarTone(author)])}>
             {initialsOf(author)}
@@ -261,11 +355,6 @@ export function CommentThread({
             </button>
           </div>
         </div>
-        {replyName ? (
-          <button type="button" className={s.cancelReply} onClick={() => setReplyTo(null)}>
-            Отменить ответ участнику {replyName}
-          </button>
-        ) : null}
       </div>
     </Popover>
   );

@@ -57,6 +57,10 @@ export function TotalRow({ grand, rows, bids, metric, lead }: {
           ширину: на четырёх колонках она накрывала 533px вместо 270 и
           прокрученной строкой съедала итог первого подрядчика. Пустые
           колонки объёма добираются отдельным colSpan={3}. */}
+      {/* Пустая ячейка под «№»: закреплённая пара — ПЕРВАЯ и ВТОРАЯ ячейки
+          строки, и подпись итога обязана оказаться второй, иначе у кромки
+          застынет номерной столбик, а сам итог уедет. */}
+      <td className={s.numCell} />
       <th scope="row" className={s.totalLabel}>{grand ? 'Итого' : 'Итого секция'}</th>
       <td colSpan={lead} />
       {bids.map((bid) => {
@@ -112,6 +116,7 @@ export function ShownRow({ node, rows, bids, metric, lead }: {
   const n = rows.length;
   return (
     <tr className={cx(s.shownRow, node && s.shownRowNode)}>
+      <td className={s.numCell} />
       <th scope="row" className={s.shownLabel}>
         Показано: {n} {plural(n, 'позиция', 'позиции', 'позиций')}
       </th>

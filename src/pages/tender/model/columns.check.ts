@@ -7,7 +7,7 @@
  *  Запуск: bun src/pages/tender/model/columns.check.ts
  *  Фреймворка нет намеренно — то же соглашение, что у comparison.check.ts. */
 import { strict as assert } from 'node:assert';
-import { BID_FIXED, TITLE_CHARS, computeColumnLayout, titleLimit } from './columns';
+import { BID_FIXED, NUM_FIXED, TITLE_CHARS, computeColumnLayout, titleLimit } from './columns';
 import { clipTitle } from './compareFormat';
 
 const layoutOf = (available: number, n: number, wideTitle = false) =>
@@ -16,7 +16,8 @@ const layoutOf = (available: number, n: number, wideTitle = false) =>
   });
 
 const sum = (l: ReturnType<typeof computeColumnLayout>) =>
-  l.qty + l.unit + l.spread + l.title + Object.values(l.bids).reduce((a, b) => a + b, 0);
+  l.num + l.qty + l.unit + l.spread + l.title
+  + Object.values(l.bids).reduce((a, b) => a + b, 0);
 
 const bidWidths = (l: ReturnType<typeof computeColumnLayout>) => Object.values(l.bids);
 
@@ -26,29 +27,34 @@ const bidWidths = (l: ReturnType<typeof computeColumnLayout>) => Object.values(l
   assert.equal(l.pan, false);
   assert.deepEqual(bidWidths(l), [BID_FIXED, BID_FIXED, BID_FIXED],
     'колонки подрядчиков фиксированы и равны');
-  assert.deepEqual([l.qty, l.unit, l.spread], [106, 88, 96], 'левый блок на базах');
-  assert.equal(l.title, 1600 - 290 - 3 * BID_FIXED, 'весь излишек у названия');
+  assert.deepEqual([l.qty, l.unit, l.spread], [106, 100, 96], 'левый блок на базах');
+  assert.equal(l.num, NUM_FIXED, 'колонка «№» — константа');
+  assert.equal(l.title, 1600 - NUM_FIXED - 302 - 3 * BID_FIXED, 'весь излишек у названия');
 }
 
 // ── тесно: левый блок сжимается первым, ширины КП не трогаются ─────────────
 {
-  /* 1200 = между «полы левого блока + название + 3×BID_FIXED» (1188) и
-     «базы левого блока + то же» (1206): место есть, но не на базы. */
-  const l = layoutOf(1200, 3);
+  /* Между «полы левого блока + № + название + 3×BID_FIXED» и «базы левого
+     блока + то же»: место есть, но не на базы. Границы считаются, а не
+     вписаны числом — иначе первая же правка BID_FIXED или NUM_FIXED
+     превращала бы проверку в неверную молча. */
+  const floorW = NUM_FIXED + 102 + 92 + 90 + 280 + 3 * BID_FIXED;
+  const baseW = NUM_FIXED + 106 + 100 + 96 + 280 + 3 * BID_FIXED;
+  const l = layoutOf(Math.floor((floorW + baseW) / 2), 3);
   assert.equal(l.pan, false);
-  assert.ok(l.qty < 106 && l.unit < 88 && l.spread < 96, 'левый блок сжат');
+  assert.ok(l.qty < 106 && l.unit < 100 && l.spread < 96, 'левый блок сжат');
   assert.deepEqual(bidWidths(l), [BID_FIXED, BID_FIXED, BID_FIXED]);
   assert.ok(l.title >= 280, `название не ниже минимума: ${l.title}`);
 }
 
 // ── порог панорамы: ниже полов левого блока + фикс. ширин места нет ────────
 {
-  const threshold = 102 + 80 + 90 + 280 + 5 * BID_FIXED;
+  const threshold = NUM_FIXED + 102 + 92 + 90 + 280 + 5 * BID_FIXED;
   const fits = layoutOf(threshold, 5);
   assert.equal(fits.pan, false, 'ровно на половах ещё влезает');
   const pan = layoutOf(threshold - 1, 5);
   assert.equal(pan.pan, true);
-  assert.deepEqual([pan.qty, pan.unit, pan.spread], [102, 80, 90], 'левые на минимумах');
+  assert.deepEqual([pan.qty, pan.unit, pan.spread], [102, 92, 90], 'левые на минимумах');
   assert.equal(pan.title, 280, 'названию — его минимум');
   assert.ok(sum(pan) > threshold - 1, 'сумма перерастает ленту — панорамирует она');
 }
@@ -126,13 +132,13 @@ assert.deepEqual(bidWidths(solo), [BID_FIXED]);
   const pan = layoutOf(900, 6, true);
   assert.equal(pan.pan, true, 'на 900px с шестью КП это панорама');
   assert.equal(pan.title, WIDE, 'в панораме название встаёт на РАЗВЁРНУТЫЙ пол');
-  assert.deepEqual([pan.qty, pan.unit, pan.spread], [102, 80, 90],
+  assert.deepEqual([pan.qty, pan.unit, pan.spread], [102, 92, 90],
     'левый блок остаётся на своих полах — режим забирает место у панорамы');
   assert.deepEqual(bidWidths(pan), Array(6).fill(BID_FIXED), 'ширины КП не трогаются');
   assert.equal(layoutOf(900, 6).title, 280, 'без тумблера — обычный пол');
 
   // Порог панорамы сдвигается ровно на разницу полов (440 − 280).
-  const narrow = 102 + 80 + 90 + 280 + 3 * BID_FIXED;
+  const narrow = NUM_FIXED + 102 + 92 + 90 + 280 + 3 * BID_FIXED;
   assert.equal(layoutOf(narrow, 3).pan, false, 'обычный режим на пороге ещё влезает');
   assert.equal(layoutOf(narrow, 3, true).pan, true, 'развёрнутый — уже нет');
   assert.equal(layoutOf(narrow + (WIDE - 280), 3, true).pan, false,

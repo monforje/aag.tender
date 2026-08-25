@@ -187,7 +187,7 @@ export function cellSummary(input: {
     fields.push({ label: 'Стоимость', value: money(sum) });
     fields.push({ label: 'Объём', value: `${decimal(position.qty)} ${position.unit}` });
     fields.push({ label: 'Ставка', value: `${money(price)}/${position.unit}` });
-    fields.push({ label: 'К медиане строки', value: dev === null ? '—' : pctSigned(dev) });
+    fields.push({ label: 'К медиане', value: dev === null ? '—' : pctSigned(dev) });
     if (mark.potential) {
       fields.push({
         label: 'Запас торга', value: `+${money(mark.potential * position.qty)}`, tone: true,
@@ -225,5 +225,131 @@ export function cellSummary(input: {
         ? `Есть непросмотренные комментарии (${comments.total}) — откройте маркер справа`
         : `Есть комментарий (${comments.total}) — откройте маркер справа`,
     } : {}),
+  };
+}
+
+/* ═══════════════════ СВОДКИ ЗНАКОВ (§8 правок 25.08.2026, вечер) ═══════════
+
+   ЗНАК ОБЯЗАН ОБЪЯСНЯТЬ СЕБЯ ПОД КУРСОРОМ. Слова из ячейки убраны (правило
+   владельца), и это правильно — но вместе со словами исчезло и объяснение:
+   на штриховку аномалии человек наводился и не получал ровно ничего, потому
+   что цель сводки — ЦЕНА, а штриховка лежит на кромке, вне её. Легенда
+   отвечает «что означает знак вообще», сводка знака — «что он означает
+   ЗДЕСЬ», и второй ответ нельзя заменить первым.
+
+   ЗДЕСЬ, А НЕ В КОМПОНЕНТЕ: ровно по той же причине, что и `cellSummary` —
+   формулировки экрана живут одним файлом, иначе легенда, сводка ячейки и
+   сводка знака расходятся в терминах, и один и тот же значок называется в
+   трёх местах по-разному. */
+
+/** Знаки ячейки, у которых есть собственная цель наведения.
+ *
+ *  МОНЕТА ВХОДИТ СЮДА С 25.08.2026 (правка владельца, §9). До этого её
+ *  держали вне списка доводом «стоит внутри тела ячейки и отберёт попап у
+ *  цены»; довод оказался слабее факта: запас торга — единственная величина
+ *  ячейки, которая НЕ следует из её чисел, и знак, объясняющий себя молчанием,
+ *  не объясняет ничего. Отбирать попап у цены она может ровно там, где курсор
+ *  стоит НА НЕЙ — то есть там, где спрашивают именно про неё; правило
+ *  «наведение на знак гасит подсветку тела» распространено и на монету, чтобы
+ *  до клика было видно, какая цель активна. */
+export type SignKind = 'min' | 'anomaly' | 'correction' | 'coin';
+
+export function signSummary(kind: SignKind, input: {
+  row: RowFacts;
+  contractor: Contractor;
+}): CellPopupData {
+  const { row, contractor } = input;
+  const { position } = row;
+  const price = contractor.prices[position.id];
+  const mark = cellMark(contractor, position.id);
+
+  if (kind === 'min') {
+    const shared = row.bestIds.length > 1;
+    return {
+      tone: 'success',
+      title: shared ? 'Совместный минимум' : 'Минимальная стоимость',
+      fields: [
+        { label: 'Здесь', value: price === undefined ? '—' : money(price * position.qty) },
+        { label: 'Медиана строки', value: row.median === null ? '—' : money(row.median * position.qty) },
+        ...(shared ? [{
+          label: 'Столько же у',
+          value: `ещё ${row.bestIds.length - 1}`,
+        }] : []),
+      ],
+      note: 'Лучшая цена строки среди предложений без аномалий. Штамп стоит на одной и той же ячейке при любом режиме показа.',
+    };
+  }
+
+  if (kind === 'anomaly') {
+    const dev = price !== undefined && row.median !== null
+      ? deviationPct(price, row.median) : null;
+    return {
+      tone: 'warning',
+      title: 'Аномальная цена',
+      fields: [
+        { label: 'Здесь', value: price === undefined ? '—' : money(price * position.qty) },
+        { label: 'К медиане', value: dev === null ? '—' : pctSigned(dev) },
+      ],
+      note: mark.anomaly
+        ?? 'Цена выбивается из ряда по этой позиции и требует обоснования состава. Штриховка и риска на кромке — два канала одного и того же признака.',
+    };
+  }
+
+  if (kind === 'coin') {
+    /* ЗАПАС ТОРГА — ЗАЯВЛЕННАЯ ВЕЛИЧИНА, а не выведенная из цен: поставщик
+       сам назвал, сколько готов отдать. Поэтому в сводке она стоит рядом с
+       текущей ценой и с ценой ПОСЛЕ уступки — иначе «+18 400 ₽» не с чем
+       сопоставить, а решают именно по второй цифре. */
+    const pot = mark.potential;
+    const now = price === undefined ? null : price * position.qty;
+    const gain = pot === undefined ? null : pot * position.qty;
+    return {
+      tone: 'info',
+      title: 'Запас торга',
+      fields: [
+        { label: 'Сейчас', value: now === null ? '—' : money(now) },
+        { label: 'Готов уступить', value: gain === null ? '—' : `+${money(gain)}`, tone: true },
+        {
+          label: 'Станет',
+          value: now === null || gain === null ? '—' : money(now - gain),
+        },
+      ],
+      note: 'Величина заявлена самим поставщиком и в итог КП не входит: итог считается по действующей цене.',
+    };
+  }
+
+  const correction = pendingCorrection(mark);
+  return {
+    tone: 'warning',
+    title: 'Иной объём у поставщика',
+    fields: [
+      { label: 'Смета', value: `${decimal(position.qty)} ${position.unit}` },
+      {
+        label: 'Поставщик считает',
+        value: correction ? `${decimal(correction.qty)} ${position.unit}` : '—',
+      },
+    ],
+    note: correction?.note
+      ?? 'Стоимость посчитана за собственный объём поставщика. Пока корректировка не рассмотрена, число несопоставимо с соседями по строке.',
+    fact: 'Клик открывает панель решения',
+  };
+}
+
+/** Сводка КЛЮЧЕВОЙ ПОМЕТКИ позиции — знак живёт в колонке-якоре, а не в
+ *  ячейке КП, поэтому и данные у него строковые: почему строка попала в
+ *  ключевые и сколько она весит. */
+export function keySummary(row: RowFacts, share: number): CellPopupData {
+  return {
+    tone: 'info',
+    title: 'Ключевая позиция',
+    fields: [
+      { label: 'Доля в тендере', value: `${decimal(share)} %` },
+      { label: 'Стоимость', value: money(row.weight) },
+      {
+        label: 'Откуда пометка',
+        value: row.position.key === true ? 'поставлена вручную' : 'топ по весу',
+      },
+    ],
+    note: 'Ключевые позиции решают итог: на них смотрят первыми и по ним торгуются.',
   };
 }

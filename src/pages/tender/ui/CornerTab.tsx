@@ -94,7 +94,11 @@ export function CornerTab({ name, marks, onGoToMark }: {
         aria-label={`Пометки колонки «${name}»`}
         onClick={() => setOpen((on) => !on)}
       >
-        <Icon name="checklistMin" />
+        {/* НЕ `checklistMin` (правка владельца 25.08.2026): чеклист обещает
+            список дел с галочками, а под кнопкой лежит перечень ПРИЗНАКОВ
+            колонки — отмечать в нём нечего. Лист с пометками говорит ровно
+            то, что есть. */}
+        <Icon name="notes" />
       </button>
 
       <span className={cx(s.cornerPanel, open && s.isOn)} role="group" aria-label={`Пометки: ${name}`}>

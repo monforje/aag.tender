@@ -33,6 +33,8 @@ import { CloseCircleIcon } from '@solar-icons/react/linear/close-circle';
 import { DoubleAltArrowLeftIcon } from '@solar-icons/react/linear/double-alt-arrow-left';
 import { DoubleAltArrowRightIcon } from '@solar-icons/react/linear/double-alt-arrow-right';
 import { DocumentTextIcon } from '@solar-icons/react/linear/document-text';
+import { DocumentsMinimalisticIcon } from '@solar-icons/react/linear/documents-minimalistic';
+import { NotesMinimalisticIcon } from '@solar-icons/react/linear/notes-minimalistic';
 import { FilterIcon } from '@solar-icons/react/linear/filter';
 import { FlagIcon } from '@solar-icons/react/linear/flag';
 import { GraphUpIcon } from '@solar-icons/react/linear/graph-up';
@@ -148,6 +150,14 @@ export const ICONS = {
   target: TargetIcon,   // не используется сегодня, оставлен для паритета со спрайтом
   planet: PlanetIcon,   // не используется сегодня, оставлен для паритета со спрайтом
   documentText: DocumentTextIcon,
+  /* Стопка документов — РЕДАКЦИИ одного КП (§5.5). Не `layers`: тот занят
+     пресетом «Обзор» на этой же полосе, и один глиф на два разных смысла
+     читался бы как связь между ними. */
+  documents: DocumentsMinimalisticIcon,
+  /* Лист с пометками — язычок «Пометки колонки» (§5.0). `checklistMin` стоял
+     здесь до 25.08.2026 и обещал ЧЕКЛИСТ: список дел с галочками, тогда как
+     под ним лежит перечень признаков колонки. */
+  notes: NotesMinimalisticIcon,
   book2: Book2Icon,
   clipboardList: ClipboardListIcon,
   billList: BillListIcon,

@@ -416,7 +416,11 @@ function SatelliteSelect({ view, hasPrevRound, onPatch }: {
             ? `Слои ячейки: ${on.map((id) => SATELLITE_LABEL[id]).join(' · ')}`
             : 'Слои ячейки: отклонение, динамика, ставка, потенциал'}
         >
-          <Icon name="layers" className={s.triggerIcon} />
+          {/* НЕ `layers` (правка владельца 25.08.2026): тем же глифом набран
+              пресет «Обзор» в двадцати сантиметрах левее по этой же полосе, и
+              два разных контрола читались как один орган. Ползунки говорят то
+              же, что лежит под кнопкой, — набор переключателей. */}
+          <Icon name="sliders" className={s.triggerIcon} />
           <span className={s.triggerVal}>Слои</span>
           {on.length ? <span className={s.satCount}>{on.length}</span> : null}
           <Icon name="caretSmall" className={s.triggerCaret} />
