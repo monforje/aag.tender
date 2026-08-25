@@ -12,9 +12,11 @@ import { Table, tableCell } from '@/shared/ui/Table';
 import { Tooltip } from '@/shared/ui/Tooltip';
 import { plural } from '@/shared/lib/plural';
 import {
-  analyzeComparison, cellMark, decimal, moneyCompact, filterRows, flatten, isModifiedView, isWaiting, METRIC_LABEL, metricTotals, money, pendingCorrection, rankBids, ROW_VIEW_LABEL, sectionPathOf, withVersion, type Bid, type CompareThresholds, type CompareView, type Comparison, type PositionGroup, type PresetId, type RowFacts,
+  analyzeComparison, cellMark, decimal, moneyCompact, filterRows, flatten, isModifiedView, isWaiting, METRIC_LABEL, metricTotals, pendingCorrection, rankBids, ROW_VIEW_LABEL, withVersion, type Bid, type CompareThresholds, type CompareView, type Comparison, type PositionGroup, type PresetId, type RowFacts,
 } from '@/entities/comparison';
-import { choose, columnMarks, resolveTone, type MarkKind } from '../model/compareFormat';
+import {
+  choose, columnMarks, positionPassport, resolveTone, type MarkKind,
+} from '../model/compareFormat';
 import { computeColumnLayout, titleLimit } from '../model/columns';
 import { useBandMaxHeight } from '../model/useBandMaxHeight';
 import { useBandWidth } from '../model/useBandWidth';
@@ -568,101 +570,17 @@ export function TenderCompare({
       weight: r.weight,
     })), [facts]);
 
-  /* ── ПАСПОРТ ПОЗИЦИИ (§4.1, вёрстка §2 правок владельца 25.08.2026) ──────
-     Наведение на название раскрывает то, чего нет в строке. Пять блоков в
-     фиксированном порядке, и порядок этот — порядок вопросов, которые
-     задают:
-
-       идентификация  — полное имя, путь ФКП, единица и шаблонный объём;
-       медиана        — база, от которой считаются вклад и отклонения;
-       участие        — сколько цен подано из скольких, сколько сопоставимо,
-                        и ПОИМЁННО те, кто отказался, пропустил или молчит;
-       условия        — условия КП, названные по этой позиции, со счётом;
-       корректировки  — кто ждёт решения по иному объёму.
-
-     Первые три есть всегда, последние два — только когда есть. Пустой блок
-     не рисуется вовсе: «условий нет» это не сообщение.
-
-     ИМЯ И ПУТЬ УШЛИ В ШАПКУ панели (`title`/`sub`), а не стоят полями
-     таблицы: полем «ФКП» вставало в колонку ЗНАЧЕНИЙ, то есть в один столбик
-     с деньгами, которыми путь не является.
-
-     ВСЁ ВЫВОДИТСЯ ИЗ ДАННЫХ, ни одна строка не написана заранее (правило
-     владельца о non-AI фичах): участие считается по КП, условия — по их
-     `conditions`, корректировки — по `pendingCorrection`.
-
-     Собирается ЗДЕСЬ, а не в строке: участие считается по КП, а строка о них
-     не знает — ей приходят только `bids` своих ячеек. */
+  /* ── ПАСПОРТ ПОЗИЦИИ (§4.1) ──────────────────────────────────────────────
+     Сборка живёт в `model/compareFormat.ts` рядом со сводкой ячейки и сводками
+     знаков: это ДАННЫЕ, а не разметка, и именно её первой заменит настоящий
+     ответ сервера. Здесь остаётся только стабильный колбэк — он уходит пропом
+     в каждую из пятисот мемоизированных строк. */
   const passportFor = useCallback((positionId: string): CellPopupData => {
     const row = facts.byId.get(positionId);
-    const position = row?.position;
-    if (!row || !position) return { title: 'Позиция', fields: [] };
-
-    const path = sectionPathOf(position, groups);
-    const declined: string[] = [];
-    const skipped: string[] = [];
-    const waiting: string[] = [];
-    const pending: string[] = [];
-    /* УСЛОВИЯ СО СЧЁТОМ КП. Считаются по тем предложениям, где цена по ЭТОЙ
-       позиции названа: условие подрядчика, не закрывшего строку, к её цене
-       отношения не имеет и в счёт идти не должно. Ключ — сам текст условия:
-       формулировку задаёт источник, и словаря у нас нет. */
-    const conditions = new Map<string, number>();
-    let counted = 0;
-    for (const bid of bids) {
-      const c = bid.contractor;
-      if (!bid.counts) continue;
-      counted += 1;
-      const mark = cellMark(c, positionId);
-      if (mark.declined) declined.push(c.name);
-      else if (c.prices[positionId] === undefined) {
-        (isWaiting(c, positionId) ? waiting : skipped).push(c.name);
-      } else {
-        for (const cond of c.conditions ?? []) {
-          conditions.set(cond, (conditions.get(cond) ?? 0) + 1);
-        }
-      }
-      if (pendingCorrection(mark)) pending.push(c.name);
-    }
-    const fair = row.bids.filter((b) => !b.anomaly).length;
-
-    return {
-      title: position.title,
-      /* Подзаголовок отвечает на «что это»: путь ФКП и мера. Обе величины
-         именующие, а не сравниваемые — в колонке значений им места нет. */
-      sub: [
-        path.length ? `ФКП: ${path.join(' › ')}` : null,
-        `единица ${position.unit} · шаблонный объём ${decimal(position.qty)}`,
-      ].filter(Boolean).join('\n'),
-      width: 400,
-      fields: [
-        {
-          label: 'медианная стоимость',
-          value: row.median === null ? '—' : money(row.median * position.qty),
-        },
-        {
-          label: 'цен подано',
-          value: `${row.bids.length} из ${counted} · сопоставимо ${fair}`,
-        },
-        /* ПОИМЁННО — строками во всю ширину: у них нет подписи, и пустая
-           колонка слева резала бы фразе место ни за чем. */
-        ...declined.map((name) => ({ span: true as const, label: '', value: `${name} — отказ от позиции` })),
-        ...skipped.map((name) => ({ span: true as const, label: '', value: `${name} — позиция пропущена` })),
-        ...waiting.map((name) => ({ span: true as const, label: '', value: `${name} — ждём ответ` })),
-        ...([...conditions].map(([cond, n]) => ({
-          label: 'условия',
-          /* «КП» не склоняется — plural здесь был бы тремя одинаковыми
-             формами; счёт даёт число. */
-          value: `${cond} · ${n} КП`,
-        }))),
-        ...(pending.length
-          ? [{ label: 'на рассмотрении', value: `иной объём — ${pending.join(', ')}` }]
-          : []),
-      ],
-      note: position.key || row.keyDerived
-        ? 'Ключевая позиция — входит в верхнюю долю стоимости тендера.'
-        : undefined,
-    };
+    /* Строки нет — паспорту нечего описывать. Пустая панель честнее выдуманной:
+       такое бывает ровно между сменой данных и перерисовкой. */
+    if (!row) return { title: 'Позиция', fields: [] };
+    return positionPassport({ row, groups, bids });
   }, [facts, groups, bids]);
 
   /* ── СОДЕРЖИМОЕ ПАНЕЛЕЙ ЯЧЕЙКИ ─────────────────────────────────────────

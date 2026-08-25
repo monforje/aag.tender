@@ -1,11 +1,9 @@
 import { cx } from '@/shared/lib/cx';
 import { plural } from '@/shared/lib/plural';
-import {
-  anomalyRatio, decimal, money, spreadPoints,
-  type CompareThresholds, type RowFacts,
-} from '@/entities/comparison';
+import { decimal, type CompareThresholds, type RowFacts } from '@/entities/comparison';
 import type { CellPopupBind } from '@/shared/ui/CellPopup';
 import { tableCell } from '@/shared/ui/Table';
+import { spreadSummary } from '../model/compareFormat';
 import { SpreadMark } from './assets';
 import s from './TenderCompare.module.css';
 
@@ -40,6 +38,11 @@ const TIER = {
  *         сравнив проценты соседних строк глазами. Словесных подписей при
  *         этом нет (правило «слов в ячейках нет»), но процент остаётся
  *         текстом: цвет не единственный носитель.
+ *         СОДЕРЖИМОЕ РАЗБОРА СОБИРАЕТ `spreadSummary()` (model/compareFormat):
+ *         шесть величин — края диапазона, кто на них стоит, сопоставимость,
+ *         ставки — считались прямо в разметке, то есть в самом горячем месте
+ *         экрана и без единой возможности их проверить. Компонент рисует
+ *         процент, линейку степени и отдаёт готовую начинку попапу.
  *         РАЗБОР ДИАПАЗОНА — НА ВСЕЙ ЯЧЕЙКЕ, а не на знаке: вопрос «насколько
  *         разошлись и кто крайний» задают самому числу. Показывает MIN /
  *         медиану / MAX поимённо И СО СТАВКОЙ (правка §3: «705 ₽/м²» рядом со
@@ -82,74 +85,11 @@ export function SpreadCell({ row, bind, thresholds, nameOf }: {
   const word = spreadTag === 'high' ? 'высокий'
     : spreadTag === 'noticeable' ? 'заметный' : 'низкий';
 
-  const prices = row.bids.map((b) => b.price);
-  const min = Math.min(...prices);
-  const max = Math.max(...prices);
-  const minAt = row.bids.find((b) => b.price === min)!;
-  const maxAt = row.bids.find((b) => b.price === max)!;
-  const fair = row.bids.filter((b) => !b.anomaly);
-
-  /* СТОИМОСТЬ И СТАВКА ОДНОЙ СТРОКОЙ. Края диапазона сравнивают по деньгам,
-     но объём у корректировок бывает свой, и «1 692 000 ₽» без «705 ₽/м²»
-     не отвечает, дешевле ли предложение на самом деле. */
-  const pair = (price: number) => `${money(price * position.qty)} · ${money(price)}/${position.unit}`;
-
-  /* ПОЛОСКА — ГОТОВЫЕ ТОЧКИ ИЗ МОДЕЛИ (`spreadPoints`): нормировка, слияние
-     близких и порядок считаются там и проверяются `comparison.check.ts`.
-     Здесь остаются только слова — имена подрядчиков за точкой. */
-  const points = spreadPoints(row);
-
   return (
     <td
       className={cx(tableCell.numeric, tier.cell, s.spreadCell)}
       aria-label={`Разброс ${decimal(spread)} ${plural(Math.round(spread), 'процент', 'процента', 'процентов')} — ${word}`}
-      {...bind({
-        tone: spreadTag === 'high' ? 'danger' : spreadTag === 'noticeable' ? 'warning' : 'success',
-        title: `Разброс ${decimal(spread)} % — ${word}`,
-        width: 420,
-        fields: [
-          { label: 'MIN', value: `${pair(min)} · ${nameOf(minAt.contractorId)}` },
-          {
-            label: 'медиана',
-            value: row.median === null ? '—' : pair(row.median),
-          },
-          { label: 'MAX', value: `${pair(max)} · ${nameOf(maxAt.contractorId)}` },
-          {
-            label: 'сопоставимо',
-            value: `${fair.length} ${plural(fair.length, 'цена', 'цены', 'цен')} из ${row.bids.length}`,
-          },
-          /* АНОМАЛИИ — ПОИМЁННО И С КОЭФФИЦИЕНТОМ. Строка «сопоставимо 5 из 6»
-             называет ЧИСЛО выброшенных, но не отвечает, кто и насколько
-             выбился, — а именно это решает, спорить с ценой или принять её.
-             k считается моделью (`anomalyRatio`), формулировка выводится из
-             знака: «выше»/«ниже» медианы, а не заранее написанное слово. */
-          ...row.bids.filter((b) => b.anomaly).map((b) => {
-            const k = anomalyRatio(b.price, row.median);
-            return {
-              span: true as const,
-              label: '',
-              value: k === null
-                ? `аномалия: ${nameOf(b.contractorId)}`
-                : `аномалия: ${nameOf(b.contractorId)} ${k >= 1 ? 'выше' : 'ниже'} медианы в k = ${decimal(k >= 1 ? k : 1 / k)} раза`,
-            };
-          }),
-        ],
-        /* ПОЛОСКА ПОСЛЕДНЕЙ СТРОКОЙ (§3): показывает ФОРМУ ряда, не масштаб.
-           Меньше двух сопоставимых цен — полоски нет вовсе: одна точка
-           показывает не форму, а её отсутствие. */
-        strip: points.length >= 2 ? {
-          min: 'MIN',
-          max: 'MAX',
-          points: points.map((p) => ({
-            at: p.at,
-            n: p.n,
-            title: p.ids.map(nameOf).join(', '),
-          })),
-        } : undefined,
-        note: spreadTag === 'high'
-          ? `Цены КП расходятся на ${decimal(thresholds.spreadHigh)} % и больше — сверяйте состав объёма, прежде чем сравнивать итоги.`
-          : undefined,
-      })}
+      {...bind(spreadSummary({ row, thresholds, nameOf }))}
     >
       {decimal(spread)} %
       <span className={cx(s.spreadMark, tier.mark)} aria-hidden="true">

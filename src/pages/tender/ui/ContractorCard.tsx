@@ -5,7 +5,8 @@ import { Icon } from '@/shared/ui/Icon';
 import { Popover } from '@/shared/ui/Popover';
 import { VisuallyHidden } from '@/shared/ui/VisuallyHidden';
 import {
-  bidStatus, currentVersion, decimal, isStaleVersion, money, type Bid,
+  bidStatus, currentVersion, decimal, isStaleVersion, money, needsStageBadge,
+  stageLabel, type Bid,
 } from '@/entities/comparison';
 import type { ColumnMarks, MarkKind } from '../model/compareFormat';
 import { Tooltip } from '@/shared/ui/Tooltip';
@@ -137,19 +138,12 @@ export function ContractorCard({
      вовсе — слот полноты занимает состояние, а не нули. Нулей они не создают
      и в расчёт не входят (`countsInAnalysis`). */
   const idle = stage === 'invited' || stage === 'draft';
-  /* Подпись статуса считается ОДИН раз: её читают и капсула, и её же title —
-     на 187px подвала слово может не поместиться целиком, и полный текст
-     обязан быть доступен по наведению. Два выражения на одну строку
-     разъехались бы при первой правке словаря. */
-  /* Дублирует ли капсула строку полноты — см. разбор у самой капсулы.
-     Считается ОДНИМ выражением здесь, а не условием по месту: правило про
-     содержательность статуса, и жить оно обязано рядом с его подписью. */
-  const showStatus = stage !== 'submitted' || contractor.status === 'revision';
-  const statusLabel = stage === 'stale' ? 'не переподал'
-    : stage === 'invited' ? 'приглашён'
-      : stage === 'draft' ? 'черновик'
-        : stage === 'locked' ? 'доступ закрыт'
-          : status.label;
+  /* СЛОВАРЬ СОСТОЯНИЙ И ПРАВИЛО ЕГО ПОКАЗА ЖИВУТ В КОНТРАКТЕ, а не здесь:
+     те же слова читают подвал карточки, её `title`, досье и выгрузка, а
+     собранная по месту цепочка тернарников разъехалась бы с ними молча на
+     первой правке словаря. Карточка спрашивает — домен отвечает. */
+  const showStatus = needsStageBadge(contractor);
+  const statusLabel = stageLabel(contractor);
 
   /* ── КЛЮЧ СТРОКИ-ФАКТОВ ────────────────────────────────────────────────────
      Свёрнуто — одно предложение о месте колонки; у лидера Δ к самому себе

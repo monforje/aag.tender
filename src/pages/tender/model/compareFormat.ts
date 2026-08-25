@@ -1,7 +1,10 @@
 import {
-  cellMark, decimal, deviationPct, isWaiting, money, pendingCorrection,
-  type Bid, type CompareThresholds, type Contractor, type RowFacts,
+  anomalyRatio, cellMark, decimal, deviationPct, isWaiting, money,
+  pendingCorrection, sectionPathOf, spreadPoints,
+  type Bid, type ComparePosition, type CompareThresholds, type Contractor,
+  type PositionGroup, type RowFacts,
 } from '@/entities/comparison';
+import { plural } from '@/shared/lib/plural';
 import type { Tone } from '@/shared/ui/Badge';
 import type { CellPopupData } from '@/shared/ui/CellPopup';
 
@@ -351,5 +354,186 @@ export function keySummary(row: RowFacts, share: number): CellPopupData {
       },
     ],
     note: 'Ключевые позиции решают итог: на них смотрят первыми и по ним торгуются.',
+  };
+}
+
+/* ═══════════════════ РАЗБОР РАЗБРОСА (§3 правок 25.08.2026) ═══════════════
+
+   Ячейка «Разброс» отдаёт разбор строки: края диапазона поимённо и со
+   ставками, сопоставимость, аномалии с коэффициентом k и полоску
+   распределения. Собирается ЗДЕСЬ, а не в <SpreadCell>, по общему правилу
+   файла: числа считает модель, слова живут одним словарём, компонент рисует
+   готовое. До переезда шесть величин (min, max, кто на краях, сопоставимые,
+   ставки) считались прямо в разметке — то есть в самом горячем месте экрана
+   и без единой возможности их проверить. */
+export function spreadSummary(input: {
+  row: RowFacts;
+  thresholds: CompareThresholds;
+  /** Имя подрядчика по id: края диапазона и аномалии называются поимённо. */
+  nameOf: (contractorId: string) => string;
+}): CellPopupData {
+  const { row, thresholds, nameOf } = input;
+  const { position, spread, spreadTag } = row;
+  const word = spreadTag === 'high' ? 'высокий'
+    : spreadTag === 'noticeable' ? 'заметный' : 'низкий';
+
+  const prices = row.bids.map((b) => b.price);
+  const min = Math.min(...prices);
+  const max = Math.max(...prices);
+  const minAt = row.bids.find((b) => b.price === min)!;
+  const maxAt = row.bids.find((b) => b.price === max)!;
+  const fair = row.bids.filter((b) => !b.anomaly);
+
+  /* СТОИМОСТЬ И СТАВКА ОДНОЙ СТРОКОЙ. Края диапазона сравнивают по деньгам,
+     но объём у корректировок бывает свой, и «1 692 000 ₽» без «705 ₽/м²»
+     не отвечает, дешевле ли предложение на самом деле. */
+  const pair = (price: number) => (
+    /* Объём 1 — ставка РАВНА стоимости, и печатать «109 367 ₽ · 109 367 ₽/компл.»
+       значит занимать полстроки повтором. Такие позиции в смете обычны:
+       комплект, узел, щит. */
+    position.qty === 1
+      ? money(price)
+      : `${money(price * position.qty)} · ${money(price)}/${position.unit}`
+  );
+  const points = spreadPoints(row);
+
+  return {
+    tone: spreadTag === 'high' ? 'danger' : spreadTag === 'noticeable' ? 'warning' : 'success',
+    title: `Разброс ${decimal(spread ?? 0)} % — ${word}`,
+    width: 420,
+    fields: [
+      { label: 'MIN', value: `${pair(min)} · ${nameOf(minAt.contractorId)}` },
+      { label: 'медиана', value: row.median === null ? '—' : pair(row.median) },
+      { label: 'MAX', value: `${pair(max)} · ${nameOf(maxAt.contractorId)}` },
+      {
+        label: 'сопоставимо',
+        value: `${fair.length} ${plural(fair.length, 'цена', 'цены', 'цен')} из ${row.bids.length}`,
+      },
+      /* АНОМАЛИИ — ПОИМЁННО И С КОЭФФИЦИЕНТОМ. Строка «сопоставимо 5 из 6»
+         называет ЧИСЛО выброшенных, но не отвечает, кто и насколько выбился, —
+         а именно это решает, спорить с ценой или принять её. Формулировка
+         выводится из знака, а не написана заранее. */
+      ...row.bids.filter((b) => b.anomaly).map((b) => {
+        const k = anomalyRatio(b.price, row.median);
+        return {
+          span: true as const,
+          label: '',
+          value: k === null
+            ? `аномалия: ${nameOf(b.contractorId)}`
+            : `аномалия: ${nameOf(b.contractorId)} ${k >= 1 ? 'выше' : 'ниже'} медианы в k = ${decimal(k >= 1 ? k : 1 / k)} раза`,
+        };
+      }),
+    ],
+    /* Меньше двух сопоставимых цен — полоски нет вовсе: одна точка показывает
+       не форму ряда, а его отсутствие. */
+    strip: points.length >= 2 ? {
+      min: 'MIN',
+      max: 'MAX',
+      points: points.map((p) => ({ at: p.at, n: p.n, title: p.ids.map(nameOf).join(', ') })),
+    } : undefined,
+    note: spreadTag === 'high'
+      ? `Цены КП расходятся на ${decimal(thresholds.spreadHigh)} % и больше — сверяйте состав объёма, прежде чем сравнивать итоги.`
+      : undefined,
+  };
+}
+
+/* ═══════════════════ ПАСПОРТ ПОЗИЦИИ (§4.1, вёрстка §2) ═══════════════════
+
+   Наведение на название раскрывает то, чего нет в строке. Пять блоков в
+   фиксированном порядке, и порядок этот — порядок вопросов, которые задают:
+
+     идентификация  — полное имя, путь ФКП, единица и шаблонный объём;
+     медиана        — база, от которой считаются вклад и отклонения;
+     участие        — сколько цен подано из скольких, сколько сопоставимо,
+                      и ПОИМЁННО те, кто отказался, пропустил или молчит;
+     условия        — условия КП, названные по этой позиции, со счётом;
+     корректировки  — кто ждёт решения по иному объёму.
+
+   Первые три есть всегда, последние два — только когда есть. Пустой блок не
+   рисуется вовсе: «условий нет» это не сообщение.
+
+   ИМЯ И ПУТЬ УХОДЯТ В ШАПКУ панели (`title`/`sub`), а не в поля таблицы:
+   полем «ФКП» вставало в колонку ЗНАЧЕНИЙ, то есть в один столбик с деньгами,
+   которыми путь не является.
+
+   ВСЁ ВЫВОДИТСЯ ИЗ ДАННЫХ, ни одна строка не написана заранее (правило
+   владельца о non-AI фичах): участие считается по КП, условия — по их
+   `conditions`, корректировки — по `pendingCorrection`.
+
+   ЖИВЁТ ЗДЕСЬ, А НЕ В <TenderCompare>: это сборка ДАННЫХ, а не разметки, и
+   именно её первой заменит настоящий ответ сервера. Экран остаётся с одним
+   `useCallback` вместо восьмидесяти строк счёта. */
+export function positionPassport(input: {
+  row: RowFacts;
+  /** Смета секциями — из неё выводится путь ФКП позиции. */
+  groups: PositionGroup[];
+  /** Колонки в порядке ленты: участие считается по КП, идущим В СЧЁТ. */
+  bids: Bid[];
+}): CellPopupData {
+  const { row, groups, bids } = input;
+  const position: ComparePosition = row.position;
+  const positionId = position.id;
+
+  const path = sectionPathOf(position, groups);
+  const declined: string[] = [];
+  const skipped: string[] = [];
+  const waiting: string[] = [];
+  const pending: string[] = [];
+  /* УСЛОВИЯ СО СЧЁТОМ КП. Считаются по тем предложениям, где цена по ЭТОЙ
+     позиции названа: условие подрядчика, не закрывшего строку, к её цене
+     отношения не имеет и в счёт идти не должно. Ключ — сам текст условия:
+     формулировку задаёт источник, и словаря у нас нет. */
+  const conditions = new Map<string, number>();
+  let counted = 0;
+  for (const bid of bids) {
+    const c = bid.contractor;
+    if (!bid.counts) continue;
+    counted += 1;
+    const mark = cellMark(c, positionId);
+    if (mark.declined) declined.push(c.name);
+    else if (c.prices[positionId] === undefined) {
+      (isWaiting(c, positionId) ? waiting : skipped).push(c.name);
+    } else {
+      for (const cond of c.conditions ?? []) {
+        conditions.set(cond, (conditions.get(cond) ?? 0) + 1);
+      }
+    }
+    if (pendingCorrection(mark)) pending.push(c.name);
+  }
+  const fair = row.bids.filter((b) => !b.anomaly).length;
+
+  return {
+    title: position.title,
+    /* Подзаголовок отвечает на «что это»: путь ФКП и мера. Обе величины
+       именующие, а не сравниваемые — в колонке значений им места нет. */
+    sub: [
+      path.length ? `ФКП: ${path.join(' › ')}` : null,
+      `единица ${position.unit} · шаблонный объём ${decimal(position.qty)}`,
+    ].filter(Boolean).join('\n'),
+    width: 400,
+    fields: [
+      {
+        label: 'медианная стоимость',
+        value: row.median === null ? '—' : money(row.median * position.qty),
+      },
+      {
+        label: 'цен подано',
+        value: `${row.bids.length} из ${counted} · сопоставимо ${fair}`,
+      },
+      /* ПОИМЁННО — строками во всю ширину: у них нет подписи, и пустая колонка
+         слева резала бы фразе место ни за чем. */
+      ...declined.map((name) => ({ span: true as const, label: '', value: `${name} — отказ от позиции` })),
+      ...skipped.map((name) => ({ span: true as const, label: '', value: `${name} — позиция пропущена` })),
+      ...waiting.map((name) => ({ span: true as const, label: '', value: `${name} — ждём ответ` })),
+      /* «КП» не склоняется — plural дал бы три одинаковые формы; счёт даёт
+         число. */
+      ...[...conditions].map(([cond, n]) => ({ label: 'условия', value: `${cond} · ${n} КП` })),
+      ...(pending.length
+        ? [{ label: 'на рассмотрении', value: `иной объём — ${pending.join(', ')}` }]
+        : []),
+    ],
+    note: position.key || row.keyDerived
+      ? 'Ключевая позиция — входит в верхнюю долю стоимости тендера.'
+      : undefined,
   };
 }

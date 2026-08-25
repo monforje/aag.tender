@@ -15,7 +15,8 @@ import {
   moneyCompact, pendingCorrection, predicateCount, predicatePasses, PREDICATES, PRESETS,
   rankBids, sanitizeFilters, spread, sumOf,
   SYSTEM_THRESHOLDS, termRows, hasTerms, countsInAnalysis, isWaiting,
-  addresseeOf, hasUnread, threadOrder, anomalyRatio, spreadPoints,
+  addresseeOf, hasUnread, threadOrder, anomalyRatio, spreadPoints, dynamicsPct,
+  stageLabel, needsStageBadge,
   type CellComment, type CellLine, type ComparePosition, type CompareThresholds,
   type CompareView, type Contractor, type PositionGroup, type RowFacts,
 } from '..';
@@ -906,6 +907,42 @@ for (const id of ['a28', 'b31']) {
   assert.equal(anomalyRatio(240, 100), 2.4);
   assert.equal(anomalyRatio(240, null), null);
   assert.equal(anomalyRatio(240, 0), null);
+}
+
+/* ── ДИНАМИКА: «не менялось» и «сравнивать не с чем» — РАЗНОЕ ───────────────
+   Ноль здесь имеет собственный смысл: подрядчик подал ту же цену. Подмени им
+   отсутствие базы — и первый круг тендера показал бы по всем ячейкам «= 0 %»,
+   то есть утверждение о прошлом, которого не было. */
+assert.equal(dynamicsPct(110, 100), 10);
+assert.equal(dynamicsPct(90, 100), -10);
+assert.equal(dynamicsPct(100, 100), 0, 'та же цена — это ноль, а не отсутствие базы');
+assert.equal(dynamicsPct(100, undefined), null, 'первый круг: базы нет');
+assert.equal(dynamicsPct(undefined, 100), null, 'позиция не закрыта: нечего сравнивать');
+assert.equal(dynamicsPct(100, 0), null, 'нулевая прошлая цена не даёт Infinity');
+
+/* ── СЛОВАРЬ СОСТОЯНИЙ КОЛОНКИ: стадия старше статуса КП ───────────────────
+   У приглашённого статус существует формально («Получено» по умолчанию), и
+   показать его значило бы соврать о том, что предложение есть. Капсула же
+   рисуется только там, где полнота КП молчит: «Получено» и «100 % заполнено»
+   — один факт, сказанный дважды. */
+{
+  const base: Contractor = {
+    id: 'x', name: 'x', status: 'complete', fill: 100,
+    inn: '1', contact: '1', submitted: '01.01.2026', prices: {},
+  };
+  assert.equal(stageLabel(base), 'Получено');
+  assert.equal(stageLabel({ ...base, stage: 'invited' }), 'приглашён');
+  assert.equal(stageLabel({ ...base, stage: 'locked' }), 'доступ закрыт');
+  assert.equal(stageLabel({ ...base, stage: 'stale' }), 'не переподал');
+  assert.equal(stageLabel({ ...base, status: 'revision' }), 'Уточняется');
+
+  assert.equal(needsStageBadge(base), false, '«Получено» повторяет «100 % заполнено»');
+  assert.equal(needsStageBadge({ ...base, status: 'partial' }), false,
+    '«Частично» повторяет процент заполнения, и процент точнее');
+  assert.equal(needsStageBadge({ ...base, status: 'revision' }), true,
+    '«Уточняется» — процесс, а не заполненность: своего числа у него нет');
+  assert.equal(needsStageBadge({ ...base, stage: 'invited' }), true);
+  assert.equal(needsStageBadge({ ...base, stage: 'locked' }), true);
 }
 
 console.log('comparison: ok');

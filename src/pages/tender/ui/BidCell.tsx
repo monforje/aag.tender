@@ -1,7 +1,7 @@
 import { type ReactNode } from 'react';
 import { cx } from '@/shared/lib/cx';
 import {
-  cellLines, cellMark, decimal, money, moneyCompact, pendingCorrection,
+  cellLines, cellMark, decimal, dynamicsPct, money, moneyCompact, pendingCorrection,
   type CellLine, type CompareThresholds, type CompareView, type Contractor, type RowFacts,
 } from '@/entities/comparison';
 import type { CellPopupBind } from '@/shared/ui/CellPopup';
@@ -287,10 +287,8 @@ export function BidCell({
        «не менял цену», что неправда.
        ТОН ОТ ЗНАКА, а не от величины: подешевел — success, подорожал —
        danger. Стрелка дублирует тон формой — цвет не единственный канал. */
-    const prev = contractor.prevPrices?.[position.id];
-    const dyn = plan.dynamicsOn !== null && prev !== undefined && prev !== 0
-      ? ((price! - prev) / prev) * 100
-      : null;
+    const dyn = plan.dynamicsOn === null ? null
+      : dynamicsPct(price, contractor.prevPrices?.[position.id]);
     const dynSuffix = dyn === null ? null : (
       <span className={cx(s.dynSuffix, dyn < 0 ? s.dynSuffixDown : dyn > 0 ? s.dynSuffixUp : undefined)}>
         {dyn === 0 ? '=' : dyn < 0 ? '▼' : '▲'}
