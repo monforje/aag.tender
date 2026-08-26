@@ -227,10 +227,8 @@ export function TenderCompare({
     [contractors],
   );
 
-  /* Видимый срез считается ЗДЕСЬ, до всего остального: его читают и рендер, и
-     переход к пометке (тот обязан отличить «скрыта фильтром» от «свёрнута
-     секция», а для этого — знать состав видимого раньше, чем строится
-     разметка). */
+  /* Видимый срез считается ЗДЕСЬ, до всего остального: его читают и рендер,
+     и сборка групп. */
   const visible = useMemo(() => filterRows(facts.rows, view.filters), [facts, view.filters]);
   const visibleIds = useMemo(() => new Set(visible.map((r) => r.position.id)), [visible]);
 
@@ -290,9 +288,6 @@ export function TenderCompare({
     { action: CellAction; contractorId: string; positionId: string; at: DOMRect } | null
   >(null);
   const [deciding, setDeciding] = useState(false);
-  /* «Цель скрыта фильтром» (§4.5) — источник обязан сказать это словами и
-     дать выход; молчаливый промах читается поломкой. */
-  const [filterMiss, setFilterMiss] = useState<string | null>(null);
   /* Список корректировок колонки (§5.3): один — сразу переход, несколько —
      мини-список. Держит и КП, и якорь: панель падает от нажатого чипа. */
   const [corrList, setCorrList] = useState<{ bid: Bid; at: DOMRect } | null>(null);
@@ -339,51 +334,59 @@ export function TenderCompare({
      два кадра, повтор находил ту же пустоту, и симптом получался ровно тот,
      ради устранения которого раскрытие и заведено, — секция раскрылась,
      обводка не пришла. Эффект по `folded` привязан к КОММИТУ, а не к
-     времени, и потому не зависит ни от размера сметы, ни от нагрузки. */
+     времени, и потому не зависит ни от размера сметы, ни от нагрузки.
+
+     ВТОРОЙ ПОВОД ОТЛОЖИТЬ ЗАХОД — СНЯТЫЙ ФИЛЬТР (правка владельца
+     25.08.2026, вечер): строки, которые он прятал, появляются тем же
+     коммитом, и ждать их надо ровно так же. Отсюда `view.filters` в
+     зависимостях — механизм один на оба повода. */
   const pendingJump = useRef<(() => void) | null>(null);
   useEffect(() => {
     const job = pendingJump.current;
     if (!job) return;
     pendingJump.current = null;
     job();
-  }, [folded]);
+  }, [folded, view.filters]);
 
   const goToMark = useCallback((kind: MarkKind, contractorId: string) => {
+    /* ФИЛЬТРЫ СНИМАЮТСЯ ПЕРЕД ПЕРЕХОДОМ (правка владельца 25.08.2026, вечер).
+       Пометка в карточке — обещание «покажу, где эти ячейки», и под чужим
+       срезом его не сдержать: часть целей не существует в DOM вовсе. Раньше
+       экран говорил об этом словами («позиция скрыта фильтром») и давал
+       кнопку «Показать все» — то есть перекладывал на человека шаг, который
+       он всё равно делал следующим. Теперь срез снимается сам, а заход
+       повторяется после перерисовки — тем же `pendingJump`, что и раскрытие
+       свёрнутой секции.
+       УСЛОВИЕ ОБЯЗАТЕЛЬНО: без фильтров `onPatch` не меняет ничего, коммита
+       не будет, и отложенный заход не случился бы никогда. */
+    if (view.filters.length) {
+      onPatch({ filters: [] });
+      pendingJump.current = () => goToMarkRef.current?.(kind, contractorId);
+      return;
+    }
     const root = dockRef.current;
     if (!root) return;
     const cells = [...root.querySelectorAll<HTMLElement>(`[data-marks~="${kind}"]`)]
       .filter((el) => (el.dataset.cell ?? '').startsWith(`${contractorId}:`));
-    /* ── КОНТРАКТ ПЕРЕХОДА, ДВЕ НЕДОСТАЮЩИЕ ПОЛОВИНЫ (§4.5,
+    /* ── КОНТРАКТ ПЕРЕХОДА, ВТОРАЯ НЕДОСТАЮЩАЯ ПОЛОВИНА (§4.5,
        `interactions.md` §3) ────────────────────────────────────────────────
-       Прокрутка и обводка работали и раньше; молча промахивался переход в
-       двух случаях, и оба читались как поломка — «кликнул, ничего не
-       произошло».
-
-       ПЕРВЫЙ: цель в СВЁРНУТОЙ секции. Её строки не существуют в DOM вовсе,
-       и querySelector честно не находил ничего. Секция раскрывается ДО
-       прокрутки — иначе scrollIntoView целится в элемент, которого ещё нет.
-       Прокрутка при этом уходит в следующий кадр: раскрытие меняет высоту
-       ленты, и мерить её в том же кадре бессмысленно.
-
-       ВТОРОЙ: цель СКРЫТА ФИЛЬТРОМ. Здесь молчать нельзя тем более —
-       пользователь сам поставил фильтр и мог про него забыть. Источник
-       говорит словами и даёт выход «Показать все». */
+       Прокрутка и обводка работали и раньше; молча промахивался переход,
+       когда цель лежала в СВЁРНУТОЙ секции: её строки не существуют в DOM
+       вовсе, и querySelector честно не находил ничего — «кликнул, ничего не
+       произошло». Секция раскрывается ДО прокрутки, иначе scrollIntoView
+       целится в элемент, которого ещё нет; сама прокрутка уходит в следующий
+       коммит — раскрытие меняет высоту ленты, и мерить её в том же кадре
+       бессмысленно.
+       Фильтра в этой развилке больше нет: он снят выше по функции. */
     if (!cells.length) {
       const target = facts.rows.find((r) => hasMark(kind, r, contractorId));
       if (!target) return;
-      const hiddenByFilter = !visibleIds.has(target.position.id);
-      if (hiddenByFilter) {
-        setFilterMiss(target.position.title);
-        return;
-      }
-      /* Не фильтр — значит свёрнутая секция: раскрываем и повторяем заход. */
       const group = groups.find((g) => g.positions.some((x) => x.id === target.position.id));
       if (!group || !folded[group.id]) return;
       setFolded((all) => ({ ...all, [group.id]: false }));
       pendingJump.current = () => goToMarkRef.current?.(kind, contractorId);
       return;
     }
-    setFilterMiss(null);
     const keys = cells.map((el) => el.dataset.cell ?? '');
     /* Подсветка — ВСЕ такие ячейки колонки сразу, тем же каналом, что и любой
        другой переход (обводка `flashCells`). */
@@ -401,7 +404,7 @@ export function TenderCompare({
       markCursor.current = null;
     }, 5300);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- dockRef объявлен ниже, реф стабилен
-  }, [facts, groups, folded, visibleIds]);
+  }, [facts, groups, folded, view.filters, onPatch]);
 
   /* Повторный заход после раскрытия секции — через реф: колбэк вызывает сам
      себя из rAF, а сослаться на себя по имени в собственном теле замыкания
@@ -414,27 +417,29 @@ export function TenderCompare({
      обвести; скрытая фильтром цель не молчит. Отдельная функция, а не флаг
      у goToMark: там адрес — «пометка в колонке», здесь — конкретная пара. */
   const goToPosition = useCallback((contractorId: string, positionId: string) => {
+    /* Фильтры снимаются перед переходом — см. `goToMark` выше: у обхода
+       пометок и у мини-списка корректировок контракт один. */
+    if (view.filters.length) {
+      onPatch({ filters: [] });
+      pendingJump.current = () => goToPositionRef.current?.(contractorId, positionId);
+      return;
+    }
     const key = `${contractorId}:${positionId}`;
     const root = dockRef.current;
     const el = root?.querySelector<HTMLElement>(`[data-cell="${key}"]`);
     if (!el) {
-      if (!visibleIds.has(positionId)) {
-        setFilterMiss(facts.byId.get(positionId)?.position.title ?? positionId);
-        return;
-      }
       const group = groups.find((g) => g.positions.some((x) => x.id === positionId));
       if (!group || !folded[group.id]) return;
       setFolded((all) => ({ ...all, [group.id]: false }));
       pendingJump.current = () => goToPositionRef.current?.(contractorId, positionId);
       return;
     }
-    setFilterMiss(null);
     setMarkFlash(new Set([key]));
     el.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' });
     window.clearTimeout(markTimer.current);
     markTimer.current = window.setTimeout(() => setMarkFlash(null), 5300);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- dockRef объявлен ниже, реф стабилен
-  }, [facts, groups, folded, visibleIds]);
+  }, [groups, folded, view.filters, onPatch]);
   const goToPositionRef = useRef<typeof goToPosition>(goToPosition);
   goToPositionRef.current = goToPosition;
 
@@ -790,21 +795,9 @@ export function TenderCompare({
         </div>
       ) : null}
 
-      {/* ЦЕЛЬ ПЕРЕХОДА СКРЫТА ФИЛЬТРОМ (§4.5): источник говорит словами и
-          даёт выход. Молчаливый промах читается поломкой. */}
-      {filterMiss ? (
-        <div className={s.missStrip} role="status">
-          <Icon name="questionCircle" className={s.errIcon} />
-          <span>Позиция «{filterMiss}» скрыта активным фильтром</span>
-          <Button
-            variant="secondary"
-            className={s.errRetry}
-            onClick={() => { onPatch({ filters: [] }); setFilterMiss(null); }}
-          >
-            Показать все
-          </Button>
-        </div>
-      ) : null}
+      {/* Полосы «позиция скрыта активным фильтром» здесь больше нет (§4.5,
+          правка владельца 25.08.2026, вечер): переход к пометке снимает срез
+          сам, и сообщать не о чем. */}
 
       {/* Точка замера порога сайдбара и СКРОЛЛБЛОК ленты: обе прокрутки —
           здесь, не на странице (разбор — в .module.css и JSDoc). Потолок

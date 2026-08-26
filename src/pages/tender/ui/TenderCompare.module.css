@@ -369,6 +369,10 @@
   min-height: var(--cu-size-6);
 }
 .card__tools > *{ flex: none; min-width: 0; }
+/* Левый край яруса: звезда и — у свёрнутой карточки — ⚠ счётчик
+   корректировок. Группа держит трёхслотовую раскладку ряда: space-between
+   центрирует середину только при трёх детях. */
+.card__tools-left{ display: flex; align-items: center; gap: 4px; }
 
 
 /* Звезда «в избранном». Рецепт (5): в покое её нет, проявляется по наведению
@@ -1088,8 +1092,7 @@ tr.group-row:has(td.group-num:hover) .section-toggle{
 }
 .tag:focus-visible,
 .coin:focus-visible,
-.key-mark:focus-visible,
-.spread-mark:focus-visible{
+.key-mark:focus-visible{
   outline: var(--cu-focus-ring); outline-offset: 2px; border-radius: 6px;
 }
 
@@ -1120,9 +1123,12 @@ tr.group-row:has(td.group-num:hover) .section-toggle{
    ключевые взглядом по столбцу было нельзя — а именно за этим на пометку и
    смотрят. У угла место постоянное при любой длине имени.
 
-   Капсула, а не голый глиф: в углу ячейки без собственной поверхности знак
-   читался бы обрывком соседней строки. Заливка — warning-fill, тот же тон,
-   что у самого ключа.
+   ЗАЛИВКИ У КАПСУЛЫ НЕТ (правка владельца 25.08.2026, вечер). Тон warning-fill
+   стоял под ключом ради «собственной поверхности» — и получил её ценой того,
+   что в углу КАЖДОЙ ключевой строки появлялось цветное пятно 30×19: на
+   таблице, где тем же тоном говорят аномалия и ⚠ «иной объём», третий
+   warning-прямоугольник читался четвёртым видом пометки. Форма ключа
+   опознаётся и без подложки, а угол ячейки постоянен сам по себе.
 
    Наклон — независимое свойство rotate, поэтому key-turn (transform) его не
    затирает. Переворот крутит SVG ВНУТРИ капсулы, а не её саму: хит-тест
@@ -1135,7 +1141,6 @@ tr.group-row:has(td.group-num:hover) .section-toggle{
   width: 30px; height: 19px;
   padding: 0 2px;
   border-radius: var(--cu-radii-3);
-  background: var(--cu-tone-warning-fill);
   cursor: help; color: var(--cu-tone-warning);
 }
 .key-mark svg{ display: block; width: 100%; height: 100%; overflow: visible;
@@ -1146,28 +1151,10 @@ tr.group-row:has(td.group-num:hover) .section-toggle{
 }
 .key-mark:hover svg{ animation: key-turn .7s cubic-bezier(.36,.07,.19,.97); }
 
-/* Высокий разброс — линейка размаха в колонке разброса; hover: засечки
-   разъезжаются на ±1.15px, диапазон «дышит» шириной. */
-.spread-mark{
-  position: relative; display: inline-block;
-  width: 24px; height: 16px; margin-left: 4px; vertical-align: -3px;
-  cursor: help; color: var(--cu-tone-danger);
-}
-.spread-mark svg{ display: block; width: 100%; height: 100%; overflow: visible; }
-@keyframes spread-open{
-  0%{ transform: translateX(0) } 45%{ transform: translateX(-1.15px) } 100%{ transform: translateX(0) }
-}
-@keyframes spread-open-r{
-  0%{ transform: translateX(0) } 45%{ transform: translateX(1.15px) } 100%{ transform: translateX(0) }
-}
-/* КРИВАЯ — СЕМЬИ БРЕЛОКОВ (.tag, .coin, .key-mark, .corr, .pin), а не
-   упругая. До 25.08.2026 здесь стояла кривая с перелётом за конечную точку;
-   на ходе в 1,15px перелёт даёт треть пикселя — то есть не читается вовсе, —
-   зато выбивает засечки из общего языка движения экрана, где все пометки
-   двигаются одной физической кривой. Разброс «дышит» ровно так же, просто
-   в семье. */
-.spread-mark:hover [data-mk='cap-l']{ animation: spread-open .55s cubic-bezier(.36,.07,.19,.97); }
-.spread-mark:hover [data-mk='cap-r']{ animation: spread-open-r .55s cubic-bezier(.36,.07,.19,.97); }
+/* Линейка размаха жила здесь до 25.08.2026 (вечер) и снята вместе со своим
+   местом: степень разброса несёт заливка ячейки, а глиф остался только у
+   предиката «Высокий разброс» в «Параметрах» — там он один на фильтр, а не
+   один на каждую из шестидесяти строк. */
 
 /* ── ⚠ «ИНОЙ ОБЪЁМ»: ОДИН ЗНАК НА ТРИ МЕСТА ───────────────────────────────
    Ячейка, шапка колонки и строка носят ОДИН и тот же класс намеренно: знак
@@ -1217,8 +1204,6 @@ tr.group-row:has(td.group-num:hover) .section-toggle{
   .corr-chip:hover .corr-chip-icon [data-mk='bang'], .cmark, .cmark:hover{ animation: none; }
   .ghost:hover .ghost-icon{ transform: none; }
   .tag:hover, .coin:hover, .key-mark:hover svg,
-  .spread-mark:hover [data-mk='cap-l'],
-  .spread-mark:hover [data-mk='cap-r'],
   .corr:hover [data-mk='bang']{ animation: none; }
   .dev-suffix, .dyn-suffix, .rate-line{ animation: none; }
   .row-enter > th,
@@ -1308,6 +1293,24 @@ tr.group-row:has(td.group-num:hover) .section-toggle{
   62%{ outline-color: color-mix(in srgb, var(--cu-tone-info) 55%, transparent); }
   100%{ outline-color: transparent; }
 }
+/* ЗНАКИ ВНУТРИ ПОДСВЕЧЕННОЙ ЯЧЕЙКИ ПОДНИМАЮТСЯ ВМЕСТЕ С НЕЙ (правка владельца
+   25.08.2026, вечер). Обводка отвечала «эта клетка», но разбор приводит сюда
+   ЗА ПОМЕТКОЙ — за штампом «мин», за штриховкой аномалии, за ⚠ или монетой, —
+   а они на 14 пикселях внутри рамки читались ровно так же, как в соседних
+   пятидесяти клетках. Ореол тем же info и по той же пятисекундной кривой:
+   один жест — один цвет и одно время жизни.
+   Селектор идёт через `.sgn` — общий якорь всех знаков ячейки (см. разбор
+   `:has()` ниже): четыре правила на четыре знака стоили бы четырёх
+   инвалидаций на каждую из 780 ячеек. Собственной геометрии правило не
+   трогает: радиус каждый знак несёт свой (монета круглая, штамп скруглён),
+   ореол ложится по нему. */
+.cell-flash .sgn{ animation: mark-flash 5s var(--cu-ease-standard) both; }
+@keyframes mark-flash{
+  0%{ box-shadow: 0 0 0 0 transparent; }
+  12%{ box-shadow: 0 0 0 3px color-mix(in srgb, var(--cu-tone-info) 45%, transparent); }
+  62%{ box-shadow: 0 0 0 3px color-mix(in srgb, var(--cu-tone-info) 22%, transparent); }
+  100%{ box-shadow: 0 0 0 0 transparent; }
+}
 /* Шапке колонки (фокус только на подрядчике) — та же обводка на карточке. */
 .col-flash{
   position: relative;
@@ -1320,6 +1323,11 @@ tr.group-row:has(td.group-num:hover) .section-toggle{
   .cell-flash, .col-flash{
     animation: none;
     outline-color: var(--cu-tone-info);
+  }
+  /* Знаки — статичным ореолом того же тона, без пульсации. */
+  .cell-flash .sgn{
+    animation: none;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--cu-tone-info) 45%, transparent);
   }
 }
 
@@ -1655,25 +1663,24 @@ td.group-unit{
   font-variant-numeric: tabular-nums;
 }
 
-/* ── §1.8 РАЗБРОС: ОДНА ЛИНЕЙКА, ТРИ ТОНА ─────────────────────────────────
-   Глиф один и переведён на currentColor; состояние задаёт ТОЛЬКО цвет.
-   Размер ×1.2 к прежнему (24×16 → 29×19) и одинаков у всех трёх: разный
-   размер читался бы разной величиной. */
+/* ── §1.8 РАЗБРОС: ТРИ ЯРУСА ОДНОЙ ЗАЛИВКОЙ ───────────────────────────────
+   Степень задаёт ТОЛЬКО фон ячейки, точное значение — текст процента рядом.
+   Линейка в трёх тонах стояла здесь один день и снята (правка владельца
+   25.08.2026, вечер): глиф на каждой строке весил больше числа, ради
+   которого колонка существует. */
 /* МНОГОТОЧИЯ В «РАЗБРОСЕ» НЕТ (правка владельца 25.08.2026). Общее правило
    таблицы (`.table--fixed td{ text-overflow: ellipsis }`) рассчитано на текст;
-   здесь содержимое — короткий процент и линейка степени, и обрезать в них
-   нечего. Зато линейка выходит за границу ячейки на пару пикселей, и правило
-   честно дорисовывало ей троеточие — знак «тут есть продолжение» там, где
-   продолжения нет. */
+   здесь содержимое — короткий процент, и обрезать в нём нечего. */
 /* `!important` обязателен: правило-обидчик — `.table--fixed td:not(.cell--card)`
    в ЧУЖОМ модуле со специфичностью (0,2,1), и одиночным классом его не
    перебить, а собрать (0,3,1) отсюда нечем — классы соседнего модуля
    хэшируются порознь. Тот же приём, что у `.title-cell` и `.ghost-head`. */
 .spread-cell{ cursor: help; text-overflow: clip !important; }
-.spread-mark{ width: 29px; height: 19px; margin-left: 7px; }
-.sp-low{ color: var(--cu-tone-success); }
-.sp-not{ color: var(--cu-tone-warning); }
-.sp-high{ color: var(--cu-tone-danger); }
+/* Тихая заливка ячейки по ярусу разброса — единственный цветовой канал
+   степени после снятия линейки. */
+.spread-none{ background: transparent; }
+.spread-noticeable{ background: var(--cu-tone-warning-fill); }
+.spread-high{ background: var(--cu-tone-danger-fill); }
 /* ── ТОЧКА «ДЫШИТ» ПО НАВЕДЕНИЮ, А НЕ В ПОКОЕ ─────────────────────────────
    Владелец просил движущуюся точку (§1.8), и она есть — но включается на
    наведении и фокусе, а не крутится всегда. Это ИЗМЕРЕННОЕ решение, а не
@@ -1700,14 +1707,12 @@ td.group-unit{
      animation: none по тому же классу p50 50,0 — то же самое.
    Возвращает кадры РОВНО отсутствие анимации в покое — отсюда :hover.
 
-   Цена решения честная и маленькая: точка неподвижна, пока на строку не
-   смотрят. Смысл жеста при этом сохраняется целиком — «дышит» она ровно
-   тогда, когда её читают. */
-@keyframes dot-slide{ from{ transform: translateX(-2.6px) } to{ transform: translateX(3.4px) } }
-.spread-cell:hover .spread-mark [data-mk='dot'],
-.spread-cell:focus-within .spread-mark [data-mk='dot']{
-  animation: dot-slide 2.4s var(--cu-ease-standard) infinite alternate;
-}
+   Цена решения честная и маленькая: движение идёт ровно тогда, когда на
+   него смотрят.
+   САМА «ДЫШАЩАЯ» ТОЧКА ушла вместе с линейкой разброса (25.08.2026, вечер);
+   замер оставлен здесь целиком — он про ленту, а не про один глиф, и им же
+   объясняется, почему точки ожидания в карточке двигаются только под
+   курсором. */
 
 /* ── §1.6 СТОЛБЕЦ «ПОТЕНЦИАЛ» ─────────────────────────────────────────────
    Появление подчёркнуто: шапка вспыхивает инфо-тоном один раз, ячейки
@@ -1783,14 +1788,13 @@ td.group-unit{
    незачем, цветом здесь говорит ТЕКСТ.
    Иконка по ЦЕНТРУ высоты строки: flex + align-items:center, margin-top
    запрещён (правило второй волны). */
-.err-strip, .miss-strip{
+.err-strip{
   display: flex; align-items: center; gap: 10px;
   margin-bottom: 10px; padding: 11px 12px;
   border-radius: var(--cu-radii-4);
   font-size: 14px; line-height: 20px;
 }
 .err-strip{ background: var(--cu-tone-danger-fill); color: var(--cu-tone-error-ink); }
-.miss-strip{ background: var(--cu-tone-warning-fill); color: var(--cu-tone-warning-ink); }
 .err-icon{ width: 17px; height: 17px; flex: none; }
 .err-retry{ margin-left: auto; flex: none; }
 /* Приглушённый, но ЧИТАЕМЫЙ и прокручиваемый срез: пустой экран вместо

@@ -132,6 +132,22 @@
   button.finding:hover{ background: var(--cu-state-hover-subtle); }
 }
 button.finding:focus-visible{ outline: var(--cu-focus-ring); outline-offset: -1px; }
+/* ПРИМЕНЁННАЯ НАХОДКА (правка владельца 25.08.2026, вечер). Тон info — тот
+   же, которым горит обводка ячейки в таблице: панель и сетка обязаны
+   говорить об одном событии одним цветом, иначе связь «отсюда — туда»
+   приходится достраивать самому. Заливка тихая, а не яркая: строка остаётся
+   строкой разбора, а не превращается во второй primary. Заливка держится,
+   пока не кликнут другую, — обводка в таблице гаснет за 5 с, но вопрос
+   «откуда она была» живёт дольше. */
+button.finding.is-on{ background: var(--cu-tone-info-fill); }
+/* Сам глиф — акцент внутри отметки: тон находки остаётся её собственным
+   (у аномалии warning, у риска danger), поэтому выделяет НЕ цвет, а кольцо
+   тем же info. */
+button.finding.is-on .finding-icon{
+  border-radius: var(--cu-radii-round);
+  box-shadow: 0 0 0 3px var(--cu-tone-info-fill), 0 0 0 4px var(--cu-tone-info);
+}
+button.finding.is-on .finding-go{ color: var(--cu-tone-info); }
 .finding-icon{ --icon-size: 14px; flex: none; }
 .f-key{ color: var(--cu-content-primary); }
 .f-saving{ color: var(--cu-tone-success); }
@@ -281,6 +297,15 @@ button.finding:focus-visible{ outline: var(--cu-focus-ring); outline-offset: -1p
 .ref:focus-visible{
   outline: var(--cu-focus-ring); outline-offset: 1px;
   border-radius: var(--cu-radii-1);
+}
+/* Применённая сущность — та же отметка тоном info, что у находки: одно
+   событие, один цвет. Пунктир снимается — слово перестаёт «предлагать» и
+   начинает «показывать». */
+.ref.is-on{
+  background: var(--cu-tone-info-fill);
+  border-bottom-color: transparent;
+  border-radius: var(--cu-radii-1);
+  color: var(--cu-tone-info-ink);
 }
 
 /* ── общая картина раунда: фиксированный набор показателей ───────────────── */

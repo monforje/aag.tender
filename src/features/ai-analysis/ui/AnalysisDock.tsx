@@ -1,5 +1,5 @@
 import {
-  lazy, memo, Suspense, useEffect, useRef, useState, type ReactNode,
+  lazy, memo, Suspense, useCallback, useEffect, useRef, useState, type ReactNode,
 } from 'react';
 import { cx } from '@/shared/lib/cx';
 import { plural } from '@/shared/lib/plural';
@@ -32,11 +32,20 @@ const AiDock = lazy(() => import('./AiDock').then((m) => ({ default: m.AiDock })
 import s from './AnalysisDock.module.css';
 
 /** Слова-сущности внутри серверной строки: пунктир и мягкий красный видны без
- *  наведения (05 §6); переход ведёт только то, у чего есть валидный переход. */
+ *  наведения (05 §6); переход ведёт только то, у чего есть валидный переход.
+ *
+ *  `keyFor` + `picked` — ОТМЕТКА ПРИМЕНЁННОГО (правка владельца 25.08.2026,
+ *  вечер). Клик уводил подсветку в таблицу и не оставлял в панели ни следа:
+ *  вернувшись глазами к разбору, человек не мог сказать, ОТ КАКОГО слова
+ *  горит обводка на сетке. Ключ приходит снаружи, потому что одно и то же имя
+ *  подрядчика встречается в десятке пунктов, и «выбрано» принадлежит паре
+ *  «пункт + сущность», а не имени. */
 function withRefs(
   text: string,
   refs: AnalysisRef[],
   onPick: (ref: AnalysisRef) => void,
+  keyFor: (ref: AnalysisRef) => string,
+  picked: string | null,
 ): ReactNode {
   const marks = refs
     .map((ref) => ({ ref, at: text.indexOf(ref.label) }))
@@ -54,7 +63,8 @@ function withRefs(
       <button
         key={`${ref.kind}:${ref.id}`}
         type="button"
-        className={s.ref}
+        className={cx(s.ref, picked === keyFor(ref) && s.isOn)}
+        aria-pressed={picked === keyFor(ref)}
         title={ref.kind === 'work'
           ? 'Показать эту работу в сравнении'
           : 'Показать этого подрядчика в сравнении'}
@@ -95,9 +105,11 @@ const FINDING_VIEW: Record<AnalysisFindingKind, { icon: IconName; cls: string }>
 /** Находка «Что обнаружено»: вся строка — цель клика (≥ 30px), переход ведёт
  *  в таблицу тем же механизмом, что слова-сущности. Без перехода строка
  *  статична и не обещает клика. */
-function Finding({ finding, onTransition }: {
+function Finding({ finding, picked, onPick }: {
   finding: AnalysisResult['brief']['findings'][number];
-  onTransition: (t: AnalysisTransition) => void;
+  /** Эта находка — та, от которой сейчас горит подсветка в таблице. */
+  picked: boolean;
+  onPick: (key: string, t: AnalysisTransition) => void;
 }) {
   const view = FINDING_VIEW[finding.kind];
   const body = (
@@ -110,9 +122,10 @@ function Finding({ finding, onTransition }: {
   return finding.transition ? (
     <button
       type="button"
-      className={s.finding}
+      className={cx(s.finding, picked && s.isOn)}
+      aria-pressed={picked}
       title="Показать в сравнении"
-      onClick={() => onTransition(finding.transition!)}
+      onClick={() => onPick(`finding:${finding.kind}`, finding.transition!)}
     >
       {body}
     </button>
@@ -135,9 +148,11 @@ function Finding({ finding, onTransition }: {
  *         раскрывает базовый разбор и доскролливает к нему.
  * A11Y:   секция озаглавлена; кнопки находок — обычные <button> с текстом.
  */
-function Brief({ brief, onTransition, onMore }: {
+function Brief({ brief, picked, onPick, onMore }: {
   brief: AnalysisResult['brief'];
-  onTransition: (t: AnalysisTransition) => void;
+  /** Ключ применённой строки разбора — или null, пока не кликали. */
+  picked: string | null;
+  onPick: (key: string, t: AnalysisTransition) => void;
   onMore: () => void;
 }) {
   return (
@@ -149,7 +164,12 @@ function Brief({ brief, onTransition, onMore }: {
           <h3 className={s.briefLabel}>Что обнаружено</h3>
           <div className={s.briefList}>
             {brief.findings.map((f) => (
-              <Finding key={f.kind} finding={f} onTransition={onTransition} />
+              <Finding
+                key={f.kind}
+                finding={f}
+                picked={picked === `finding:${f.kind}`}
+                onPick={onPick}
+              />
             ))}
           </div>
         </>
@@ -170,7 +190,7 @@ function Brief({ brief, onTransition, onMore }: {
           {brief.recommendation.transition ? (
             <Button
               variant="primary"
-              onClick={() => onTransition(brief.recommendation.transition!)}
+              onClick={() => onPick('rec', brief.recommendation.transition!)}
             >
               Применить
             </Button>
@@ -186,16 +206,20 @@ function Brief({ brief, onTransition, onMore }: {
  *  полноты слот пуст всегда (`mute`) — заметки просто нет.
  *  memo: пункты стабильны между сменами раскрытости секций, и переезд
  *  `<details>` не обязан перерисовывать весь их список. */
-const Item = memo(function Item({ item, onTransition }: {
+const Item = memo(function Item({ item, picked, onPick }: {
   item: AnalysisItem;
-  onTransition: (t: AnalysisTransition) => void;
+  /** Ключ применённой строки разбора — или null. */
+  picked: string | null;
+  onPick: (key: string, t: AnalysisTransition) => void;
 }) {
   const interactive = !!item.transition;
+  const keyFor = (ref: AnalysisRef) => `${item.id}|${ref.kind}:${ref.id}`;
+  const pick = (ref: AnalysisRef) => onPick(keyFor(ref), transitionFor(item, ref));
   return (
     <li className={s.item}>
       <p className={s.itemTitle}>
         {interactive
-          ? withRefs(item.title, item.refs, (ref) => onTransition(transitionFor(item, ref)))
+          ? withRefs(item.title, item.refs, pick, keyFor, picked)
           : item.title}
       </p>
       {/* СУЩНОСТИ ЖИВУТ И В ФАКТАХ, а не только в заголовке. Самые крупные
@@ -206,7 +230,7 @@ const Item = memo(function Item({ item, onTransition }: {
       {item.details?.map((line) => (
         <p key={line} className={s.itemDetail}>
           {interactive
-            ? withRefs(line, item.refs, (ref) => onTransition(transitionFor(item, ref)))
+            ? withRefs(line, item.refs, pick, keyFor, picked)
             : line}
         </p>
       ))}
@@ -350,6 +374,17 @@ export function AnalysisDock({
 }) {
   const headingRef = useRef<HTMLHeadingElement>(null);
   const [chatMode, setChatMode] = useState(false);
+  /* ── КАКАЯ СТРОКА РАЗБОРА СЕЙЧАС ПРИМЕНЕНА (правка владельца 25.08.2026,
+     вечер) ────────────────────────────────────────────────────────────────
+     Переход «анализ → таблица» подсвечивал ячейки и не оставлял следа в самой
+     панели: обводка на сетке горит, а какая из десяти находок её зажгла —
+     не сказано нигде. Ключ живёт ЗДЕСЬ, а не у страницы: это состояние
+     ЧТЕНИЯ панели, странице оно не нужно ни для чего, а поднимать его наверх
+     значило бы перерисовывать таблицу на каждый клик по разбору.
+     Ключ — строка, потому что источников три (находка брифа, кнопка
+     рекомендации, слово-сущность внутри пункта), и общий у них ровно один
+     вопрос: «эта ли строка сейчас применена». */
+  const [picked, setPicked] = useState<string | null>(null);
   /* Управляемая раскрытость секций: свёрнуты по умолчанию, якорь сводки
      раскрывает свою и скроллит к ней. */
   const [unfolded, setUnfolded] = useState<Record<string, boolean>>({});
@@ -363,6 +398,11 @@ export function AnalysisDock({
   useEffect(() => {
     if (open) headingRef.current?.focus();
   }, [open]);
+
+  const pick = useCallback((key: string, transition: AnalysisTransition) => {
+    setPicked(key);
+    onTransition(transition);
+  }, [onTransition]);
 
   /* Якорь сводки раскрывает ОБА уровня: подсекция живёт внутри свёрнутой
      секции, и раскрытие одной её не показывает — переход уходил бы в никуда. */
@@ -535,7 +575,8 @@ export function AnalysisDock({
                 рекомендация. Секции ниже — подробности по [Подробнее]. */}
             <Brief
               brief={entry.result.brief}
-              onTransition={onTransition}
+              picked={picked}
+              onPick={pick}
               onMore={() => goto('base_review', 'tender_overview')}
             />
 
@@ -584,7 +625,7 @@ export function AnalysisDock({
                   {section.items?.length ? (
                     <ul className={s.list}>
                       {section.items.map((item) => (
-                        <Item key={item.id} item={item} onTransition={onTransition} />
+                        <Item key={item.id} item={item} picked={picked} onPick={pick} />
                       ))}
                     </ul>
                   ) : null}
@@ -607,7 +648,7 @@ export function AnalysisDock({
                       </summary>
                       <ul className={s.list}>
                         {sub.items.map((item) => (
-                          <Item key={item.id} item={item} onTransition={onTransition} />
+                          <Item key={item.id} item={item} picked={picked} onPick={pick} />
                         ))}
                       </ul>
                     </details>
